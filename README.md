@@ -109,6 +109,75 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | `--json` | The reply as the endpoint sent it, for `jq` and scripts. |
 | `--dry-run` | Print the request instead of sending it. No key needed. |
 
+### A structured state
+
+`--state-json` sends the state as JSON rather than as text, so nested fields, numbers and lists
+reach the model as what they are. A support ticket, `ticket.json`:
+
+```json
+{
+  "subject": "Charged twice for the October invoice",
+  "plan": "enterprise",
+  "opened_days_ago": 6,
+  "prior_escalations": 2,
+  "messages": [
+    {"from": "customer", "text": "We were billed EUR 4,800 twice on 3 October. Please refund one."},
+    {"from": "support", "text": "Thanks, looking into it."},
+    {"from": "customer", "text": "Six days now and no answer. Our finance team is escalating."}
+  ]
+}
+```
+
+The three question types, in one `questions.json`. A noul's criteria are keyed `true` and `false`,
+which is what the endpoint calls them — the `--noul` flag spells the same thing
+`id=INSTRUCTIONS|WHAT YES MEANS|WHAT NO MEANS`:
+
+```json
+{
+  "team": {
+    "type": "choice",
+    "instructions": "Which team should own this ticket?",
+    "criteria": {
+      "billing": "charges, invoices, refunds",
+      "support": "the product itself, bugs, outages",
+      "success": "the relationship, renewals, escalations"
+    }
+  },
+  "urgency": {
+    "type": "score",
+    "instructions": "How urgently does this need a human today?",
+    "criteria": ["Can wait a week", "This week", "Today", "Now"]
+  },
+  "churn_risk": {
+    "type": "noul",
+    "instructions": "Is this account at risk of leaving?",
+    "criteria": {"true": "Threats, repeated escalation, money at stake", "false": "Routine, patient, one-off"}
+  }
+}
+```
+
+```sh
+cat ticket.json | jev --state-json -q questions.json
+```
+
+```text
+team        billing  confidence 0.99  (billing 0.99, success 0.01, support 0.00)
+urgency     2.48 of 3, nearest "Today"  confidence 0.52
+churn_risk  0.86 yes
+571 tokens in, 72 out, $0.000024, typesafe/jev-1.13-20260917
+```
+
+The numbers move a little from call to call, so a threshold is worth setting with a margin rather
+than at the value one run happened to give.
+
+With `--json`, each answer is named after its type — `.noul`, `.choice` (with `.confidence` and
+`.probabilities`), `.score` — which is what a script gates on:
+
+```sh
+cat ticket.json | jev --state-json -q questions.json --json > answers.json
+jq -r 'if .answers.churn_risk.noul > 0.8 then "page the account team" else "queue normally" end' answers.json
+```
+
 ## The Agent Skill
 
 A coding agent asked to "sort these tickets" or "which of these need a human?" will usually read
