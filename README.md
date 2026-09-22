@@ -10,7 +10,9 @@ Ask [Jev](https://openrouter.ai) typed questions about a piece of text and get c
 probabilities back, rather than prose. A **Choice** between named options, a **Score** on an
 ordered scale, or a **Noul** — the probability that something is true.
 
-A command for your terminal, and a Rust library that also compiles for `wasm32-unknown-unknown`.
+A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, and
+an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
+by eye — `jev add skill` writes it into your project.
 
 ```sh
 export OPENROUTER_API_KEY=sk-or-...
@@ -41,14 +43,39 @@ tar -xzf jev-0.1.0-aarch64-apple-darwin.tar.gz
 ./jev --help
 ```
 
-**From source**, with a [Rust toolchain](https://rustup.rs):
+**With cargo, from this repository.** No release needed, and no clone: cargo fetches the source
+and builds it. Needs a [Rust toolchain](https://rustup.rs).
 
 ```sh
-cargo install --git https://github.com/dsaad68/jev-cli
+cargo install --git https://github.com/dsaad68/jev-cli --locked
+```
+
+It lands in `~/.cargo/bin`, which rustup puts on your PATH, so `jev` works in any folder. A few
+variants:
+
+```sh
+# a particular release, rather than whatever main says today
+cargo install --git https://github.com/dsaad68/jev-cli --tag v0.1.0 --locked
+
+# a branch, to try something before it is merged
+cargo install --git https://github.com/dsaad68/jev-cli --branch some-branch --locked
+
+# over an older copy, when cargo says one is already installed
+cargo install --git https://github.com/dsaad68/jev-cli --locked --force
+```
+
+`--locked` builds with the dependency versions in `Cargo.lock`, which is what CI tested; leave it
+out to let cargo pick newer ones. To run it from a clone instead:
+
+```sh
+git clone https://github.com/dsaad68/jev-cli
+cd jev-cli
+cargo install --path . --locked      # or: cargo run -- --help
 ```
 
 Then set `OPENROUTER_API_KEY` from an [OpenRouter key](https://openrouter.ai/keys). `--dry-run`
-prints the request instead of sending it, and needs no key.
+prints the request instead of sending it, and needs no key; `cargo uninstall jev` takes it off
+your PATH again.
 
 ## Asking
 
@@ -75,8 +102,40 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | `--json` | The reply as the endpoint sent it, for `jq` and scripts. |
 | `--dry-run` | Print the request instead of sending it. No key needed. |
 
-`jev add skill` writes an [Agent Skill](https://code.claude.com/docs/en/skills) into a project, so
-a coding agent knows when to reach for this rather than judging by eye.
+## The Agent Skill
+
+A coding agent asked to "sort these tickets" or "which of these need a human?" will usually read
+them itself and write a paragraph of opinion. The skill teaches it to reach for `jev` instead: one
+call, a probability per item, and a number it can threshold on.
+
+```sh
+cd your-project
+jev add skill
+```
+
+```text
+created .agents/skills/jev/SKILL.md
+created .agents/skills/jev/references/patterns.md
+The jev skill is in .agents/skills/jev. Agents that read .agents will find it.
+```
+
+| | |
+| --- | --- |
+| `jev add skill` | writes it to `.agents/skills/jev`, the convention most agents read |
+| `jev add skill --claude` | writes it to `.claude/skills/jev` instead |
+| `jev add skill --force` | replaces files that are there and differ |
+
+The two files are compiled into the binary, so an installed `jev` carries its own skill and needs
+no source tree to hand it over. Nothing is overwritten without `--force`: a file that is already
+what would be written is left alone, so running it twice says `unchanged` rather than churning
+your diff.
+
+What it teaches is when the tool fits — classifying, routing, triaging, rating, flagging, and
+anything where a confidence number beats an opinion — how to write the three question types, and
+the patterns for putting many items through one call. Read
+[`skills/jev/SKILL.md`](skills/jev/SKILL.md) and
+[`skills/jev/references/patterns.md`](skills/jev/references/patterns.md) before installing it, as
+you would any instruction you're adding to a project.
 
 ## As a library
 
