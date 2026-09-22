@@ -4,12 +4,18 @@
 [![Release](https://github.com/dsaad68/jev-cli/actions/workflows/release.yml/badge.svg)](https://github.com/dsaad68/jev-cli/actions/workflows/release.yml)
 [![Rust](https://img.shields.io/badge/Rust-2021_edition-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Platforms](https://img.shields.io/badge/binaries-Linux%20%7C%20macOS-informational)](https://github.com/dsaad68/jev-cli/releases)
-[![OpenRouter](https://img.shields.io/badge/endpoint-OpenRouter%20decisions-6566F1)](https://openrouter.ai)
+[![Model](https://img.shields.io/badge/model-TypeSafe%20Jev-0B7285)](https://typesafe.ai)
+[![OpenRouter](https://img.shields.io/badge/served%20by-OpenRouter%20decisions-6566F1)](https://openrouter.ai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Ask [Jev](https://openrouter.ai) typed questions about a piece of text and get calibrated
-probabilities back, rather than prose. A **Choice** between named options, a **Score** on an
-ordered scale, or a **Noul** — the probability that something is true.
+Ask **Jev** typed questions about a piece of text and get calibrated probabilities back, rather
+than prose. A **Choice** between named options, a **Score** on an ordered scale, or a **Noul** —
+the probability that something is true.
+
+Jev is [TypeSafe](https://typesafe.ai)'s model. This client reaches it through
+[OpenRouter](https://openrouter.ai), which serves it on the decisions endpoint
+(`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one;
+`--url` points the same questions at another endpoint.
 
 A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, and
 an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
@@ -96,7 +102,7 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | --- | --- |
 | `STATE` | The state, as text. Without it, it's read from `--state-file` (`-f`, `-` for standard input), or from standard input when that isn't a terminal. |
 | `--state-json` | Parse the state as JSON: `cat ticket.json \| jev --state-json -q questions.json` |
-| `--model` (`-m`) | Another model; the default is `typesafe/jev-1.13`. |
+| `--model` (`-m`) | Another model; the default is TypeSafe's `typesafe/jev-1.13`. |
 | `--url` | Another endpoint. With one, `OPENROUTER_API_KEY` may be unset, for an endpoint that adds the key. |
 | `--text` | One line per question. The default. |
 | `--table` | A table: question, type, answer, confidence, and every option's probability. |
