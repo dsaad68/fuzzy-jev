@@ -4,9 +4,10 @@
 # binary. Artifacts last 90 days and need a GitHub login to download; a run started by pushing a
 # tag (`v1.2.3`) also puts the same files on a Release, where anyone can fetch them with no login.
 #
-# Each target builds on a runner of its own architecture rather than cross-compiling, because the
-# TLS stack has C in it and a native build is the one that needs no cross toolchain. The Arm Linux
-# and Intel macOS runners are free for public repositories.
+# Each Linux target builds on a runner of its own architecture; the Arm runners are free for public
+# repositories. Both macOS targets build on the Apple-silicon runner, which carries the SDK for
+# Intel too, so `--target x86_64-apple-darwin` cross-compiles there — GitHub is retiring the Intel
+# image, and a job asking for it waits for a runner that is on its way out.
 name: Release
 
 on:
@@ -35,7 +36,7 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
           - target: aarch64-apple-darwin
             os: macos-latest
     steps:
