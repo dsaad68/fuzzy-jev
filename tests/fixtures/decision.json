@@ -1,0 +1,41 @@
+{
+  "model": "typesafe/jev-1.13-20260917",
+  "answers": {
+    "is_urgent": {
+      "type": "noul",
+      "noul": 0.95
+    },
+    "department": {
+      "type": "choice",
+      "choice": "billing",
+      "probabilities": {
+        "sales": 0,
+        "billing": 0.88,
+        "technical": 0.12
+      },
+      "confidence": 0.82
+    },
+    "frustration": {
+      "type": "score",
+      "score": 1.04,
+      "legend": {
+        "0": "Calm",
+        "1": "Frustrated",
+        "2": "Very angry"
+      },
+      "probabilities": {
+        "0": 0,
+        "1": 0.96,
+        "2": 0.04
+      },
+      "confidence": 0.94
+    }
+  },
+  "usage": {
+    "input_tokens": 427,
+    "output_tokens": 73,
+    "cost": 1.7934e-05
+  },
+  "id": "gen-dec-1789834659-75NM4YNUKx6BSTjWND3L",
+  "provider": "TypeSafe"
+}

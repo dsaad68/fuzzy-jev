@@ -1,0 +1,52 @@
+[package]
+name = "jev"
+version = "0.1.0"
+edition = "2021"
+description = "A client for TypeSafe's Jev on OpenRouter's decisions endpoint: typed Choice, Score and Noul answers about a state. Native and wasm32, and a CLI."
+repository = "https://github.com/dsaad68/jev-cli"
+readme = "README.md"
+
+[features]
+default = ["cli"]
+# `cli`: the `jev` command (src/main.rs and src/cli/). Without it the library has no CLI
+# dependencies, for crates that only call Jev.
+cli = ["command", "dep:clap", "dep:tokio", "dep:anyhow", "dep:terminal_size"]
+# `command`: writing questions as a command line writes them (`spec`) and printing a reply as the
+# command prints it (`print`), without the command itself. It is what another crate needs to offer
+# `jev` the way the terminal does — dx's shell command, in wasm-agent — so the two can't drift
+# apart in what a question means or how an answer reads.
+command = ["dep:unicode-width"]
+
+[[bin]]
+name = "jev"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# How wide a --table cell prints: a CJK character or an emoji takes two terminal columns, which
+# counting `char`s would put a column short and the borders out of line. Not target-specific: the
+# `command` feature prints the same table in the browser build of dx's shell.
+unicode-width = { version = "0.2", optional = true }
+
+# TLS is only needed natively; on wasm32 reqwest goes through the host's `fetch`.
+# The CLI is native-only; the library stays wasm32-compatible.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+clap = { version = "4", features = ["derive"], optional = true }
+tokio = { version = "1", features = ["macros", "rt"], optional = true }
+anyhow = { version = "1", optional = true }
+# How wide a --table may be. Only the terminal's size, where crossterm (which dx uses for its
+# editor) would bring an event loop and signal handling this command has no use for.
+terminal_size = { version = "0.4", optional = true }
+
+# The example and the live test.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# What the released binaries are built with: the symbols are of no use to whoever downloads one,
+# and they are most of the file.
+[profile.release]
+strip = true

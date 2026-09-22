@@ -1,0 +1,50 @@
+# Formatting, lints and tests, on every push and pull request.
+#
+# The binaries are built by release.yml; this is the one that has to be green before they are worth
+# building. The library also builds for `wasm32-unknown-unknown`, so it is linted for that too: the
+# CLI's dependencies are native-only, and this is what keeps them that way.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      # --locked everywhere: a lock file that no longer matches Cargo.toml fails here, not later.
+      - name: Lint
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Lint for WebAssembly
+        run: cargo clippy --lib --locked --target wasm32-unknown-unknown -- -D warnings
+
+      # The test that calls OpenRouter is #[ignore]d, so this needs no key and no network.
+      - name: Tests
+        run: cargo test --locked

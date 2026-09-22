@@ -1,0 +1,5 @@
+# How the crates are formatted, and what CI's `cargo fmt --check` holds them to. rustfmt finds this
+# from every crate below it. These are the settings closest to how the code was already written:
+# wide lines, and short expressions kept on one line rather than broken at rustfmt's defaults.
+max_width = 140
+use_small_heuristics = "Max"
