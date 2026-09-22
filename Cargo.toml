@@ -5,6 +5,7 @@ edition = "2021"
 description = "A client for TypeSafe's Jev on OpenRouter's decisions endpoint: typed Choice, Score and Noul answers about a state. Native and wasm32, and a CLI."
 repository = "https://github.com/dsaad68/jev-cli"
 readme = "README.md"
+license = "MIT"
 
 [features]
 default = ["cli"]

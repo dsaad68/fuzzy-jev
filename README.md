@@ -5,6 +5,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2021_edition-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Platforms](https://img.shields.io/badge/binaries-Linux%20%7C%20macOS-informational)](https://github.com/dsaad68/jev-cli/releases)
 [![OpenRouter](https://img.shields.io/badge/endpoint-OpenRouter%20decisions-6566F1)](https://openrouter.ai)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Ask [Jev](https://openrouter.ai) typed questions about a piece of text and get calibrated
 probabilities back, rather than prose. A **Choice** between named options, a **Score** on an
@@ -170,3 +171,8 @@ can be started by hand from the Actions tab, which leaves them as artifacts.
 
 Extracted from [wasm-agent](https://github.com/dsaad68/wasm-agent), where this began as
 `crates/jev` and where dx's shell offers the same command to an agent.
+
+## License
+
+MIT — see [LICENSE](LICENSE). The bundled Agent Skill says the same in its own frontmatter, so a
+project that runs `jev add skill` carries it with the files.
