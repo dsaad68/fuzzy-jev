@@ -24,7 +24,7 @@ decisions, or into a crisp amount through [fuzzy outputs](#outputs-a-crisp-amoun
 full guide to `rules.toml`: every table, operator and formula, the output formats, the errors, and
 an example worked by hand.
 
-![The irrigation rules drawn as a fuzzy rule base: the premises cut at Jev's degrees, each rule's set clipped, and the merged shape with its centroid](docs/irrigation.svg)
+![The weather rules drawn as a fuzzy rule base: each question's levels cut at Jev's degrees, each rule's operators, and what to wear against the threshold](docs/wear.svg)
 
 A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, and
 an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
@@ -352,11 +352,11 @@ structure alone and makes no call, which is a free way to check a rules file. Wi
 part carries its number.
 
 ```sh
-jev 'A fairly normal week: two moderate showers, and the soil is damp but drying at the surface.' \
-  -q examples/rules/rain.json -r examples/rules/irrigation.toml --svg irrigation.svg
+jev '16°C, the air feels sticky, and a light drizzle has started.' \
+  -q examples/rules/weather.json -r examples/rules/wear.toml --svg wear.svg
 ```
 
-The image is laid out the way a fuzzy rule base is usually drawn, with one row per rule:
+That is the drawing at the top of this page. The image is laid out the way a fuzzy rule base is usually drawn, with one row per rule:
 
 - **Premises:** a column per question. A Score's levels are drawn as a fuzzy partition, with the
   term's own level in bold, shaded up to the degree Jev gave it. The red arrow is the expected
@@ -366,9 +366,15 @@ The image is laid out the way a fuzzy rule base is usually drawn, with one row p
   against the threshold.
 - **Final:** each output's merged shape with an arrow at its centroid, and every item's score.
 
-The weather rules, which mix Scores, a Noul, operator trees and items:
+With an output, the conclusions are its sets clipped at each rule's score, and the final column is
+their merged shape with an arrow at its centroid. The irrigation rules:
 
-![The weather rules drawn as a fuzzy rule base, one row per rule](docs/wear.svg)
+```sh
+jev 'A fairly normal week: two moderate showers, and the soil is damp but drying at the surface.' \
+  -q examples/rules/rain.json -r examples/rules/irrigation.toml --svg irrigation.svg
+```
+
+![The irrigation rules drawn as a fuzzy rule base: each rule's set clipped, and the merged shape with its centroid](docs/irrigation.svg)
 
 In the terminal, `--graph` prints each rule as a tree, and each term with every level's
 probability (the term's own in brackets):
