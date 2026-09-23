@@ -103,7 +103,7 @@ from 0 to 1.
 [terms]                       # lowercase names for answers
 hot     = "temp.Hot"          # a Score level, by its exact text
 raining = "raining"           # a Noul, by its id
-billing = "team.billing"      # a Choice option
+stormy  = "sky.storm"         # a Choice option, from a "sky" choice: clear, cloudy, storm
 
 [[rule]]
 if   = "raining AND NOT hot"  # AND OR NOT ( ), hedges VERY SOMEWHAT EXTREMELY INDEED — uppercase

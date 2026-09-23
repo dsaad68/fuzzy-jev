@@ -99,7 +99,7 @@ logic; every answer is already a degree from 0 to 1:
 hot     = "temp.Hot"          # a Score level, by its exact text
 humid   = "humidity.Humid"
 raining = "raining"           # a Noul, by its id
-# billing = "team.billing"    # a Choice option
+# stormy  = "sky.storm"       # a Choice option, from a "sky" choice: clear, cloudy, storm
 
 [[rule]]
 if   = "raining AND NOT hot"  # AND OR NOT ( ), hedges VERY SOMEWHAT EXTREMELY INDEED — uppercase

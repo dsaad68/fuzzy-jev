@@ -13,7 +13,7 @@
 //!
 //! [terms]                    # the names rules use for the answers
 //! hot     = "temp.Hot"       # a Score's level, by its text
-//! billing = "team.billing"   # a Choice's option
+//! stormy  = "sky.storm"      # a Choice's option
 //! raining = "raining"        # a Noul, by its id alone
 //!
 //! [[rule]]

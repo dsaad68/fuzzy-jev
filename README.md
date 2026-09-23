@@ -225,7 +225,7 @@ mild    = "temp.Mild"
 hot     = "temp.Hot"
 humid   = "humidity.Humid"
 raining = "raining"      # a Noul, by its id
-# billing = "team.billing"  (a Choice option)
+# stormy = "sky.storm"   (a Choice option, from a "sky" choice: clear, cloudy, storm)
 
 [[rule]]
 if   = "cold"
