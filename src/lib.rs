@@ -38,6 +38,7 @@ pub mod spec;
 mod types;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -50,6 +51,10 @@ pub const DEFAULT_MODEL: &str = "typesafe/jev-1.13";
 /// OpenRouter's decisions endpoint.
 pub const DECISIONS_URL: &str = "https://openrouter.ai/api/alpha/decisions";
 
+/// How long a request may take, from sending it to reading the whole reply, unless the client says
+/// otherwise ([`Client::with_timeout`]). A reply usually takes a second or two.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Sends decision requests. `Debug` isn't derived, to keep the key out of logs.
 #[derive(Clone)]
 pub struct Client {
@@ -57,13 +62,35 @@ pub struct Client {
     key: String,
     url: String,
     model: String,
+    timeout: Duration,
 }
 
 impl Client {
     /// A client for OpenRouter with an API key. An empty key sends no `Authorization` header, for an
     /// endpoint (see [`Client::with_url`]) that adds the key itself.
     pub fn new(key: &str) -> Client {
-        Client { http: reqwest::Client::new(), key: key.trim().to_owned(), url: DECISIONS_URL.to_owned(), model: DEFAULT_MODEL.to_owned() }
+        Client {
+            http: reqwest::Client::new(),
+            key: key.trim().to_owned(),
+            url: DECISIONS_URL.to_owned(),
+            model: DEFAULT_MODEL.to_owned(),
+            timeout: DEFAULT_TIMEOUT,
+        }
+    }
+
+    /// Gives up on a request that takes longer than `timeout` in all, instead of
+    /// [`DEFAULT_TIMEOUT`]. A request that timed out is not sent again: it may have been answered,
+    /// and billed, all the same.
+    pub fn with_timeout(mut self, timeout: Duration) -> Client {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Sends requests through `http`, for a proxy, other TLS roots or a shared connection pool.
+    /// The timeout is still this client's own ([`Client::with_timeout`]).
+    pub fn with_http(mut self, http: reqwest::Client) -> Client {
+        self.http = http;
+        self
     }
 
     /// Sends requests to `url` instead of OpenRouter's decisions endpoint.
@@ -113,7 +140,7 @@ impl Client {
     /// Sends `request` as it is, whatever model it names.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
         let body = serde_json::to_vec(request).map_err(|e| Error::Decode(e.to_string()))?;
-        let mut post = self.http.post(&self.url).header("content-type", "application/json").body(body);
+        let mut post = self.http.post(&self.url).header("content-type", "application/json").timeout(self.timeout).body(body);
         if !self.key.is_empty() {
             post = post.bearer_auth(&self.key);
         }

@@ -11,16 +11,17 @@
   },
   "urgency": {
     "type": "score",
-    "instructions": "How soon does the sender need an answer?",
+    "instructions": "How soon does the sender need an answer? Today: something stops or a deadline falls today. This week: a deadline within the next few days. No deadline: none given or implied.",
     "criteria": ["No deadline", "This week", "Today"]
   },
   "blocked": {
     "type": "noul",
-    "instructions": "Is the sender unable to do their work until this is answered?"
+    "instructions": "Is the sender unable to do their work until this is answered?",
+    "criteria": {"true": "They say they can't work, log in, pay or ship until it is fixed", "false": "They can carry on meanwhile"}
   },
   "anger": {
     "type": "score",
-    "instructions": "How angry does the sender sound?",
+    "instructions": "How angry does the sender sound? Calm: neutral or polite. Annoyed: frustrated but civil. Angry: hostile, shouting in capitals, or threatening to leave.",
     "criteria": ["Calm", "Annoyed", "Angry"]
   }
 }

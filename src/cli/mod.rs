@@ -6,6 +6,7 @@ mod skill;
 
 use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{bail, Context};
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser};
@@ -98,6 +99,10 @@ pub struct Args {
     #[arg(long, default_value = jev::DECISIONS_URL)]
     url: String,
 
+    /// Give up on the request after this many seconds; it is not sent again
+    #[arg(long, value_name = "SECONDS", default_value_t = jev::DEFAULT_TIMEOUT.as_secs_f64(), value_parser = seconds)]
+    timeout: f64,
+
     /// Print one line per question (the default)
     #[arg(long, group = "format")]
     text: bool,
@@ -106,7 +111,7 @@ pub struct Args {
     #[arg(long, group = "format")]
     table: bool,
 
-    /// Print the reply as the endpoint sent it, for scripts
+    /// Print the reply as JSON, for scripts: the fields jev knows, re-encoded
     #[arg(long, group = "format")]
     json: bool,
 
@@ -201,7 +206,7 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     if key.trim().is_empty() && args.url == jev::DECISIONS_URL {
         bail!("OPENROUTER_API_KEY is not set");
     }
-    let reply = Client::new(&key).with_url(&args.url).send(&request).await?;
+    let reply = Client::new(&key).with_url(&args.url).with_timeout(Duration::from_secs_f64(args.timeout)).send(&request).await?;
     match rules {
         Some(rules) if draws => {
             draw(args, &rules, Some(&reply))?;
@@ -307,6 +312,14 @@ fn state(args: &Args, piped: Option<String>) -> anyhow::Result<Value> {
     Ok(Value::String(text.trim_end_matches(['\n', '\r']).to_owned()))
 }
 
+/// `--timeout`: a number of seconds over zero.
+fn seconds(text: &str) -> Result<f64, String> {
+    match text.parse::<f64>() {
+        Ok(seconds) if seconds.is_finite() && seconds > 0.0 && seconds < 1e9 => Ok(seconds),
+        _ => Err("a number of seconds over zero, such as 30 or 2.5".to_owned()),
+    }
+}
+
 /// A file's text, or standard input's for `-`.
 fn read(path: &Path) -> anyhow::Result<String> {
     if path == Path::new("-") {
@@ -351,6 +364,15 @@ mod tests {
         assert!(Args::command().try_get_matches_from(["jev", "state", "--noul", "n=?", "--svg", "x.svg"]).is_err());
         assert!(Args::command().try_get_matches_from(["jev", "state", "-r", "r.toml", "--graph", "--json"]).is_err());
         assert!(Args::command().try_get_matches_from(["jev", "state", "-r", "r.toml", "--svg", "x.svg", "--json"]).is_ok());
+    }
+
+    #[test]
+    fn takes_a_timeout_in_seconds() {
+        assert_eq!(invocation(&["state"]).args.timeout, 60.0);
+        assert_eq!(invocation(&["state", "--timeout", "2.5"]).args.timeout, 2.5);
+        for wrong in ["0", "-1", "soon", "inf"] {
+            assert!(Args::command().try_get_matches_from(["jev", "state", "--timeout", wrong]).is_err(), "{wrong}");
+        }
     }
 
     #[test]

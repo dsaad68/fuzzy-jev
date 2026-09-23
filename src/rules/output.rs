@@ -1,27 +1,28 @@
 //! Outputs: a crisp axis with named fuzzy sets, for rules that conclude `OUTPUT IS SET` rather than an
-//! item. Each such rule clips its set at its score, the clipped shapes are joined by the file's OR,
-//! and the output's value is the centre of the shape that makes (Mamdani inference, centroid
-//! defuzzification).
+//! item. Each set's rules are joined by the file's OR into the set's score, each set is clipped at its
+//! score, the clipped shapes are joined by the file's OR, and the output's value is the centre of the
+//! shape that makes (Mamdani inference, centroid defuzzification).
 //!
 //! ```toml
 //! [output.irrigation]
-//! range  = [0, 100]
+//! range  = [0, 100]           # millimetres of water, say: the file gives no unit
 //! drops  = [0, 0, 20, 40]     # a trapezoid: a, b, c, d
 //! liter  = [30, 50, 70]       # a triangle: a, peak, c
 //! gallon = [60, 80, 100, 100]
 //! ```
+//!
+//! An output's sets are all shapes or all points (`[5, 5, 5]`). A point has no area, so an output
+//! of points takes its value as the points' average, weighted by their sets' scores; a point among
+//! shapes would have no area to add, and is refused.
+//!
+//! The value says where the support lies, not how strong it is, and it can fall between two sets
+//! that both have support, where neither does.
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
 use super::{is_term_name, Or, Then};
-
-/// How many points along an output's range the centroid is taken over, and how many more across
-/// each concluded set. Fine enough that the value is right to well under the two places it prints
-/// with, however narrow a set is next to its range.
-const SAMPLES: usize = 1001;
-const PER_SET: usize = 200;
 
 /// An `[output.NAME]` table as written: its range, and every other key a set.
 #[derive(Deserialize)]
@@ -40,7 +41,8 @@ pub(super) struct Output {
 }
 
 /// A fuzzy set on an output's axis: a trapezoid `a, b, c, d`, rising from `a` to `b`, flat to `c`,
-/// falling to `d`. A triangle is the trapezoid with `b` and `c` at its peak.
+/// falling to `d`. A triangle is the trapezoid with `b` and `c` at its peak, and a point the one
+/// with all four at one place.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Set {
     pub(super) name: String,
@@ -65,6 +67,11 @@ impl Set {
     /// Where the set is at its highest, for a label.
     pub(super) fn middle(&self) -> f64 {
         (self.points[1] + self.points[2]) / 2.0
+    }
+
+    /// Whether it is a point, with no width.
+    fn is_point(&self) -> bool {
+        self.points[0] == self.points[3]
     }
 }
 
@@ -99,99 +106,214 @@ impl Output {
             }
             sets.push(Set { name: set, points });
         }
+        let (points, shapes): (Vec<&Set>, Vec<&Set>) = sets.iter().partition(|set| set.is_point());
+        if let (Some(point), Some(shape)) = (points.first(), shapes.first()) {
+            return Err(wrong(format!(
+                "mixes a point ({}) with a set that has width ({}): a point has no area to weigh against a shape's, so an \
+                 output's sets are all points or all shapes",
+                point.name, shape.name
+            )));
+        }
         sets.sort_by(|a, b| a.points.partial_cmp(&b.points).unwrap_or(std::cmp::Ordering::Equal));
         Ok(Output { name, range: (low, high), sets })
     }
 
-    /// The x of each sample along the range.
+    /// The x of each sample along the range, for drawing.
     pub(super) fn samples(&self, count: usize) -> impl Iterator<Item = f64> + '_ {
         let (low, high) = self.range;
         (0..count).map(move |at| low + (high - low) * at as f64 / (count - 1) as f64)
     }
 
-    /// The merged shape at `x`: each concluded set clipped at its rule's score, joined by `or`.
-    pub(super) fn merged(&self, clipped: &[(usize, f64)], or: Or, x: f64) -> f64 {
-        clipped.iter().fold(0.0, |merged, &(set, score)| or.apply(merged, self.sets[set].membership(x).min(score)))
+    /// The merged shape at `x`: each set clipped at its score (`scores`, one per set), joined by `or`.
+    pub(super) fn merged(&self, scores: &[f64], or: Or, x: f64) -> f64 {
+        self.sets
+            .iter()
+            .zip(scores)
+            .filter(|(_, score)| **score > 0.0)
+            .fold(0.0, |merged, (set, &score)| or.apply(merged, set.membership(x).min(score)))
     }
 
-    /// The centre of the merged shape, or `None` when no concluded set scored above zero.
+    /// The centre of the merged shape, or `None` when no set scored above zero. `scores` has one
+    /// score per set.
     ///
-    /// The shape is integrated over an even grid across the range and a fine one across each
-    /// concluded set, so a set narrow next to its range is never missed between two samples. A set
-    /// with no width at all (`[5, 5, 5]`) has no area to take a centre of; when every scoring set is
-    /// like that, the value is their points, weighted by score.
-    pub(super) fn centroid(&self, clipped: &[(usize, f64)], or: Or) -> Option<f64> {
-        let scoring: Vec<(usize, f64)> = clipped.iter().copied().filter(|(_, score)| *score > 0.0).collect();
+    /// The integral is exact, not sampled. Between two neighbouring breaks (a set's corners, and
+    /// where its clip meets its sides) every clipped set is a straight line; `or` joins those lines
+    /// into a polynomial on each piece, once the pieces are cut where max's lines cross or where
+    /// bounded's sum reaches 1; and a polynomial's area and moment have a closed form.
+    pub(super) fn centroid(&self, scores: &[f64], or: Or) -> Option<f64> {
+        let scoring: Vec<(&Set, f64)> =
+            self.sets.iter().zip(scores).filter(|(_, score)| **score > 0.0).map(|(set, score)| (set, *score)).collect();
         if scoring.is_empty() {
             return None;
         }
-        let mut xs: Vec<f64> = self.samples(SAMPLES).collect();
-        for &(set, _) in &scoring {
-            let [a, _, _, d] = self.sets[set].points;
-            xs.extend((0..=PER_SET).map(|at| a + (d - a) * at as f64 / PER_SET as f64));
-            xs.extend(self.sets[set].points);
+        if scoring.iter().all(|(set, _)| set.is_point()) {
+            let weight: f64 = scoring.iter().map(|(_, score)| score).sum();
+            return Some(scoring.iter().map(|(set, score)| set.points[0] * score).sum::<f64>() / weight);
         }
-        xs.sort_by(f64::total_cmp);
-        xs.dedup();
-        let heights: Vec<f64> = xs.iter().map(|x| self.merged(&scoring, or, *x)).collect();
-        // The trapezoid rule over the uneven grid, for the area and its moment about zero.
+        let mut breaks: Vec<f64> = Vec::new();
+        for (set, score) in &scoring {
+            let [a, b, c, d] = set.points;
+            breaks.extend([a, b, c, d, a + (b - a) * score, d - (d - c) * score]);
+        }
+        breaks.sort_by(f64::total_cmp);
+        breaks.dedup();
         let (mut area, mut moment) = (0.0, 0.0);
-        for at in 1..xs.len() {
-            let (x0, x1, y0, y1) = (xs[at - 1], xs[at], heights[at - 1], heights[at]);
-            area += (x1 - x0) * (y0 + y1) / 2.0;
-            moment += (x1 - x0) * (x0 * y0 + x1 * y1) / 2.0;
-        }
-        if area > 0.0 {
-            return Some(moment / area);
-        }
-        // Each set's score first, its rules joined by `or` as everywhere else, so that two rules
-        // for one point count as the set's score does, not as their sum.
-        let mut sets: Vec<(usize, f64)> = Vec::new();
-        for &(set, score) in &scoring {
-            match sets.iter_mut().find(|(seen, _)| *seen == set) {
-                Some((_, joined)) => *joined = or.apply(*joined, score),
-                None => sets.push((set, score)),
+        for pair in breaks.windows(2) {
+            let (x0, width) = (pair[0], pair[1] - pair[0]);
+            if width <= 0.0 {
+                continue;
+            }
+            // Each set's line across the piece, as its values at the two ends. They are read from
+            // inside, at a third and two thirds, since a vertical side at an end has two values.
+            let lines: Vec<(f64, f64)> = scoring
+                .iter()
+                .map(|(set, score)| {
+                    let at = |t: f64| set.membership(x0 + width * t).min(*score);
+                    let (first, second) = (at(1.0 / 3.0), at(2.0 / 3.0));
+                    (2.0 * first - second, 2.0 * second - first)
+                })
+                .collect();
+            for (t0, t1) in or.pieces(&lines) {
+                let ends: Vec<(f64, f64)> = lines.iter().map(|(from, to)| (from + (to - from) * t0, from + (to - from) * t1)).collect();
+                let (piece_area, piece_moment) = integrate(&or.polynomial(&ends), x0 + width * t0, width * (t1 - t0));
+                area += piece_area;
+                moment += piece_moment;
             }
         }
-        let weight: f64 = sets.iter().map(|(_, score)| score).sum();
-        Some(sets.iter().map(|(set, score)| self.sets[*set].middle() * score).sum::<f64>() / weight)
+        (area > 0.0).then(|| moment / area)
     }
 }
 
+impl Or {
+    /// Where, between 0 and 1 along a piece, `lines` (each its values at the two ends) must be cut
+    /// for their join to be one polynomial on each part: where two cross, for max, and where their
+    /// sum reaches 1, for bounded. Probsum's product of lines is a polynomial already.
+    fn pieces(self, lines: &[(f64, f64)]) -> Vec<(f64, f64)> {
+        let crossing = |from: f64, to: f64| (from * to < 0.0).then(|| from / (from - to));
+        let mut cuts: Vec<f64> = match self {
+            Or::Max => (0..lines.len())
+                .flat_map(|i| (i + 1..lines.len()).map(move |j| (i, j)))
+                .filter_map(|(i, j)| crossing(lines[i].0 - lines[j].0, lines[i].1 - lines[j].1))
+                .collect(),
+            Or::Bounded => {
+                let (from, to) = lines.iter().fold((0.0, 0.0), |(from, to), line| (from + line.0, to + line.1));
+                crossing(from - 1.0, to - 1.0).into_iter().collect()
+            }
+            Or::Probsum => Vec::new(),
+        };
+        cuts.sort_by(f64::total_cmp);
+        let bounds: Vec<f64> = std::iter::once(0.0).chain(cuts).chain(std::iter::once(1.0)).collect();
+        bounds.windows(2).map(|pair| (pair[0], pair[1])).filter(|(t0, t1)| t1 > t0).collect()
+    }
+
+    /// The join of `lines` (each its values at the two ends) on a piece with no cut inside, as a
+    /// polynomial's coefficients in `t` from 0 to 1, lowest power first.
+    fn polynomial(self, lines: &[(f64, f64)]) -> Vec<f64> {
+        let line = |(from, to): (f64, f64)| vec![from, to - from];
+        match self {
+            // No two lines cross inside, so the highest at the middle is the highest throughout.
+            Or::Max => lines.iter().copied().max_by(|a, b| (a.0 + a.1).total_cmp(&(b.0 + b.1))).map_or_else(|| vec![0.0], line),
+            // The sum doesn't reach 1 inside, so it is either under 1 throughout or at it.
+            Or::Bounded => {
+                let (from, to) = lines.iter().fold((0.0, 0.0), |(from, to), line| (from + line.0, to + line.1));
+                line((from.min(1.0), to.min(1.0)))
+            }
+            // 1 − (1 − a)(1 − b)…, which is a + b − ab joined over every line.
+            Or::Probsum => {
+                let mut none = vec![1.0];
+                for &(from, to) in lines {
+                    let (constant, slope) = (1.0 - from, from - to);
+                    let mut next = vec![0.0; none.len() + 1];
+                    for (power, coefficient) in none.iter().enumerate() {
+                        next[power] += coefficient * constant;
+                        next[power + 1] += coefficient * slope;
+                    }
+                    none = next;
+                }
+                let mut any: Vec<f64> = none.iter().map(|coefficient| -coefficient).collect();
+                any[0] += 1.0;
+                any
+            }
+        }
+    }
+}
+
+/// The area under `y(t) = Σ cₖ tᵏ` over `x` from `start` to `start + width` (with `t` going from 0
+/// to 1 across it), and its moment about zero.
+fn integrate(polynomial: &[f64], start: f64, width: f64) -> (f64, f64) {
+    let over = |shift: usize| polynomial.iter().enumerate().map(|(power, coefficient)| coefficient / (power + shift) as f64).sum::<f64>();
+    let area = width * over(1);
+    (area, start * area + width * width * over(2))
+}
+
 impl Then {
-    /// A rule's `then`: `OUTPUT IS SET` when `OUTPUT` is one of `outputs`, and anything else an
-    /// item. An item may have `IS` in its name (`request IS urgent`), as it could before outputs
-    /// existed, so only a declared output's name makes it an output.
+    /// A rule's `then`: `OUTPUT IS SET`, or an item. Three words with `IS` between them always
+    /// conclude in an output, so a typo in the output's name is an error rather than an item that
+    /// quietly takes the rule; an item is named any other way (`request is urgent`).
     pub(super) fn parse(then: &str, outputs: &[Output]) -> Result<Then, String> {
         let then = then.trim();
         if then.is_empty() {
             return Err("the `then` is empty".to_owned());
         }
         let words: Vec<&str> = then.split_whitespace().collect();
-        let Some(at) = (match words[..] {
-            [name, "IS", _] => outputs.iter().position(|output| output.name == name),
-            _ => None,
-        }) else {
+        let [name, "IS", set] = words[..] else {
             return Ok(Then::Item(then.to_owned()));
         };
+        let Some(at) = outputs.iter().position(|output| output.name == name) else {
+            let names: Vec<&str> = outputs.iter().map(|output| output.name.as_str()).collect();
+            let hint = match closest(name, &names) {
+                Some(close) => format!("; did you mean `{close} IS {set}`?"),
+                None if names.is_empty() => format!(
+                    "; declare it, as [output.{name}] with a range and its sets, or name the item without `IS`, as `{name} is {set}`"
+                ),
+                None => format!("; the outputs are {}, or name an item without `IS`, as `{name} is {set}`", names.join(", ")),
+            };
+            return Err(format!("`{then}` concludes in an output, and there is no [output.{name}]{hint}"));
+        };
         let sets = &outputs[at].sets;
-        match sets.iter().position(|set| set.name == words[2]) {
+        match sets.iter().position(|candidate| candidate.name == set) {
             Some(set) => Ok(Then::Output { output: at, set }),
-            None => Err(format!(
-                "[output.{}] has no set `{}`; its sets are {}",
-                outputs[at].name,
-                words[2],
-                sets.iter().map(|set| set.name.as_str()).collect::<Vec<_>>().join(", ")
-            )),
+            None => {
+                let names: Vec<&str> = sets.iter().map(|set| set.name.as_str()).collect();
+                let hint = closest(set, &names).map(|close| format!("; did you mean `{close}`?")).unwrap_or_default();
+                Err(format!("[output.{}] has no set `{set}`; its sets are {}{hint}", outputs[at].name, names.join(", ")))
+            }
         }
     }
+}
+
+/// The name in `names` a typo of `name` most likely meant: within two edits, and the nearest.
+fn closest<'a>(name: &str, names: &[&'a str]) -> Option<&'a str> {
+    names
+        .iter()
+        .map(|candidate| (edits(name, candidate), *candidate))
+        .filter(|(distance, _)| *distance <= 2)
+        .min()
+        .map(|(_, candidate)| candidate)
+}
+
+/// How many one-character insertions, deletions and substitutions turn `a` into `b`.
+fn edits(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, x) in a.chars().enumerate() {
+        let mut diagonal = row[0];
+        row[0] = i + 1;
+        for (j, y) in b.iter().enumerate() {
+            let next = (row[j + 1] + 1).min(row[j] + 1).min(diagonal + usize::from(x != *y));
+            diagonal = row[j + 1];
+            row[j + 1] = next;
+        }
+    }
+    row[b.len()]
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use super::super::Rules;
+    use super::super::{Or, Rules};
+    use super::*;
     use crate::{DecisionResponse, Question};
 
     /// The irrigation example: how much it rained, as a Score.
@@ -240,15 +362,34 @@ mod tests {
         .unwrap()
     }
 
+    /// An output `y` over `range` with `sets`, one rule per set concluding it from `rainfall`'s
+    /// levels in turn, under `logic`.
+    fn output(logic: &str, range: &str, sets: &[(&str, &str)], thens: &[(&str, &str)]) -> Rules {
+        let mut text = format!(
+            "{logic}\n[terms]\nscarce = \"rainfall.Scarce\"\nregular = \"rainfall.Regular\"\nlarge = \"rainfall.Large\"\n[output.y]\nrange = {range}\n"
+        );
+        for (name, points) in sets {
+            text.push_str(&format!("{name} = {points}\n"));
+        }
+        for (when, set) in thens {
+            text.push_str(&format!("[[rule]]\nif = \"{when}\"\nthen = \"y IS {set}\"\n"));
+        }
+        rules(&text).unwrap()
+    }
+
+    fn value(rules: &Rules, levels: [f64; 3]) -> f64 {
+        rules.evaluate(&reply(levels)).unwrap().outputs[0].value.unwrap()
+    }
+
     #[test]
     fn a_symmetric_set_fired_alone_has_its_peak_as_its_centre() {
-        let outcome = rules(RULES).unwrap().evaluate(&reply([0.0, 0.8, 0.0])).unwrap();
+        let outcome = rules(RULES).unwrap().evaluate(&reply([0.0, 1.0, 0.0])).unwrap();
         let irrigation = &outcome.outputs[0];
         assert_eq!(irrigation.output, "irrigation");
-        assert!((irrigation.value.unwrap() - 50.0).abs() < 0.01, "{:?}", irrigation.value);
+        assert!((irrigation.value.unwrap() - 50.0).abs() < 1e-9, "{:?}", irrigation.value);
         // The sets in order along the axis, each with the score its rules clip it at.
         let sets: Vec<(&str, f64)> = irrigation.sets.iter().map(|set| (set.set.as_str(), set.score)).collect();
-        assert_eq!(sets, [("drops", 0.0), ("liter", 0.8), ("gallon", 0.0)]);
+        assert_eq!(sets, [("drops", 0.0), ("liter", 1.0), ("gallon", 0.0)]);
     }
 
     #[test]
@@ -263,69 +404,110 @@ mod tests {
 
     #[test]
     fn no_rule_firing_leaves_no_value() {
-        let outcome = rules(RULES).unwrap().evaluate(&reply([0.0, 0.0, 0.0])).unwrap();
+        let only_scarce = output("", "[0, 100]", &[("low", "[0, 10, 20]")], &[("scarce", "low")]);
+        let outcome = only_scarce.evaluate(&reply([0.0, 1.0, 0.0])).unwrap();
         assert_eq!(outcome.outputs[0].value, None);
-        assert!(outcome.text().starts_with("irrigation  -  "));
+        assert!(outcome.text().starts_with("y  -  "));
         assert_eq!(serde_json::to_value(&outcome).unwrap()["outputs"][0]["value"], serde_json::Value::Null);
     }
 
     #[test]
     fn a_set_narrow_next_to_its_range_is_not_missed() {
-        // Between two points of an even grid over a million, this triangle would have no area.
-        let narrow = r#"
-            [terms]
-            regular = "rainfall.Regular"
-            [output.flow]
-            range = [0, 1000000]
-            trickle = [0.1, 0.2, 0.3]
-            flood = [900000, 950000, 1000000]
-            [[rule]]
-            if = "regular"
-            then = "flow IS trickle"
-        "#;
-        let value = rules(narrow).unwrap().evaluate(&reply([0.0, 0.8, 0.0])).unwrap().outputs[0].value.unwrap();
-        assert!((value - 0.2).abs() < 1e-6, "{value}");
-        // A set with no width has no area; its point is the value.
-        let point = narrow.replace("[0.1, 0.2, 0.3]", "[5, 5, 5]");
-        assert_eq!(rules(&point).unwrap().evaluate(&reply([0.0, 0.8, 0.0])).unwrap().outputs[0].value, Some(5.0));
+        let narrow = output(
+            "",
+            "[0, 1000000]",
+            &[("trickle", "[0.1, 0.2, 0.3]"), ("flood", "[900000, 950000, 1000000]")],
+            &[("regular", "trickle")],
+        );
+        let value = value(&narrow, [0.2, 0.8, 0.0]);
+        assert!((value - 0.2).abs() < 1e-9, "{value}");
     }
 
     #[test]
-    fn points_are_weighted_by_their_sets_scores_joined_by_or() {
-        // Two rules for the point at 10 (0.3 and 0.2) and one for the point at 20 (0.3). With max,
-        // the point at 10 scores 0.3, as its set's reported score says, so the value is halfway:
-        // summing the rules would weight it 0.5 and pull the value to 13.75.
-        let points = |logic: &str| {
-            format!(
-                r#"
-                {logic}
-                [terms]
-                scarce = "rainfall.Scarce"
-                regular = "rainfall.Regular"
-                large = "rainfall.Large"
-                [output.dose]
-                range = [0, 30]
-                low = [10, 10, 10]
-                high = [20, 20, 20]
-                [[rule]]
-                if = "scarce"
-                then = "dose IS low"
-                [[rule]]
-                if = "regular"
-                then = "dose IS low"
-                [[rule]]
-                if = "large"
-                then = "dose IS high"
-                "#
-            )
-        };
-        let outcome = rules(&points("")).unwrap().evaluate(&reply([0.3, 0.2, 0.3])).unwrap();
+    fn two_equal_triangles_meet_in_the_middle_under_every_or() {
+        // Symmetric about 65, so the centre is 65 whatever joins them.
+        for logic in ["", "[logic]\nor = \"probsum\"", "[logic]\nor = \"bounded\""] {
+            let two = output(logic, "[0, 100]", &[("a", "[30, 50, 70]"), ("b", "[60, 80, 100]")], &[("regular", "a"), ("large", "b")]);
+            let value = value(&two, [0.0, 0.5, 0.5]);
+            assert!((value - 65.0).abs() < 1e-9, "{logic}: {value}");
+        }
+    }
+
+    #[test]
+    fn the_centre_is_exact_not_sampled() {
+        // Two triangles 10 wide that don't overlap, centred on 5 and 20. Clipped at h, each is a
+        // trapezoid of area h × (10 + 10(1 − h)) / 2 about its own centre.
+        let rules = output("", "[0, 30]", &[("a", "[0, 5, 10]"), ("b", "[15, 20, 25]")], &[("regular", "a"), ("large", "b")]);
+        let area = |h: f64| h * (10.0 + 10.0 * (1.0 - h)) / 2.0;
+        for (a, b) in [(0.5, 0.5), (0.75, 0.25), (0.9, 0.1)] {
+            let want = (area(a) * 5.0 + area(b) * 20.0) / (area(a) + area(b));
+            let got = value(&rules, [0.0, a, b]);
+            assert!((got - want).abs() < 1e-12, "{a}, {b}: {got} vs {want}");
+        }
+    }
+
+    #[test]
+    fn probsum_and_bounded_match_a_fine_sum() {
+        // Overlapping sets, where the join is curved (probsum) or meets 1 (bounded): the closed form
+        // agrees with a sum over a million steps.
+        let sets = [("a", "[0, 20, 40, 60]"), ("b", "[30, 50, 70]"), ("c", "[45, 80, 100, 100]")];
+        let thens = [("scarce", "a"), ("regular", "b"), ("large", "c")];
+        for (logic, or) in [("[logic]\nor = \"probsum\"", Or::Probsum), ("[logic]\nor = \"bounded\"", Or::Bounded), ("", Or::Max)] {
+            let rules = output(logic, "[0, 100]", &sets, &thens);
+            let levels = [0.3, 0.9, 0.6];
+            let levels = [levels[0] / 1.8, levels[1] / 1.8, levels[2] / 1.8];
+            let got = value(&rules, levels);
+            let output = &rules.outputs[0];
+            let (mut area, mut moment) = (0.0, 0.0);
+            let steps = 1_000_000;
+            for at in 0..steps {
+                let x = (at as f64 + 0.5) * 100.0 / steps as f64;
+                let y = output.merged(&levels, or, x);
+                area += y;
+                moment += x * y;
+            }
+            assert!((got - moment / area).abs() < 1e-6, "{logic}: {got} vs {}", moment / area);
+        }
+    }
+
+    #[test]
+    fn points_are_weighted_by_their_sets_scores() {
+        // The review's case: two points far apart on a wide range, equally scored.
+        let points = output(
+            "",
+            "[0, 1000]",
+            &[("low", "[0.0001, 0.0001, 0.0001]"), ("high", "[5, 5, 5]")],
+            &[("regular", "low"), ("large", "high")],
+        );
+        assert!((value(&points, [0.0, 0.5, 0.5]) - 2.50005).abs() < 1e-12);
+        let points = output("", "[0, 100]", &[("low", "[0, 0, 0]"), ("high", "[10, 10, 10]")], &[("regular", "low"), ("large", "high")]);
+        assert!((value(&points, [0.0, 0.5, 0.5]) - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_sets_rules_join_before_it_is_clipped() {
+        // Two rules for the point at 10 (0.3 and 0.2) and one for the point at 20 (0.5). With max
+        // the point at 10 scores 0.3, as its set's reported score says: (3 + 10) / 0.8.
+        let sets = [("low", "[10, 10, 10]"), ("high", "[20, 20, 20]")];
+        let thens = [("scarce", "low"), ("regular", "low"), ("large", "high")];
+        let max = output("", "[0, 30]", &sets, &thens);
+        let outcome = max.evaluate(&reply([0.3, 0.2, 0.5])).unwrap();
         assert_eq!(outcome.outputs[0].sets[0].score, 0.3);
-        assert!((outcome.outputs[0].value.unwrap() - 15.0).abs() < 1e-9, "{:?}", outcome.outputs[0].value);
-        // With probsum the point at 10 scores 0.3 + 0.2 − 0.06 = 0.44, so the value leans toward it.
-        let probsum = rules(&points("[logic]\nor = \"probsum\"")).unwrap().evaluate(&reply([0.3, 0.2, 0.3])).unwrap();
-        let expected = (10.0 * 0.44 + 20.0 * 0.3) / 0.74;
-        assert!((probsum.outputs[0].value.unwrap() - expected).abs() < 1e-9, "{:?}", probsum.outputs[0].value);
+        assert!((outcome.outputs[0].value.unwrap() - 16.25).abs() < 1e-12);
+        // With probsum the point at 10 scores 0.3 + 0.2 − 0.06 = 0.44.
+        let probsum = output("[logic]\nor = \"probsum\"", "[0, 30]", &sets, &thens);
+        let expected = (10.0 * 0.44 + 20.0 * 0.5) / 0.94;
+        assert!((value(&probsum, [0.3, 0.2, 0.5]) - expected).abs() < 1e-12);
+
+        // Shapes too, the review's case: both triangles at 1, and the first's rule written twice.
+        // Its set is still at 1 under any OR, so the value stays 65; clipping each rule's copy
+        // apart and joining them by probsum would have pulled it to about 62.8.
+        let shapes = [("a", "[30, 50, 70]"), ("b", "[60, 80, 100]")];
+        for logic in ["", "[logic]\nor = \"probsum\"", "[logic]\nor = \"bounded\""] {
+            let twice = output(logic, "[0, 100]", &shapes, &[("NOT scarce", "a"), ("NOT scarce", "a"), ("NOT scarce", "b")]);
+            let got = value(&twice, [0.0, 0.5, 0.5]);
+            assert!((got - 65.0).abs() < 1e-9, "{logic}: {got}");
+        }
     }
 
     #[test]
@@ -344,18 +526,35 @@ mod tests {
         };
         let output = "[output.water]\nrange = [0, 10]\nsome = [0, 5, 10]";
         assert!(with(output, "water IS lots").contains("[output.water] has no set `lots`; its sets are some"));
-        // IS names an output only when the output is declared: anything else is an item's name.
-        let rules = rules(&format!(
-            "[terms]\nregular = \"rainfall.Regular\"\n{output}\n[[rule]]\nif = \"regular\"\nthen = \"request IS urgent\"\n[[rule]]\nif = \"regular\"\nthen = \"water IS some\""
-        ))
-        .unwrap();
-        let outcome = rules.evaluate(&reply([0.0, 1.0, 0.0])).unwrap();
-        assert_eq!(outcome.items[0].item, "request IS urgent");
-        assert_eq!(outcome.outputs[0].output, "water");
+        assert!(with(output, "water IS somr").contains("did you mean `some`?"));
+        // `X IS Y` always concludes in an output: a typo in its name is an error, not an item.
+        let typo = with(output, "wter IS some");
+        assert!(typo.contains("there is no [output.wter]; did you mean `water IS some`?"), "{typo}");
+        let far = with(output, "request IS urgent");
+        assert!(far.contains("the outputs are water") && far.contains("`request is urgent`"), "{far}");
+        let none = with("", "request IS urgent");
+        assert!(none.contains("declare it, as [output.request]"), "{none}");
+        // Any other shape is an item's name.
+        let rules =
+            rules(&format!("[terms]\nregular = \"rainfall.Regular\"\n{output}\n[[rule]]\nif = \"regular\"\nthen = \"request is urgent\""))
+                .unwrap();
+        assert_eq!(rules.evaluate(&reply([0.0, 1.0, 0.0])).unwrap().items[0].item, "request is urgent");
+
         assert!(with("[output.water]\nrange = [10, 0]\nsome = [0, 5, 10]", "x").contains("lowest first"));
         assert!(with("[output.water]\nrange = [0, 10]\nsome = [0, 5, 20]", "x").contains("outside the range"));
         assert!(with("[output.water]\nrange = [0, 10]\nsome = [0, 5]", "x").contains("2 points"));
         assert!(with("[output.water]\nrange = [0, 10]\nsome = [5, 2, 10]", "x").contains("go down"));
         assert!(with("[output.water]\nrange = [0, 10]", "x").contains("has no sets"));
+        let mixed = with("[output.water]\nrange = [0, 10]\nsome = [0, 5, 10]\nexact = [5, 5, 5]", "x");
+        assert!(mixed.contains("mixes a point (exact) with a set that has width (some)"), "{mixed}");
+    }
+
+    #[test]
+    fn counts_edits() {
+        assert_eq!(edits("water", "water"), 0);
+        assert_eq!(edits("wter", "water"), 1);
+        assert_eq!(edits("watre", "water"), 2);
+        assert_eq!(closest("irigation", &["irrigation", "dose"]), Some("irrigation"));
+        assert_eq!(closest("request", &["irrigation"]), None);
     }
 }

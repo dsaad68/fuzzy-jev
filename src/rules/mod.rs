@@ -1,7 +1,10 @@
-//! Fuzzy rules over a reply: what `-r rules.toml` reads. Jev's answers are degrees from 0 to 1 — a
-//! Noul's probability of yes, each Score level's and each Choice option's probability — and the
-//! rules combine them with AND, OR, NOT and hedges into a score per outcome, which counts as a yes
-//! at or over a threshold.
+//! Fuzzy rules over a reply: what `-r rules.toml` reads. A policy written over Jev's answers: each
+//! term reads a probability (a Noul's probability of yes, one Score level's or one Choice option's)
+//! and uses it as the degree to which the term holds. That is a modelling choice, not a fact about
+//! the numbers: a probability of 0.8 that it is hot is not "hot to degree 0.8". The rules combine
+//! the degrees with AND, OR, NOT and hedges, by fuzzy logic, into a support score per outcome, which
+//! counts as a yes at or over a threshold. A support score is not a probability, and isn't
+//! calibrated as one: the reply keeps the probabilities.
 //!
 //! ```toml
 //! [logic]                    # optional
@@ -25,7 +28,11 @@
 //! Operators are uppercase (`AND`, `OR`, `NOT`, and the hedges `VERY`, `SOMEWHAT`, `EXTREMELY`,
 //! `INDEED`) and terms are lowercase, so neither can be taken for the other. Hedges and `NOT` bind
 //! tightest, then `AND`, then `OR`, and parentheses group. Rules with the same `then` are joined by
-//! the file's OR.
+//! the file's OR. `OUTPUT IS SET` always concludes in a declared `[output.OUTPUT]`.
+//!
+//! Before evaluating, every answer the terms read is checked: a probability outside 0 to 1, a
+//! distribution that doesn't add up to 1, or a level or option the question doesn't have is an
+//! error, never clamped into something that looks like an answer.
 //!
 //! A rules file is checked against the questions before anything is asked ([`Rules::parse`]), so a
 //! term naming a level the question doesn't have costs no call.
@@ -48,12 +55,13 @@ use output::Output;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum And {
-    /// The smaller: safe when the answers are related, as answers about one state usually are.
+    /// The smaller: the weakest condition decides, and repeating one doesn't lower it.
     #[default]
     Min,
-    /// Their product, for independent conditions: every doubt lowers the result.
+    /// Their product: every weak condition lowers the result. Read as a probability, it assumes
+    /// the events are independent, which answers about one state seldom are.
     Product,
-    /// `max(0, a + b − 1)`: strict, true only when both clearly are.
+    /// `max(0, a + b − 1)`: strict, high only when both are.
     Lukasiewicz,
 }
 
@@ -80,12 +88,14 @@ impl And {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Or {
-    /// The larger: the strongest reason decides.
+    /// The larger: the strongest reason decides, and repeating one doesn't raise it.
     #[default]
     Max,
-    /// `a + b − ab`: independent reasons reinforce each other.
+    /// `a + b − ab`: reasons reinforce each other. A reason written twice counts twice (0.6 becomes
+    /// 0.84), so it suits distinct pieces of evidence, not restatements of one.
     Probsum,
-    /// `min(1, a + b)`: reasons add up, to at most 1.
+    /// `min(1, a + b)`: reasons add up, to at most 1. For levels or options of one question, which
+    /// exclude each other, this is their probabilities' sum: the chance that one of them holds.
     Bounded,
 }
 
@@ -118,7 +128,9 @@ pub struct Logic {
     pub or: Or,
 }
 
-/// A word that changes how strongly a term holds.
+/// A word that reshapes a degree. It moves where the threshold falls (`VERY a` passes 0.5 only
+/// when `a` is at least 0.71), and nothing more: it doesn't make "angry" mean "very angry", or add
+/// evidence. A stronger meaning needs its own level or question.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Hedge {
     /// `a²`: only a strong answer stays strong.
@@ -127,7 +139,7 @@ enum Hedge {
     Somewhat,
     /// `a³`.
     Extremely,
-    /// Pushes a degree away from 0.5, toward yes or no.
+    /// Pushes a degree away from 0.5, toward 0 or 1. It makes no answer more certain.
     Indeed,
 }
 
@@ -419,6 +431,32 @@ impl Target {
 }
 
 impl Target {
+    /// Whether the reply's answer to this term's question is one it can read: of the right type,
+    /// its numbers probabilities ([`crate::Answer::check`]), and no level or option the question
+    /// doesn't have.
+    fn check(&self, reply: &DecisionResponse) -> crate::Result<()> {
+        let bad = |why: String| crate::Error::BadAnswer { id: self.id.clone(), why };
+        match self.kind {
+            Kind::Noul => {
+                reply.noul(&self.id)?;
+            }
+            Kind::Score => {
+                if let Some(level) = reply.score(&self.id)?.probabilities.keys().find(|level| usize::from(**level) >= self.labels.len()) {
+                    return Err(bad(format!(
+                        "it gives a probability for level {level}, and the question's levels are 0 to {}",
+                        self.labels.len() - 1
+                    )));
+                }
+            }
+            Kind::Choice => {
+                if let Some(option) = reply.choice(&self.id)?.probabilities.keys().find(|option| !self.labels.contains(option)) {
+                    return Err(bad(format!("it gives a probability for `{option}`, which isn't one of the question's options")));
+                }
+            }
+        }
+        reply.answer(&self.id)?.check().map_err(bad)
+    }
+
     /// The error for a reply whose answer gives no probability for this term's level or option.
     fn missing(&self) -> crate::Error {
         crate::Error::MissingProbability { id: self.id.clone(), label: self.labels[self.selected].clone() }
@@ -607,6 +645,7 @@ impl Rules {
     /// The outcome `reply` gives: every `then`, in the order the file first names it, with its
     /// score and the rules behind it.
     pub fn evaluate(&self, reply: &DecisionResponse) -> crate::Result<Outcome> {
+        self.check(reply)?;
         let scores = self.scores(reply)?;
         let mut items: Vec<Item> = Vec::new();
         let mut outputs: Vec<OutputValue> = self
@@ -639,9 +678,21 @@ impl Rules {
             item.yes = item.score >= self.threshold;
         }
         for (at, value) in outputs.iter_mut().enumerate() {
-            value.value = self.outputs[at].centroid(&self.clipped(at, &scores), self.logic.or);
+            value.value = self.outputs[at].centroid(&self.set_scores(at, &scores), self.logic.or);
         }
         Ok(Outcome { threshold: self.threshold, items, outputs })
+    }
+
+    /// Every answer the terms read, checked once per question.
+    fn check(&self, reply: &DecisionResponse) -> crate::Result<()> {
+        let mut checked: Vec<&str> = Vec::new();
+        for target in self.terms.values() {
+            if !checked.contains(&target.id.as_str()) {
+                target.check(reply)?;
+                checked.push(&target.id);
+            }
+        }
+        Ok(())
     }
 
     /// Each rule's score for `reply`: what its `if` came to, times its weight.
@@ -650,16 +701,19 @@ impl Rules {
         self.rules.iter().map(|rule| Ok(rule.when.eval(self.logic, &mut degree)? * rule.weight)).collect()
     }
 
-    /// The sets output `at` is concluded in, each with the score its rule clips it at.
-    fn clipped(&self, at: usize, scores: &[f64]) -> Vec<(usize, f64)> {
-        self.rules
-            .iter()
-            .zip(scores)
-            .filter_map(|(rule, &score)| match rule.then {
-                Then::Output { output, set } if output == at => Some((set, score)),
-                _ => None,
-            })
-            .collect()
+    /// Every set of output `at`, with the score it is clipped at: its rules' scores joined by the
+    /// file's OR, and 0 for a set no rule concludes. Each set is clipped once, at this score, so the
+    /// score an outcome reports, the shape drawn and the value taken from it are the same thing.
+    fn set_scores(&self, at: usize, scores: &[f64]) -> Vec<f64> {
+        let mut sets = vec![0.0; self.outputs[at].sets.len()];
+        for (rule, &score) in self.rules.iter().zip(scores) {
+            if let Then::Output { output, set } = rule.then {
+                if output == at {
+                    sets[set] = self.logic.or.apply(sets[set], score);
+                }
+            }
+        }
+        sets
     }
 }
 
@@ -676,6 +730,8 @@ pub struct Outcome {
 }
 
 /// An output's crisp value: the centroid of its sets, each clipped at the score its rules give it.
+/// The value says where the support lies, not how much there is: a set clipped at 0.01 alone gives
+/// the same value as one clipped at 1, so read the sets' scores before acting on it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OutputValue {
     pub output: String,
@@ -740,7 +796,7 @@ impl OutputValue {
         self.value.map_or_else(|| "-".to_owned(), |value| format!("{value:.2}"))
     }
 
-    /// `drops 0.00, liter 0.80, gallon 0.10`.
+    /// `short 0.00, medium 0.80, long 0.10`.
     pub fn sets_text(&self) -> String {
         self.sets.iter().map(|set| format!("{} {:.2}", set.set, set.score)).collect::<Vec<_>>().join(", ")
     }
@@ -1006,12 +1062,62 @@ mod tests {
         let rules = rules("[[rule]]\nif = \"hot OR storm\"\nthen = \"x\"").unwrap();
         let mut level_gone = reply();
         let crate::Answer::Score(temp) = level_gone.answers.get_mut("temp").unwrap() else { unreachable!() };
+        // Its share moved to another level, so that the rest still adds up to 1.
         temp.probabilities.remove(&2);
+        temp.probabilities.insert(1, 0.9);
         assert_eq!(rules.evaluate(&level_gone), Err(crate::Error::MissingProbability { id: "temp".to_owned(), label: "Hot".to_owned() }));
         let mut option_gone = reply();
         let crate::Answer::Choice(sky) = option_gone.answers.get_mut("sky").unwrap() else { unreachable!() };
         sky.probabilities.remove("storm");
+        sky.probabilities.insert("cloudy".to_owned(), 0.9);
         assert_eq!(rules.evaluate(&option_gone).unwrap_err().to_string(), "question `sky` gives no probability for `storm`");
+    }
+
+    #[test]
+    fn an_answer_that_isnt_probabilities_is_an_error_not_clamped() {
+        let rules = rules("[[rule]]\nif = \"NOT raining OR hot OR storm\"\nthen = \"x\"").unwrap();
+        let why = |change: &dyn Fn(&mut DecisionResponse)| {
+            let mut reply = reply();
+            change(&mut reply);
+            match rules.evaluate(&reply) {
+                Err(error @ crate::Error::BadAnswer { .. }) => error.to_string(),
+                other => panic!("{other:?}"),
+            }
+        };
+        let noul = |value: f64| {
+            move |reply: &mut DecisionResponse| {
+                reply.answers.insert("raining".to_owned(), crate::Answer::Noul(crate::NoulAnswer { noul: value })).map(drop).unwrap_or(())
+            }
+        };
+        // 1.2 would have read as a yes of 1.2, and NOT it as −0.2.
+        assert_eq!(
+            why(&noul(1.2)),
+            "the answer to question `raining` can't be read: the probability of yes is 1.2, which isn't a probability from 0 to 1"
+        );
+        assert!(why(&noul(f64::NAN)).contains("NaN"));
+        let temp = |levels: [(u8, f64); 3]| {
+            move |reply: &mut DecisionResponse| {
+                let crate::Answer::Score(temp) = reply.answers.get_mut("temp").unwrap() else { unreachable!() };
+                temp.probabilities = levels.into();
+            }
+        };
+        assert!(why(&temp([(0, 0.1), (1, 0.9), (2, 0.2)])).contains("its probabilities add up to 1.200, not 1"));
+        assert!(why(&temp([(0, 0.9), (1, -0.1), (2, 0.2)])).contains("level 1's probability is -0.1"));
+        assert!(why(&temp([(0, 0.1), (1, 0.9), (3, 0.0)])).contains("level 3, and the question's levels are 0 to 2"));
+        assert!(why(&|reply: &mut DecisionResponse| {
+            let crate::Answer::Choice(sky) = reply.answers.get_mut("sky").unwrap() else { unreachable!() };
+            sky.probabilities.insert("hail".to_owned(), 0.0);
+        })
+        .contains("`hail`, which isn't one of the question's options"));
+        // Two places of rounding is not a mistake: 0.33 three times is 0.99.
+        let mut rounded = reply();
+        let crate::Answer::Choice(sky) = rounded.answers.get_mut("sky").unwrap() else { unreachable!() };
+        sky.probabilities = [("clear", 0.33), ("cloudy", 0.33), ("storm", 0.33)].map(|(option, p)| (option.to_owned(), p)).into();
+        assert!(rules.evaluate(&rounded).is_ok());
+        // The drawings check the same way.
+        let mut bad = reply();
+        noul(1.2)(&mut bad);
+        assert!(rules.graph_text(Some(&bad)).is_err() && rules.graph_svg(Some(&bad)).is_err());
     }
 
     #[test]

@@ -1,5 +1,5 @@
 //! The rules drawn as a picture, laid out as a fuzzy rule base is: a row per rule with its premises
-//! (the questions' levels, the term's own in bold, cut at the degree Jev gave it), the operators that
+//! (each question's levels or options and their probabilities, the term's own marked), the operators that
 //! combine them, and its conclusion (an item's bar, or an output's set clipped at the rule's score),
 //! then the final column (each item's score against the threshold, and each output's merged shape
 //! with its centre).
@@ -118,6 +118,7 @@ impl Rules {
 
     /// Every term's degree in `reply`.
     pub(super) fn degrees(&self, reply: &DecisionResponse) -> crate::Result<BTreeMap<String, f64>> {
+        self.check(reply)?;
         self.terms.iter().map(|(name, target)| Ok((name.clone(), target.degree(reply)?))).collect()
     }
 
@@ -178,7 +179,7 @@ impl Rules {
                 out.push('\n');
             }
             let scores: Option<Vec<f64>> = rows.iter().map(|row| row.score).collect();
-            let clipped = scores.as_ref().map(|scores| self.clipped(at, scores));
+            let clipped = scores.as_ref().map(|scores| self.set_scores(at, scores));
             let value = clipped.as_ref().and_then(|clipped| output.centroid(clipped, self.logic.or));
             let _ = match (&clipped, value) {
                 (Some(_), Some(value)) => writeln!(out, "  {} = {value:.2}", output.name),
@@ -229,8 +230,9 @@ impl Rules {
             .iter()
             .enumerate()
             .map(|(at, label)| {
-                let shown = match &probabilities {
-                    Some(probabilities) => format!("{label} {:.2}", probabilities[at]),
+                let shown = match probabilities.as_ref().map(|probabilities| probabilities[at]) {
+                    Some(Some(probability)) => format!("{label} {probability:.2}"),
+                    Some(None) => format!("{label} missing"),
                     None => label.clone(),
                 };
                 if at == target.selected {
@@ -245,7 +247,7 @@ impl Rules {
 
     /// An output's range as a plot: the merged shape filled in blocks, every set's outline shaded
     /// behind it, the sets' names under their peaks, and `↑` at the centre.
-    fn plot(&self, at: usize, clipped: Option<&[(usize, f64)]>, value: Option<f64>, out: &mut String) {
+    fn plot(&self, at: usize, clipped: Option<&[f64]>, value: Option<f64>, out: &mut String) {
         const WIDTH: usize = 60;
         const HEIGHT: usize = 5;
         const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -323,22 +325,19 @@ fn bar(score: f64, width: usize) -> String {
 }
 
 impl super::Target {
-    /// Every level's or option's probability in `reply`, in the order of `labels`. For a Noul, no
-    /// and yes.
-    pub(super) fn probabilities(&self, reply: &DecisionResponse) -> Option<Vec<f64>> {
+    /// Every level's or option's probability in `reply`, in the order of `labels`, and `None` for
+    /// one the reply leaves out: a drawing that showed it as 0 would make a gap look like a
+    /// confident no. For a Noul, no and yes.
+    pub(super) fn probabilities(&self, reply: &DecisionResponse) -> Option<Vec<Option<f64>>> {
         match self.kind {
-            Kind::Noul => reply.noul(&self.id).ok().map(|yes| vec![1.0 - yes, yes]),
+            Kind::Noul => reply.noul(&self.id).ok().map(|yes| vec![Some(1.0 - yes), Some(yes)]),
             Kind::Score => {
                 let answer = reply.score(&self.id).ok()?;
-                Some(
-                    (0..self.labels.len())
-                        .map(|at| u8::try_from(at).ok().and_then(|at| answer.probabilities.get(&at)).copied().unwrap_or(0.0))
-                        .collect(),
-                )
+                Some((0..self.labels.len()).map(|at| u8::try_from(at).ok().and_then(|at| answer.probabilities.get(&at)).copied()).collect())
             }
             Kind::Choice => {
                 let answer = reply.choice(&self.id).ok()?;
-                Some(self.labels.iter().map(|label| answer.probabilities.get(label).copied().unwrap_or(0.0)).collect())
+                Some(self.labels.iter().map(|label| answer.probabilities.get(label).copied()).collect())
             }
         }
     }
@@ -442,6 +441,20 @@ R1  raining AND NOT VERY hot  ⇒  raincoat
         // The structure alone draws no numbers and says why.
         let structure = rules().graph_svg(None).unwrap();
         assert!(structure.contains("Structure only") && !structure.contains("water ="));
+    }
+
+    #[test]
+    fn draws_a_missing_probability_as_missing() {
+        // `rain` gives nothing for Scarce; the term reads Regular, so the rules still evaluate.
+        let mut reply = reply();
+        let crate::Answer::Score(rain) = reply.answers.get_mut("rain").unwrap() else { unreachable!() };
+        rain.probabilities = [(1, 1.0)].into();
+        let text = rules().graph_text(Some(&reply)).unwrap();
+        assert!(text.contains("rain: Scarce missing · [Regular 1.00]"), "{text}");
+        let svg = rules().graph_svg(Some(&reply)).unwrap();
+        assert!(svg.contains(">missing<"));
+        // A Score's expected level is its own marker, not a reading of the levels.
+        assert!(svg.contains(">expected 1.40<"), "the temp marker is missing");
     }
 
     #[test]
