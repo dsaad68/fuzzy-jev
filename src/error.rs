@@ -19,6 +19,9 @@ pub enum Error {
     MissingAnswer(String),
     /// The answer under `id` is of another type than the one asked for.
     WrongType { id: String, expected: &'static str, found: String },
+    /// The answer under `id` gives no probability for one of its levels or options, which rules
+    /// need: reading it as zero would be a confident no that nothing said.
+    MissingProbability { id: String, label: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -33,6 +36,7 @@ impl fmt::Display for Error {
             Error::Invalid { id, why } => write!(f, "question `{id}`: {why}"),
             Error::MissingAnswer(id) => write!(f, "no answer for question `{id}`"),
             Error::WrongType { id, expected, found } => write!(f, "question `{id}` is a {found}, not a {expected}"),
+            Error::MissingProbability { id, label } => write!(f, "question `{id}` gives no probability for `{label}`"),
         }
     }
 }

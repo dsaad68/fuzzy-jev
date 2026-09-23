@@ -68,6 +68,28 @@ fn writes_the_skill_into_the_folder_it_is_run_in() {
 }
 
 #[test]
+fn tool_writes_the_other_skill_in_the_same_folder() {
+    // Same folder, since both are named `jev` in their frontmatter and an agent carries one of
+    // them; what differs is which jev it teaches — a command line, or a tool called with JSON.
+    let temp = Temp::new("tool");
+    let done = jev(&temp.0, &["add", "skill", "--tool"]);
+    assert!(done.status.success(), "{}", stderr(&done));
+    let skill = temp.0.join(".agents/skills/jev");
+    let text = fs::read_to_string(skill.join("SKILL.md")).unwrap();
+    assert!(text.starts_with("---\nname: jev\n"), "{text:.40}");
+    assert!(!text.contains("jev -f") && !text.contains("jev '"), "the tool skill teaches a command line");
+    assert!(stdout(&done).contains("a jev tool"), "{}", stdout(&done));
+
+    // The command skill is then in the way, as an edited file would be, and --force is the answer.
+    let refused = jev(&temp.0, &["add", "skill"]);
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(stderr(&refused).contains("jev add skill --force"), "{}", stderr(&refused));
+    let replaced = jev(&temp.0, &["add", "skill", "--force"]);
+    assert!(replaced.status.success(), "{}", stderr(&replaced));
+    assert!(fs::read_to_string(skill.join("SKILL.md")).unwrap().contains("jev -f"));
+}
+
+#[test]
 fn the_flag_picks_the_folder() {
     for (flag, dir, other) in
         [(Some("--agents"), ".agents", ".claude"), (Some("--claude"), ".claude", ".agents"), (None, ".agents", ".claude")]
@@ -156,7 +178,7 @@ fn a_mistake_says_how_to_call_it_and_exits_1() {
         assert_eq!(done.status.code(), Some(1), "{argv:?} should fail");
         let said = stderr(&done);
         assert!(said.contains(expected), "{argv:?}: {said}");
-        assert!(said.contains("Usage: jev add skill [--agents|--claude] [--force]"), "{argv:?}: {said}");
+        assert!(said.contains("Usage: jev add skill [--agents|--claude] [--tool] [--force]"), "{argv:?}: {said}");
     }
     // Nothing was written by any of them.
     assert!(!temp.0.join(".agents").exists() && !temp.0.join(".claude").exists());

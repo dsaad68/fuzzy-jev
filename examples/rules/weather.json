@@ -1,0 +1,5 @@
+{
+  "temp":     {"type": "score", "instructions": "How warm does it feel outside?", "criteria": ["Cold", "Mild", "Hot"]},
+  "humidity": {"type": "score", "instructions": "How humid is the air?", "criteria": ["Dry", "Normal", "Humid"]},
+  "raining":  {"type": "noul",  "instructions": "Is it raining, or about to?"}
+}

@@ -1,11 +1,11 @@
-# The four patterns
+# The five patterns
 
 How Jev calls get composed into something useful. From TypeSafe's own docs
 ([fan-out](https://docs.typesafe.ai/patterns/fan-out),
 [confidence routing](https://docs.typesafe.ai/patterns/confidence-routing),
 [intent routing](https://docs.typesafe.ai/patterns/intent-routing),
 [composite scoring](https://docs.typesafe.ai/patterns/composite-scoring)), worked through with the
-`jev` command.
+`jev` command, and fuzzy rules over the answers with `-r`.
 
 They compose: intent routing is usually fan-out plus confidence routing, and a ranking step is
 composite scoring over one fan-out call.
@@ -130,3 +130,100 @@ Two roles, two weightings, one call. The top level is `(levels - 1)`, since leve
 
 **Avoid it** when the dimensions aren't actually independent (scoring them apart then adding them
 double-counts), or when the judgment is genuinely holistic and the weights would be invented.
+
+## Fuzzy rules
+
+**Let Jev read the situation and let rules, written by whoever owns the decision, say what to do.**
+Every answer is already a fuzzy degree: a Noul's probability, each Score level's probability, each
+Choice option's. A rules file combines them, and each outcome gets a score.
+
+Ask the inputs as Scores with named levels, 3–5 each: `Cold|Mild|Hot`, not a number. Graded ideas
+belong in a Score; keep Nouls for things that are true or false.
+
+```json
+{"temp":     {"type": "score", "instructions": "How warm does it feel outside?", "criteria": ["Cold", "Mild", "Hot"]},
+ "humidity": {"type": "score", "instructions": "How humid is the air?", "criteria": ["Dry", "Normal", "Humid"]},
+ "raining":  {"type": "noul",  "instructions": "Is it raining, or about to?"}}
+```
+
+```toml
+[logic]                  # optional
+and = "min"              # min (default: safe when answers are related) | product | lukasiewicz
+or  = "max"              # max (default: the strongest reason decides) | probsum | bounded
+
+[decide]
+threshold = 0.5          # an item is a yes at or over this
+
+[terms]
+cold = "temp.Cold"
+mild = "temp.Mild"
+hot = "temp.Hot"
+humid = "humidity.Humid"
+raining = "raining"
+
+[[rule]]
+if = "cold"
+then = "coat"
+
+[[rule]]
+if = "mild AND NOT raining"
+then = "light jacket"
+
+[[rule]]
+if = "raining AND NOT hot"
+then = "raincoat"
+
+[[rule]]
+if = "hot"
+then = "t-shirt"
+```
+
+```sh
+jev -f weather.txt -q weather.json -r wear.toml --table
+```
+
+Designing them:
+
+1. **One rule per piece of know-how**, in the owner's words: "a raincoat when it rains, unless it's
+   hot" is `raining AND NOT hot`.
+2. **Check coverage.** Walk every combination of levels (cold/mild/hot × raining or not) and make sure
+   some rule speaks for each; a gap means no outcome in that weather.
+3. **Look for conflicts** — two rules saying opposite things for one situation — and decide which
+   wins, or make a third outcome.
+4. **Tune with real states.** Run ten or twenty through `-r` and fix a rule, a weight or the
+   threshold, never the answers. `--table` shows which rule gave each score, and `--graph` (or
+   `--svg rules.svg`) draws every rule with its numbers.
+
+Operators: `AND`, `OR`, `NOT`, parentheses, and hedges `VERY` (a²), `SOMEWHAT` (√a), `EXTREMELY`
+(a³), `INDEED` (pushed toward 0 or 1). Hedges and `NOT` bind tightest, then `AND`, then `OR`. Use
+`probsum` for OR when independent reasons should reinforce each other, `product` for AND when
+conditions really are independent.
+
+### Outputs: an amount, not a yes
+
+When the decision is an amount (how much to water, how many minutes to wait), declare an output: a
+crisp axis with named fuzzy sets. Rules conclude `OUTPUT IS SET`. Each such rule clips its set at its
+score, the clipped sets are merged with OR, and the value is the centre of the merged shape
+(Mamdani inference, centroid defuzzification).
+
+```toml
+[output.irrigation]
+range  = [0, 100]
+drops  = [0, 0, 20, 40]       # trapezoid: a, b, c, d
+liter  = [30, 50, 70]         # triangle: a, peak, c
+gallon = [60, 80, 100, 100]
+
+[[rule]]
+if = "scarce"
+then = "irrigation IS gallon"
+
+[[rule]]
+if = "regular"
+then = "irrigation IS liter"
+```
+
+Overlap neighbouring sets, as the levels of a Score overlap, so that an answer between two levels
+gives a value between their sets. Gaps between the sets make the value jump.
+
+**Avoid it** when one answer decides alone (read it directly), or when you'd be inventing rules
+nobody holds: then a weighted sum is at least honest about being a guess.

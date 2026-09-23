@@ -1,0 +1,33 @@
+[decide]
+threshold = 0.5
+
+[terms]
+cold    = "temp.Cold"
+mild    = "temp.Mild"
+hot     = "temp.Hot"
+humid   = "humidity.Humid"
+raining = "raining"
+
+[[rule]]
+if   = "cold"
+then = "coat"
+
+[[rule]]
+if   = "mild AND NOT raining"
+then = "light jacket"
+
+[[rule]]
+if   = "raining AND NOT hot"
+then = "raincoat"
+
+[[rule]]
+if   = "raining"
+then = "umbrella"
+
+[[rule]]
+if   = "hot AND humid"
+then = "t-shirt"
+
+[[rule]]
+if   = "humid OR hot"
+then = "breathable fabric"

@@ -1,0 +1,1 @@
+{"rainfall": {"type": "score", "instructions": "How much rain has fallen on the field this week?", "criteria": ["Scarce", "Regular", "Large"]}}

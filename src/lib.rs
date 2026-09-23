@@ -30,6 +30,10 @@ mod error;
 #[cfg(feature = "command")]
 pub mod print;
 #[cfg(feature = "command")]
+pub mod rules;
+#[cfg(feature = "command")]
+pub mod skill;
+#[cfg(feature = "command")]
 pub mod spec;
 mod types;
 

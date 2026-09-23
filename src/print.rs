@@ -3,8 +3,9 @@
 
 use std::fmt::Write;
 
+use crate::rules::Outcome;
 use crate::{Answer, DecisionResponse};
-use serde_json::Value;
+use serde_json::{json, Value};
 use unicode_width::UnicodeWidthStr;
 
 /// How the reply is printed.
@@ -25,6 +26,17 @@ pub fn render(format: Format, reply: &DecisionResponse, ids: &[String], width: u
         Format::Text => text(reply, ids),
         Format::Table => table(reply, ids, width),
         Format::Json => serde_json::to_string_pretty(reply)? + "\n",
+    })
+}
+
+/// What rules made of `reply`, in `format`: a line or a row per item, or `{"reply", "outcome"}` as
+/// JSON so a script still has every answer. A table is kept within `width` columns. Ends with a
+/// newline.
+pub fn render_outcome(format: Format, reply: &DecisionResponse, outcome: &Outcome, width: usize) -> serde_json::Result<String> {
+    Ok(match format {
+        Format::Text => outcome.text() + &usage(reply),
+        Format::Table => outcome_table(outcome, width) + &usage(reply),
+        Format::Json => serde_json::to_string_pretty(&json!({"reply": reply, "outcome": outcome}))? + "\n",
     })
 }
 
@@ -133,17 +145,57 @@ fn table(reply: &DecisionResponse, ids: &[String], width: usize) -> String {
         let confidence = row.confidence();
         rows.push(vec![id.clone(), row.kind.to_owned(), row.answer, confidence, row.probabilities]);
     }
+    boxed(rows, &DROP_ORDER, &SQUEEZE_ORDER, width) + &usage(reply)
+}
+
+/// An outcome's columns. The rules behind each score come out first when the table doesn't fit,
+/// and give up space first: the item and whether it is a yes are what the table is for.
+const OUTCOME_COLUMNS: [&str; 4] = ["item", "score", "yes?", "rules"];
+const OUTCOME_DROP_ORDER: [usize; 1] = [3];
+const OUTCOME_SQUEEZE_ORDER: [usize; 4] = [3, 2, 1, 0];
+
+/// A boxed table of an outcome: each item, its score, whether it is a yes, and every rule that
+/// gave it a score, with what that rule came to.
+fn outcome_table(outcome: &Outcome, width: usize) -> String {
+    let mut rows = vec![OUTCOME_COLUMNS.map(String::from).to_vec()];
+    for item in &outcome.items {
+        let rules: Vec<String> = item.rules.iter().map(|rule| format!("{} = {:.2}", rule.when, rule.score)).collect();
+        let yes = if item.yes { "yes" } else { "" };
+        rows.push(vec![item.item.clone(), format!("{:.2}", item.score), yes.to_owned(), rules.join("; ")]);
+    }
+    // An output's row: its value, and each set a rule concluded in, with those rules.
+    for output in &outcome.outputs {
+        let sets: Vec<String> = output
+            .sets
+            .iter()
+            .filter(|set| !set.rules.is_empty())
+            .map(|set| {
+                let rules: Vec<String> = set.rules.iter().map(|rule| format!("{} = {:.2}", rule.when, rule.score)).collect();
+                format!("{}: {}", set.set, rules.join(", "))
+            })
+            .collect();
+        rows.push(vec![output.output.clone(), output.value_text(), String::new(), sets.join("; ")]);
+    }
+    let threshold = if outcome.items.is_empty() { String::new() } else { format!("threshold {:.2}\n", outcome.threshold) };
+    boxed(rows, &OUTCOME_DROP_ORDER, &OUTCOME_SQUEEZE_ORDER, width) + &threshold
+}
+
+/// `rows`, the first of them the header, in a boxed table within `width` columns. When it doesn't
+/// fit, the columns in `drop_order` come out until every one left fits at its narrowest, and then
+/// the ones in `squeeze_order` give up space in turn.
+fn boxed(mut rows: Vec<Vec<String>>, drop_order: &[usize], squeeze_order: &[usize], width: usize) -> String {
+    let count = rows[0].len();
     let natural = |rows: &[Vec<String>], column: usize| rows.iter().map(|row| columns(&row[column])).max().unwrap_or(0);
     // A column wraps down to its longest word, which is as narrow as it gets without cutting a
     // word in half. Question ids are one word, so they stay whole.
     let wrapped_to =
         |rows: &[Vec<String>], column: usize| rows.iter().flat_map(|row| row[column].split_whitespace()).map(columns).max().unwrap_or(0);
 
-    let mut widths: Vec<usize> = (0..COLUMNS.len()).map(|column| natural(&rows, column)).collect();
-    let mut narrowest: Vec<usize> = (0..COLUMNS.len()).map(|column| wrapped_to(&rows, column)).collect();
+    let mut widths: Vec<usize> = (0..count).map(|column| natural(&rows, column)).collect();
+    let mut narrowest: Vec<usize> = (0..count).map(|column| wrapped_to(&rows, column)).collect();
 
     // Drop columns until what's left fits with every column at its narrowest, then share the rest.
-    for column in DROP_ORDER {
+    for &column in drop_order {
         if fits(&narrowest, width) {
             break;
         }
@@ -153,8 +205,8 @@ fn table(reply: &DecisionResponse, ids: &[String], width: usize) -> String {
             row[column] = String::new();
         }
     }
-    let kept: Vec<usize> = (0..COLUMNS.len()).filter(|column| widths[*column] > 0).collect();
-    let order: Vec<usize> = SQUEEZE_ORDER.iter().filter_map(|column| kept.iter().position(|kept| kept == column)).collect();
+    let kept: Vec<usize> = (0..count).filter(|column| widths[*column] > 0).collect();
+    let order: Vec<usize> = squeeze_order.iter().filter_map(|column| kept.iter().position(|kept| kept == column)).collect();
     let narrowest: Vec<usize> = kept.iter().map(|column| narrowest[*column]).collect();
     let mut widths: Vec<usize> = kept.iter().map(|column| widths[*column]).collect();
     let rows: Vec<Vec<String>> = rows.iter().map(|row| kept.iter().map(|column| row[*column].clone()).collect()).collect();
@@ -199,7 +251,7 @@ fn table(reply: &DecisionResponse, ids: &[String], width: usize) -> String {
         out += &block(row);
     }
     out += &rule("└", "┴", "┘");
-    out + &usage(reply)
+    out
 }
 
 /// Whether the table fits with one more column of space for `column`.
@@ -265,7 +317,7 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 }
 
 /// What the call used, and the model that answered.
-fn usage(reply: &DecisionResponse) -> String {
+pub fn usage(reply: &DecisionResponse) -> String {
     let usage = &reply.usage;
     let mut out = format!("{} tokens in, {} out", usage.input_tokens, usage.output_tokens);
     if let Some(cost) = usage.cost {
@@ -372,6 +424,69 @@ missing      no answer
         assert_eq!(wrap("billing 0.88, technical 0.12", 14), ["billing 0.88,", "technical 0.12"]);
         assert_eq!(wrap("", 5), [""]);
         assert_eq!(wrap("unsplittable", 5), ["unspl", "ittab", "le"]);
+    }
+
+    /// The fixture's answers through two rules: an urgent, fairly frustrated billing ticket.
+    fn outcome() -> (DecisionResponse, Outcome) {
+        let (reply, _) = fixture();
+        let questions = [
+            ("is_urgent".to_owned(), crate::Question::noul("Urgent?")),
+            ("department".to_owned(), crate::Question::choice("Team?", [("billing", ""), ("technical", ""), ("sales", "")])),
+            ("frustration".to_owned(), crate::Question::score("Frustrated?", ["Calm", "Frustrated", "Very angry"])),
+        ];
+        let rules = crate::rules::Rules::parse(
+            r#"
+            [terms]
+            urgent = "is_urgent"
+            billing = "department.billing"
+            angry = "frustration.Very angry"
+            [[rule]]
+            if = "urgent AND billing"
+            then = "page billing"
+            [[rule]]
+            if = "VERY angry"
+            then = "escalate"
+            "#,
+            questions.iter().map(|(id, question)| (id.as_str(), question)),
+        )
+        .unwrap();
+        let outcome = rules.evaluate(&reply).unwrap();
+        (reply, outcome)
+    }
+
+    #[test]
+    fn prints_an_outcome() {
+        let (reply, outcome) = outcome();
+        assert_eq!(
+            render_outcome(Format::Text, &reply, &outcome, 120).unwrap(),
+            "\
+page billing  0.88  yes
+escalate      0.00
+threshold 0.50
+427 tokens in, 73 out, $0.000018, typesafe/jev-1.13-20260917
+"
+        );
+        assert_eq!(
+            render_outcome(Format::Table, &reply, &outcome, 120).unwrap(),
+            "\
+┌──────────────┬───────┬──────┬───────────────────────────┐
+│ item         │ score │ yes? │ rules                     │
+├──────────────┼───────┼──────┼───────────────────────────┤
+│ page billing │ 0.88  │ yes  │ urgent AND billing = 0.88 │
+│ escalate     │ 0.00  │      │ VERY angry = 0.00         │
+└──────────────┴───────┴──────┴───────────────────────────┘
+threshold 0.50
+427 tokens in, 73 out, $0.000018, typesafe/jev-1.13-20260917
+"
+        );
+        // Narrow, the rules come out and the rest stays whole.
+        let narrow = render_outcome(Format::Table, &reply, &outcome, 34).unwrap();
+        assert!(!narrow.contains("rules") && narrow.contains("page billing"), "{narrow}");
+        // JSON keeps the reply, so a script loses nothing by asking for the outcome.
+        let json: Value = serde_json::from_str(&render_outcome(Format::Json, &reply, &outcome, 120).unwrap()).unwrap();
+        assert_eq!(json["reply"]["answers"]["is_urgent"]["noul"], 0.95);
+        assert_eq!(json["outcome"]["items"][0]["item"], "page billing");
+        assert_eq!(json["outcome"]["items"][0]["yes"], true);
     }
 
     #[test]

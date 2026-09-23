@@ -1,0 +1,22 @@
+[terms]
+scarce  = "rainfall.Scarce"
+regular = "rainfall.Regular"
+large   = "rainfall.Large"
+
+[output.irrigation]
+range  = [0, 100]
+drops  = [0, 0, 20, 40]
+liter  = [30, 50, 70]
+gallon = [60, 80, 100, 100]
+
+[[rule]]
+if   = "scarce"
+then = "irrigation IS gallon"
+
+[[rule]]
+if   = "regular"
+then = "irrigation IS liter"
+
+[[rule]]
+if   = "large"
+then = "irrigation IS drops"

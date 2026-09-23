@@ -1,5 +1,6 @@
 //! The `jev` command's arguments, and what it does with them: build one request from a state and
-//! the questions (from flags and a file), send it, and print the reply.
+//! the questions (from flags and a file), send it, and print the reply, or what a rules file makes
+//! of it.
 
 mod skill;
 
@@ -9,6 +10,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context};
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser};
 use jev::print::{self, Format};
+use jev::rules::Rules;
 use jev::spec::{self, Kind};
 use jev::{Client, DecisionRequest};
 use serde_json::Value;
@@ -24,6 +26,15 @@ Examples:
 
   cat ticket.json | jev --state-json --questions questions.json --json
 
+  jev '16°C, sticky air, light drizzle' -q weather.json -r wear.toml
+                             fuzzy rules over the answers (AND, OR, NOT, VERY, SOMEWHAT, …):
+                             prints each outcome's score, and yes at or over the threshold
+
+  jev '16°C, sticky air, light drizzle' -q weather.json -r wear.toml --graph --svg wear.svg
+  jev -q weather.json -r wear.toml --graph
+                             draw the rules: a tree per rule in the terminal, and the rule base
+                             as an SVG image; without a state, the structure alone and no call
+
   jev add skill              teach an agent in this project to use jev: writes the bundled
                              Agent Skill to .agents/skills/jev, or .claude/skills/jev with --claude.
                              A file already there and different stops it; --force replaces it
@@ -34,8 +45,19 @@ NAME:DESCRIPTION) for --choice, two to ten levels from the lowest for --score, a
 in the endpoint's own shape. The key is read from OPENROUTER_API_KEY.";
 
 #[derive(Parser)]
-#[command(name = "jev", about = "Ask Jev typed questions about a state, through OpenRouter", after_help = EXAMPLES)]
+// `-v` as well as clap's `-V`: what most people type first.
+#[command(
+    name = "jev",
+    version,
+    disable_version_flag = true,
+    about = "Ask Jev typed questions about a state, through OpenRouter",
+    after_help = EXAMPLES
+)]
 pub struct Args {
+    /// Print the version
+    #[arg(short = 'v', visible_short_alias = 'V', long, action = clap::ArgAction::Version)]
+    version: (),
+
     /// The state to judge, as text. Without it, it's read from --state-file or standard input
     state: Option<String>,
 
@@ -63,6 +85,11 @@ pub struct Args {
     #[arg(long, short = 'q', value_name = "PATH")]
     questions: Option<PathBuf>,
 
+    /// Fuzzy rules over the answers, from a TOML file (`-` for standard input); prints their outcome
+    /// instead of the answers
+    #[arg(long, short = 'r', value_name = "PATH")]
+    rules: Option<PathBuf>,
+
     /// The model to ask
     #[arg(long, short = 'm', default_value = jev::DEFAULT_MODEL)]
     model: String,
@@ -82,6 +109,16 @@ pub struct Args {
     /// Print the reply as the endpoint sent it, for scripts
     #[arg(long, group = "format")]
     json: bool,
+
+    /// Draw the rules (-r) in the terminal: each rule's operators down to its terms, what it
+    /// concludes, and the final scores. Without a state, the structure alone, and no call
+    #[arg(long, group = "format", requires = "rules")]
+    graph: bool,
+
+    /// Draw the rules (-r) as an SVG image to PATH: premises, conclusions and the final values, a
+    /// row per rule. Without a state, the structure alone, and no call
+    #[arg(long, value_name = "PATH", requires = "rules")]
+    svg: Option<PathBuf>,
 
     /// How wide a --table may be; the terminal's width by default
     #[arg(long, value_name = "COLUMNS")]
@@ -137,7 +174,25 @@ impl Invocation {
 /// Asks, and prints the answers.
 pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     let args = &invocation.args;
-    let (request, ids) = request(&invocation)?;
+    // A drawing without a state is the rules' structure, which needs no call. Standard input is read
+    // here to tell: a script that pipes nothing in is asking for the structure, not an empty state.
+    let draws = args.graph || args.svg.is_some();
+    let mut piped = None;
+    if draws && args.state.is_none() && args.state_file.is_none() {
+        let dash = |path: &Option<PathBuf>| path.as_deref() == Some(Path::new("-"));
+        let stdin_is_state = !std::io::stdin().is_terminal() && !dash(&args.questions) && !dash(&args.rules);
+        let text = if stdin_is_state { read(Path::new("-"))? } else { String::new() };
+        if text.trim().is_empty() {
+            let (_, _, rules) = questions(&invocation, false)?;
+            return draw(args, &rules.expect("--graph and --svg require --rules"), None);
+        }
+        piped = Some(text);
+    }
+    if draws && args.dry_run {
+        let (_, _, rules) = questions(&invocation, false)?;
+        return draw(args, &rules.expect("--graph and --svg require --rules"), None);
+    }
+    let (request, ids, rules) = request(&invocation, piped)?;
     if args.dry_run {
         println!("{}", serde_json::to_string_pretty(&request)?);
         return Ok(());
@@ -147,17 +202,52 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
         bail!("OPENROUTER_API_KEY is not set");
     }
     let reply = Client::new(&key).with_url(&args.url).send(&request).await?;
-    print!("{}", print::render(args.format(), &reply, &ids, args.width())?);
+    match rules {
+        Some(rules) if draws => {
+            draw(args, &rules, Some(&reply))?;
+            if args.graph {
+                print!("{}", print::usage(&reply));
+            } else {
+                print!("{}", print::render_outcome(args.format(), &reply, &rules.evaluate(&reply)?, args.width())?);
+            }
+        }
+        Some(rules) => print!("{}", print::render_outcome(args.format(), &reply, &rules.evaluate(&reply)?, args.width())?),
+        None => print!("{}", print::render(args.format(), &reply, &ids, args.width())?),
+    }
     Ok(())
 }
 
-/// The request to send, and its question ids in the order they were asked: the file's, then the
-/// flags'.
-fn request(Invocation { args, asked }: &Invocation) -> anyhow::Result<(DecisionRequest, Vec<String>)> {
-    let state_from_stdin = args.state.is_none() && args.state_file.as_deref().is_none_or(|path| path == Path::new("-"));
-    if state_from_stdin && args.questions.as_deref() == Some(Path::new("-")) {
-        bail!("the state and --questions can't both come from standard input");
+/// Draws the rules as asked: the terminal's tree with --graph, the image with --svg.
+fn draw(args: &Args, rules: &Rules, reply: Option<&jev::DecisionResponse>) -> anyhow::Result<()> {
+    if args.graph {
+        print!("{}", rules.graph_text(reply)?);
     }
+    if let Some(path) = &args.svg {
+        std::fs::write(path, rules.graph_svg(reply)?).with_context(|| format!("writing {}", path.display()))?;
+        eprintln!("jev: drew {}", path.display());
+    }
+    Ok(())
+}
+
+/// The request to send, its question ids in the order they were asked (the file's, then the
+/// flags'), and the rules to apply to the reply. The rules are checked against the questions here,
+/// so a mistake in them costs no call, and `--dry-run` finds it too.
+fn request(invocation: &Invocation, piped: Option<String>) -> anyhow::Result<(DecisionRequest, Vec<String>, Option<Rules>)> {
+    let args = &invocation.args;
+    let (questions, ids, rules) = questions(invocation, true)?;
+    let request = DecisionRequest { model: args.model.clone(), state: state(args, piped)?, questions: questions.into_iter().collect() };
+    Ok((request, ids, rules))
+}
+
+/// The questions in the order they were asked (the file's, then the flags'), their ids, and the
+/// rules checked against them. `with_state` says whether a state will be read too: a drawing of the
+/// structure reads none, so its rules or questions may have standard input to themselves.
+#[allow(clippy::type_complexity)]
+fn questions(
+    Invocation { args, asked }: &Invocation,
+    with_state: bool,
+) -> anyhow::Result<(Vec<(String, jev::Question)>, Vec<String>, Option<Rules>)> {
+    one_reader_of_stdin(args, with_state)?;
 
     let mut questions = match &args.questions {
         Some(path) => spec::questions_file(&read(path)?).map_err(|error| anyhow::anyhow!("--questions: {error}"))?,
@@ -177,15 +267,34 @@ fn request(Invocation { args, asked }: &Invocation) -> anyhow::Result<(DecisionR
         ids.push(id.clone());
     }
 
-    let request = DecisionRequest { model: args.model.clone(), state: state(args)?, questions: questions.into_iter().collect() };
-    Ok((request, ids))
+    let rules = match &args.rules {
+        Some(path) => Some(
+            Rules::parse(&read(path)?, questions.iter().map(|(id, question)| (id.as_str(), question)))
+                .map_err(|error| anyhow::anyhow!("--rules {}: {error}", path.display()))?,
+        ),
+        None => None,
+    };
+    Ok((questions, ids, rules))
 }
 
-/// The state: the argument, the file, or standard input, as text or as JSON.
-fn state(args: &Args) -> anyhow::Result<Value> {
+/// At most one of the state, `--questions` and `--rules` may come from standard input, which can be
+/// read once. The state counts only when one will be read.
+fn one_reader_of_stdin(args: &Args, with_state: bool) -> anyhow::Result<()> {
+    let state_from_stdin = with_state && args.state.is_none() && args.state_file.as_deref().is_none_or(|path| path == Path::new("-"));
+    let stdin = |path: &Option<PathBuf>| path.as_deref() == Some(Path::new("-"));
+    if [state_from_stdin, stdin(&args.questions), stdin(&args.rules)].into_iter().filter(|from| *from).count() > 1 {
+        bail!("only one of the state, --questions and --rules can come from standard input");
+    }
+    Ok(())
+}
+
+/// The state: the argument, the file, or standard input (read already when `piped`), as text or
+/// as JSON.
+fn state(args: &Args, piped: Option<String>) -> anyhow::Result<Value> {
     let text = match (&args.state, &args.state_file) {
         (Some(text), _) => text.clone(),
         (None, Some(path)) => read(path)?,
+        (None, None) if piped.is_some() => piped.unwrap_or_default(),
         (None, None) if !std::io::stdin().is_terminal() => read(Path::new("-"))?,
         (None, None) => bail!("no state: give it as an argument, with --state-file, or on standard input"),
     };
@@ -228,6 +337,23 @@ mod tests {
     }
 
     #[test]
+    fn a_drawing_of_the_structure_leaves_stdin_to_the_rules() {
+        // `cat rules.toml | jev -q q.json -r - --graph` reads no state, so the rules may have stdin.
+        let structure = invocation(&["-q", "q.json", "-r", "-", "--graph"]);
+        assert!(one_reader_of_stdin(&structure.args, false).is_ok());
+        // Asking about a state from stdin as well is still two readers.
+        assert!(one_reader_of_stdin(&structure.args, true).is_err());
+    }
+
+    #[test]
+    fn draws_only_with_rules() {
+        assert!(Args::command().try_get_matches_from(["jev", "state", "--noul", "n=?", "--graph"]).is_err());
+        assert!(Args::command().try_get_matches_from(["jev", "state", "--noul", "n=?", "--svg", "x.svg"]).is_err());
+        assert!(Args::command().try_get_matches_from(["jev", "state", "-r", "r.toml", "--graph", "--json"]).is_err());
+        assert!(Args::command().try_get_matches_from(["jev", "state", "-r", "r.toml", "--svg", "x.svg", "--json"]).is_ok());
+    }
+
+    #[test]
     fn takes_one_output_format() {
         assert_eq!(invocation(&["state"]).args.format(), Format::Text);
         assert_eq!(invocation(&["state", "--text"]).args.format(), Format::Text);
@@ -238,15 +364,18 @@ mod tests {
 
     #[test]
     fn builds_the_request() {
-        let (request, ids) = request(&invocation(&[
-            "Help! My payouts have been failing for 3 days.",
-            "--model",
-            "typesafe/jev-latest",
-            "--noul",
-            "is_urgent=Does this message convey urgency?",
-            "--score",
-            "frustration=How frustrated is the customer?|Calm|Frustrated|Very angry",
-        ]))
+        let (request, ids, _) = request(
+            &invocation(&[
+                "Help! My payouts have been failing for 3 days.",
+                "--model",
+                "typesafe/jev-latest",
+                "--noul",
+                "is_urgent=Does this message convey urgency?",
+                "--score",
+                "frustration=How frustrated is the customer?|Calm|Frustrated|Very angry",
+            ]),
+            None,
+        )
         .unwrap();
         assert_eq!(ids, ["is_urgent", "frustration"]);
         assert_eq!(
@@ -264,14 +393,14 @@ mod tests {
 
     #[test]
     fn reads_the_state_as_json() {
-        let (request, _) =
-            request(&invocation(&[r#"{"message": "hi", "order": {"id": "A-104"}}"#, "--state-json", "--noul", "n=?"])).unwrap();
+        let (request, _, _) =
+            request(&invocation(&[r#"{"message": "hi", "order": {"id": "A-104"}}"#, "--state-json", "--noul", "n=?"]), None).unwrap();
         assert_eq!(request.state, json!({"message": "hi", "order": {"id": "A-104"}}));
         assert!(request_error(&["not json", "--state-json", "--noul", "n=?"]).contains("isn't JSON"));
     }
 
     fn request_error(argv: &[&str]) -> String {
-        format!("{:#}", request(&invocation(argv)).unwrap_err())
+        format!("{:#}", request(&invocation(argv), None).unwrap_err())
     }
 
     #[test]
@@ -280,6 +409,27 @@ mod tests {
         assert!(request_error(&["state", "--noul", "a=?", "--noul", "a=Again?"]).contains("asked twice"));
         assert!(request_error(&["  ", "--noul", "a=?"]).contains("empty"));
         assert!(request_error(&["state", "--choice", "a=?|one"]).contains("at least two options"));
-        assert!(request_error(&["--state-file", "-", "--questions", "-"]).contains("both come from standard input"));
+        assert!(request_error(&["--state-file", "-", "--questions", "-"]).contains("only one of"));
+        assert!(request_error(&["--questions", "q.json", "--rules", "-"]).contains("only one of"));
+    }
+
+    #[test]
+    fn checks_the_rules_before_asking() {
+        let dir = std::env::temp_dir().join(format!("jev-rules-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = |name: &str, text: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            path.display().to_string()
+        };
+        let good = file("good.toml", "[terms]\nhot = \"temp.Hot\"\n[[rule]]\nif = \"VERY hot\"\nthen = \"shorts\"\n");
+        let bad = file("bad.toml", "[terms]\nhot = \"temp.hot\"\n[[rule]]\nif = \"hot\"\nthen = \"shorts\"\n");
+        let temp = "temp=How warm is it?|Cold|Mild|Hot";
+
+        let (_, _, rules) = request(&invocation(&["state", "--score", temp, "-r", &good]), None).unwrap();
+        assert!(rules.is_some());
+        let error = request_error(&["state", "--score", temp, "-r", &bad]);
+        assert!(error.contains("--rules") && error.contains("`temp` has no level `hot`"), "{error}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -1,9 +1,9 @@
-# jev
+# fuzzy-jev
 
-[![CI](https://github.com/dsaad68/jev-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/dsaad68/jev-cli/actions/workflows/ci.yml)
-[![Release](https://github.com/dsaad68/jev-cli/actions/workflows/release.yml/badge.svg)](https://github.com/dsaad68/jev-cli/actions/workflows/release.yml)
+[![CI](https://github.com/dsaad68/fuzzy-jev/actions/workflows/ci.yml/badge.svg)](https://github.com/dsaad68/fuzzy-jev/actions/workflows/ci.yml)
+[![Release](https://github.com/dsaad68/fuzzy-jev/actions/workflows/release.yml/badge.svg)](https://github.com/dsaad68/fuzzy-jev/actions/workflows/release.yml)
 [![Rust](https://img.shields.io/badge/Rust-2021_edition-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
-[![Platforms](https://img.shields.io/badge/binaries-Linux%20%7C%20macOS-informational)](https://github.com/dsaad68/jev-cli/releases)
+[![Platforms](https://img.shields.io/badge/binaries-Linux%20%7C%20macOS-informational)](https://github.com/dsaad68/fuzzy-jev/releases)
 [![Model](https://img.shields.io/badge/model-TypeSafe%20Jev-0B7285)](https://typesafe.ai)
 [![OpenRouter](https://img.shields.io/badge/served%20by-OpenRouter%20decisions-6566F1)](https://openrouter.ai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -17,9 +17,17 @@ Jev is [TypeSafe](https://typesafe.ai)'s model. This client reaches it through
 (`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one;
 `--url` points the same questions at another endpoint.
 
+Every answer is already a degree from 0 to 1, so the answers can be used directly as fuzzy truth
+values. A [rules file](#fuzzy-rules) combines them with `AND`, `OR`, `NOT` and hedges into
+decisions, or into a crisp amount through [fuzzy outputs](#outputs-a-crisp-amount).
+`--svg` [draws the whole rule base](#drawing-the-rules):
+
+![The irrigation rules drawn as a fuzzy rule base: the premises cut at Jev's degrees, each rule's set clipped, and the merged shape with its centroid](docs/irrigation.svg)
+
 A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, and
 an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
-by eye — `jev add skill` writes it into your project.
+by eye — `jev add skill` writes it into your project. The crate and the command are both called
+`jev`.
 
 ```sh
 export OPENROUTER_API_KEY=sk-or-...
@@ -42,7 +50,7 @@ extra question costs a few tokens and no extra round trip.
 
 ## Install
 
-**A built binary.** Each [release](https://github.com/dsaad68/jev-cli/releases) carries a
+**A built binary.** Each [release](https://github.com/dsaad68/fuzzy-jev/releases) carries a
 `.tar.gz` per platform — Linux and macOS, x86-64 and Arm — with a `.sha256` beside it:
 
 ```sh
@@ -50,11 +58,14 @@ tar -xzf jev-0.1.0-aarch64-apple-darwin.tar.gz
 ./jev --help
 ```
 
+The v0.1.0 binaries predate fuzzy rules and drawing (`-r`, `--graph`, `--svg`). Until the next
+release, install from `main` with cargo, below.
+
 **With cargo, from this repository.** No release needed, and no clone: cargo fetches the source
 and builds it. Needs a [Rust toolchain](https://rustup.rs).
 
 ```sh
-cargo install --git https://github.com/dsaad68/jev-cli --locked
+cargo install --git https://github.com/dsaad68/fuzzy-jev --locked
 ```
 
 It lands in `~/.cargo/bin`, which rustup puts on your PATH, so `jev` works in any folder. A few
@@ -62,20 +73,20 @@ variants:
 
 ```sh
 # a particular release, rather than whatever main says today
-cargo install --git https://github.com/dsaad68/jev-cli --tag v0.1.0 --locked
+cargo install --git https://github.com/dsaad68/fuzzy-jev --tag v0.1.0 --locked
 
 # a branch, to try something before it is merged
-cargo install --git https://github.com/dsaad68/jev-cli --branch some-branch --locked
+cargo install --git https://github.com/dsaad68/fuzzy-jev --branch some-branch --locked
 
 # over an older copy, when cargo says one is already installed
-cargo install --git https://github.com/dsaad68/jev-cli --locked --force
+cargo install --git https://github.com/dsaad68/fuzzy-jev --locked --force
 ```
 
 `--locked` builds with the dependency versions in `Cargo.lock`, which is what CI tested; leave it
 out to let cargo pick newer ones. To run it from a clone instead:
 
 ```sh
-git clone https://github.com/dsaad68/jev-cli
+git clone https://github.com/dsaad68/fuzzy-jev
 cd jev-cli
 cargo install --path . --locked      # or: cargo run -- --help
 ```
@@ -107,6 +118,9 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | `--text` | One line per question. The default. |
 | `--table` | A table: question, type, answer, confidence, and every option's probability. |
 | `--json` | The reply as the endpoint sent it, for `jq` and scripts. |
+| `--rules` (`-r`) | [Fuzzy rules](#fuzzy-rules) over the answers, from a TOML file; prints their outcome instead of the answers. |
+| `--graph` | With `-r`: [draw the rules](#drawing-the-rules) in the terminal. |
+| `--svg PATH` | With `-r`: draw the rules as an SVG image. Without a state, either one draws the structure alone, with no call. |
 | `--dry-run` | Print the request instead of sending it. No key needed. |
 
 ### A structured state
@@ -178,6 +192,201 @@ cat ticket.json | jev --state-json -q questions.json --json > answers.json
 jq -r 'if .answers.churn_risk.noul > 0.8 then "page the account team" else "queue normally" end' answers.json
 ```
 
+## Fuzzy rules
+
+A decision is often several answers combined: "a raincoat when it rains, unless it's hot". A
+**rules file** says that directly. It names the answers it needs as **terms**, combines them with
+fuzzy logic, and gives each outcome a score. The rules are your knowledge; Jev only supplies how
+much each condition holds.
+
+The questions, [`examples/rules/weather.json`](examples/rules/weather.json):
+
+```json
+{
+  "temp":     {"type": "score", "instructions": "How warm does it feel outside?", "criteria": ["Cold", "Mild", "Hot"]},
+  "humidity": {"type": "score", "instructions": "How humid is the air?", "criteria": ["Dry", "Normal", "Humid"]},
+  "raining":  {"type": "noul",  "instructions": "Is it raining, or about to?"}
+}
+```
+
+The rules, [`examples/rules/wear.toml`](examples/rules/wear.toml):
+
+```toml
+[logic]                  # optional
+and = "min"              # min | product | lukasiewicz
+or  = "max"              # max | probsum | bounded
+
+[decide]                 # optional
+threshold = 0.5
+
+[terms]
+cold    = "temp.Cold"    # a Score level, by its exact text
+mild    = "temp.Mild"
+hot     = "temp.Hot"
+humid   = "humidity.Humid"
+raining = "raining"      # a Noul, by its id
+# billing = "team.billing"  (a Choice option)
+
+[[rule]]
+if   = "cold"
+then = "coat"
+
+[[rule]]
+if   = "mild AND NOT raining"
+then = "light jacket"
+
+[[rule]]
+if   = "raining AND NOT hot"
+then = "raincoat"
+
+[[rule]]
+if   = "raining"
+then = "umbrella"
+
+[[rule]]
+if   = "hot AND humid"
+then = "t-shirt"
+
+[[rule]]
+if     = "humid OR hot"
+then   = "breathable fabric"
+weight = 1.0             # optional, 0 to 1; the rule's score is multiplied by it
+```
+
+```sh
+jev '16°C, the air feels sticky, and a light drizzle has started.' \
+  -q examples/rules/weather.json -r examples/rules/wear.toml
+```
+
+```text
+coat               0.03
+light jacket       0.05
+raincoat           0.95  yes
+umbrella           0.95  yes
+t-shirt            0.02
+breathable fabric  1.00  yes
+threshold 0.50
+369 tokens in, 47 out, $0.000015, typesafe/jev-1.13-20260917
+```
+
+- **Terms** are lowercase names, and every word in a rule is a term or an operator. A term points
+  at a Noul by its id, at a Score level by the question id, a `.`, and the level's exact text, or at
+  a Choice option by its name.
+- **Operators** are uppercase: `AND`, `OR`, `NOT`, parentheses, and the hedges `VERY` (x²),
+  `SOMEWHAT` (√x), `EXTREMELY` (x³) and `INDEED` (pushed toward 0 or 1). Hedges and `NOT` bind
+  tightest, then `AND`, then `OR`.
+- **`[logic]`** picks the AND and the OR for the whole file. `min` and `max`, the defaults, are
+  safe when answers are related, as answers about one state usually are. `product` and `probsum`
+  treat conditions as independent, so doubts compound and reasons reinforce.
+- **Rules with the same `then`** are joined by the file's OR, and an item is a yes at or over the
+  threshold.
+- **Checked before the call.** Every term is resolved against the questions first, so a typo costs
+  nothing, and `--dry-run` catches it too. The error names what does exist:
+  ``[terms] hot: `temp` has no level `hot`; its levels are `temp.Cold`, `temp.Mild`, `temp.Hot` ``.
+  An answer or a probability missing from the reply is an error, never a silent zero.
+- **`--table`** adds the rules behind each score, and **`--json`** prints
+  `{"reply": …, "outcome": …}`, so a script keeps every answer.
+
+### Outputs: a crisp amount
+
+When the answer is an amount ("how much to water?") rather than a yes, a rule can conclude in an
+**output**: a crisp axis with named fuzzy sets. Each rule clips its set at its score, the clipped
+shapes are merged with the file's OR, and the value is the centre of the merged shape. This is
+Mamdani inference with centroid defuzzification.
+
+[`examples/rules/irrigation.toml`](examples/rules/irrigation.toml), with
+[`examples/rules/rain.json`](examples/rules/rain.json) asking how much it rained:
+
+```toml
+[terms]
+scarce  = "rainfall.Scarce"
+regular = "rainfall.Regular"
+large   = "rainfall.Large"
+
+[output.irrigation]
+range  = [0, 100]
+drops  = [0, 0, 20, 40]      # a trapezoid: rises a→b, flat b→c, falls c→d
+liter  = [30, 50, 70]        # a triangle: a, peak, c
+gallon = [60, 80, 100, 100]  # a shoulder, held up to the end of the range
+
+[[rule]]
+if   = "scarce"
+then = "irrigation IS gallon"
+
+[[rule]]
+if   = "regular"
+then = "irrigation IS liter"
+
+[[rule]]
+if   = "large"
+then = "irrigation IS drops"
+```
+
+```sh
+jev 'A fairly normal week: two moderate showers, and the soil is damp but drying at the surface.' \
+  -q examples/rules/rain.json -r examples/rules/irrigation.toml
+```
+
+```text
+irrigation  51.02  (drops 0.00, liter 0.98, gallon 0.02)
+```
+
+`then = "OUTPUT IS SET"` concludes in an output when the file declares that output; any other
+`then` is an item, and one file can have both. When no rule for an output scores above zero, its
+value is `-` (`null` in JSON) rather than a made-up number.
+
+## Drawing the rules
+
+`--svg PATH` draws the rules as an image, and `--graph` draws them in the terminal. Without a
+state (no argument, no `-f`, nothing on standard input) or with `--dry-run`, either one draws the
+structure alone and makes no call, which is a free way to check a rules file. With a state, every
+part carries its number.
+
+```sh
+jev 'A fairly normal week: two moderate showers, and the soil is damp but drying at the surface.' \
+  -q examples/rules/rain.json -r examples/rules/irrigation.toml --svg irrigation.svg
+```
+
+The image is laid out the way a fuzzy rule base is usually drawn, with one row per rule:
+
+- **Premises:** a column per question. A Score's levels are drawn as a fuzzy partition, with the
+  term's own level in bold, shaded up to the degree Jev gave it. The red arrow is the expected
+  level, the reading the curves turn into degrees. Choices and Nouls are drawn as bars.
+- **Rules:** the `if` as a tree of its operators, each with what it came to.
+- **Conclusions:** an output's sets, with the rule's own set clipped at its score, or an item's bar
+  against the threshold.
+- **Final:** each output's merged shape with an arrow at its centroid, and every item's score.
+
+The weather rules, which mix Scores, a Noul, operator trees and items:
+
+![The weather rules drawn as a fuzzy rule base, one row per rule](docs/wear.svg)
+
+In the terminal, `--graph` prints each rule as a tree, and each term with every level's
+probability (the term's own in brackets):
+
+```text
+R3  raining AND NOT hot  ⇒  raincoat
+    AND (min)  0.95
+    ├─ raining  0.95  ← raining: no 0.05 · [yes 0.95]
+    └─ NOT (1 − x)  0.98
+       └─ hot  0.02  ← temp: Cold 0.04 · Mild 0.94 · [Hot 0.02]
+    ⇒ raincoat  0.95  ███████████████████
+```
+
+An output is drawn as a plot of its merged shape, with `↑` at its centre:
+
+```text
+  irrigation = 51.02
+  1.0 ┤░░░░░░░░░░░░░               ▃▆▆▃               ░░░░░░░░░░░░░
+      │░░░░░░░░░░░░░░░░         ▁▄██████▄▁         ░░░░░░░░░░░░░░░░
+      │░░░░░░░░░░░░░░░░░░     ▂▅██████████▅▂     ░░░░░░░░░░░░░░░░░░
+      │░░░░░░░░░░░░░░░░░░░░░▃▇██████████████▇▃░░░░░░░░░░░░░░░░░░░░░
+      │░░░░░░░░░░░░░░░░░░▁▄████████████████████▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+  0.0 └──────────────────────────────┬─────────────────────────────
+       0                             ↑ 51.02                    100
+           drops                   liter                 gallon
+```
+
 ## The Agent Skill
 
 A coding agent asked to "sort these tickets" or "which of these need a human?" will usually read
@@ -199,6 +408,7 @@ The jev skill is in .agents/skills/jev. Agents that read .agents will find it.
 | --- | --- |
 | `jev add skill` | writes it to `.agents/skills/jev`, the convention most agents read |
 | `jev add skill --claude` | writes it to `.claude/skills/jev` instead |
+| `jev add skill --tool` | writes the skill for an agent whose jev is a tool it calls with JSON, rather than this command |
 | `jev add skill --force` | replaces files that are there and differ |
 
 The two files are compiled into the binary, so an installed `jev` carries its own skill and needs
@@ -207,8 +417,8 @@ what would be written is left alone, so running it twice says `unchanged` rather
 your diff.
 
 What it teaches is when the tool fits — classifying, routing, triaging, rating, flagging, and
-anything where a confidence number beats an opinion — how to write the three question types, and
-the patterns for putting many items through one call. Read
+anything where a confidence number beats an opinion — how to write the three question types, the
+patterns for putting many items through one call, and how to design fuzzy rules over the answers. Read
 [`skills/jev/SKILL.md`](skills/jev/SKILL.md) and
 [`skills/jev/references/patterns.md`](skills/jev/references/patterns.md) before installing it, as
 you would any instruction you're adding to a project.
@@ -217,7 +427,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { git = "https://github.com/dsaad68/jev-cli", default-features = false }
+jev = { git = "https://github.com/dsaad68/fuzzy-jev", default-features = false }
 ```
 
 ```rust
@@ -229,8 +439,15 @@ let reply = client
 
 `default-features = false` leaves out the CLI's dependencies; the library then builds for
 `wasm32-unknown-unknown` too, where requests go through the host's `fetch`. The `command` feature
-adds question specs (`jev::spec`) and the command's own printing (`jev::print`) without the
-command, for another program that wants to offer `jev` the way the terminal does.
+adds question specs (`jev::spec`), the command's own printing (`jev::print`) and the rules engine
+(`jev::rules`) without the command, for another program that wants to offer `jev` the way the
+terminal does:
+
+```rust
+let rules = jev::rules::Rules::parse(&std::fs::read_to_string("wear.toml")?, questions.iter().map(|(id, q)| (id.as_str(), q)))?;
+let outcome = rules.evaluate(&reply)?;       // items and outputs, with their scores
+let svg = rules.graph_svg(Some(&reply))?;    // or graph_text, for a terminal
+```
 
 ## Development
 
@@ -245,7 +462,8 @@ Pushing a tag such as `v0.1.0` builds the four binaries and puts them on a Relea
 can be started by hand from the Actions tab, which leaves them as artifacts.
 
 Extracted from [wasm-agent](https://github.com/dsaad68/wasm-agent), where this began as
-`crates/jev` and where dx's shell offers the same command to an agent.
+`crates/jev` and where dx's shell offers the same command to an agent. This repository was called
+`jev-cli` until the fuzzy rules arrived; GitHub redirects the old URLs.
 
 ## License
 

@@ -1,9 +1,13 @@
 //! `jev add skill`: writes the Agent Skill bundled into this binary under `.agents/skills/jev`, or
-//! `.claude/skills/jev` with `--claude`, so an agent in that project learns to use the command.
+//! `.claude/skills/jev` with `--claude`, so an agent in that project learns to use jev.
 //!
-//! The skill's files are compiled in ([`SKILL`], [`PATTERNS`]), so an installed `jev` carries them
-//! and the source tree doesn't have to be there. Existing folders are used as they are, and a file
-//! that is already what we'd write is left alone, so running it twice says so rather than churning.
+//! Which jev it learns is `--tool`: without it the skill teaches this command, and with it the
+//! same substance for an agent whose jev is a tool it calls with JSON ([`jev::skill`]). Both go in
+//! the folder `jev`, so a project carries one of them.
+//!
+//! The files are compiled in, so an installed `jev` carries them and the source tree doesn't have
+//! to be there. Existing folders are used as they are, and a file that is already what we'd write
+//! is left alone, so running it twice says so rather than churning.
 
 use std::fmt;
 use std::fs;
@@ -11,12 +15,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-/// The skill, from `skills/jev/`. `cargo build` picks up an edit to either.
-const SKILL: &str = include_str!("../../skills/jev/SKILL.md");
-const PATTERNS: &str = include_str!("../../skills/jev/references/patterns.md");
-
-/// The skill's files, under the folder it's written to.
-const FILES: [(&str, &str); 2] = [("SKILL.md", SKILL), ("references/patterns.md", PATTERNS)];
+use jev::skill::{Flavour, FOLDER};
 
 /// Which convention's folder the skill goes in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,15 +61,23 @@ impl fmt::Display for Wrote {
 /// argument, so `add` would otherwise be the state.
 pub fn command(words: &[&str]) -> Option<Result<()>> {
     match plan(words)? {
-        Ok((home, force)) => Some(add(home, force)),
+        Ok(asked) => Some(add(asked)),
         Err(error) => Some(Err(error)),
     }
+}
+
+/// What a `jev add skill` line asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Asked {
+    home: Home,
+    flavour: Flavour,
+    force: bool,
 }
 
 /// What a command line asks for, without doing any of it. Apart from `command`, which runs it,
 /// this is what the tests use: calling `command` with a valid line would write to whatever folder
 /// the test process happens to be in.
-fn plan(words: &[&str]) -> Option<Result<(Home, bool)>> {
+fn plan(words: &[&str]) -> Option<Result<Asked>> {
     let rest = match words {
         ["add", "skill", rest @ ..] => rest,
         // `jev add` alone is worth naming: a state with no questions can't be asked anyway. Any
@@ -78,41 +85,48 @@ fn plan(words: &[&str]) -> Option<Result<(Home, bool)>> {
         ["add"] => return Some(Err(usage("jev add takes `skill`"))),
         _ => return None,
     };
-    let (mut home, mut force) = (None, false);
+    let (mut home, mut flavour, mut force) = (None, Flavour::Command, false);
     for flag in rest {
         match *flag {
             "--agents" if home.is_none() => home = Some(Home::Agents),
             "--claude" if home.is_none() => home = Some(Home::Claude),
             // Naming the flag here would name a valid one; having both is the mistake.
             "--agents" | "--claude" => return Some(Err(usage("jev add skill takes one folder, not two"))),
+            "--tool" => flavour = Flavour::Tool,
             "--force" => force = true,
             other => return Some(Err(usage(&format!("jev add skill: unexpected {other}")))),
         }
     }
-    Some(Ok((home.unwrap_or(Home::Agents), force)))
+    Some(Ok(Asked { home: home.unwrap_or(Home::Agents), flavour, force }))
 }
 
 fn usage(what: &str) -> anyhow::Error {
     anyhow::anyhow!(
-        "{what}\n\nUsage: jev add skill [--agents|--claude] [--force]\n  \
+        "{what}\n\nUsage: jev add skill [--agents|--claude] [--tool] [--force]\n  \
          --agents  write it to .agents/skills/jev (the default)\n  \
          --claude  write it to .claude/skills/jev\n  \
+         --tool    teach an agent whose jev is a tool it calls, rather than this command\n  \
          --force   replace files that are already there and differ"
     )
 }
 
 /// Writes the skill into the current folder, and says where it went.
-fn add(home: Home, force: bool) -> Result<()> {
+fn add(asked: Asked) -> Result<()> {
+    let Asked { home, flavour, force } = asked;
     let root = std::env::current_dir().context("can't tell what folder this is")?;
-    let (skill, written) = install(&root, home, force)?;
+    let (skill, written) = install(&root, home, flavour, force)?;
     let shown = skill.strip_prefix(&root).unwrap_or(&skill).to_path_buf();
     for (path, wrote) in &written {
         println!("{wrote} {}", shown.join(path).display());
     }
+    let teaches = match flavour {
+        Flavour::Command => "the jev command",
+        Flavour::Tool => "a jev tool",
+    };
     if written.iter().all(|(_, wrote)| *wrote == Wrote::Unchanged) {
         println!("The jev skill was already there, as it is now.");
     } else {
-        println!("The jev skill is in {}. Agents that read {} will find it.", shown.display(), home.dir());
+        println!("The jev skill ({teaches}) is in {}. Agents that read {} will find it.", shown.display(), home.dir());
     }
     Ok(())
 }
@@ -123,9 +137,10 @@ fn add(home: Home, force: bool) -> Result<()> {
 /// A file that is there and differs stops the whole thing unless `force`: someone edited it, or it
 /// came from another version, and quietly overwriting it would lose their work. Every file is
 /// checked before any is written, so a refusal leaves nothing half-applied.
-pub fn install(root: &Path, home: Home, force: bool) -> Result<(PathBuf, Vec<(&'static str, Wrote)>)> {
-    let skill = root.join(home.dir()).join("skills").join("jev");
-    let planned: Vec<(&'static str, &'static str, Wrote)> = FILES
+pub fn install(root: &Path, home: Home, flavour: Flavour, force: bool) -> Result<(PathBuf, Vec<(&'static str, Wrote)>)> {
+    let skill = root.join(home.dir()).join("skills").join(FOLDER);
+    let planned: Vec<(&'static str, &'static str, Wrote)> = flavour
+        .files()
         .into_iter()
         .map(|(path, contents)| {
             let wrote = match fs::read_to_string(skill.join(path)) {
@@ -151,10 +166,14 @@ pub fn install(root: &Path, home: Home, force: bool) -> Result<(PathBuf, Vec<(&'
             Home::Agents => "",
             Home::Claude => " --claude",
         };
+        let shape = match flavour {
+            Flavour::Command => "",
+            Flavour::Tool => " --tool",
+        };
         bail!(
             "{subject} already there, and not what this jev would write:\n  {}\n\n\
              {pronoun} — nothing was written.\n\n\
-             To replace {}:  jev add skill{folder} --force\n\
+             To replace {}:  jev add skill{folder}{shape} --force\n\
              Or move the folder aside and run it again.",
             clashes.join("\n  "),
             if clashes.len() == 1 { "it" } else { "them" },
@@ -181,31 +200,11 @@ pub fn install(root: &Path, home: Home, force: bool) -> Result<(PathBuf, Vec<(&'
     Ok((skill, written))
 }
 
-/// Refuses a destination reached through a symbolic link. Walks what exists of `file` below
-/// `root`, since it is the parts already on disk that could redirect a write; std has no way to
-/// open a path without following links, so they are found and refused rather than avoided.
+/// Refuses a destination reached through a symbolic link ([`jev::skill::refuse_symlinks`]), with
+/// what to do about it: the check is the library's, since dx writes these files too.
 fn refuse_symlinks(root: &Path, file: &Path) -> Result<()> {
-    let mut at = root.to_path_buf();
-    for part in file.strip_prefix(root).unwrap_or(file) {
-        at.push(part);
-        let Ok(there) = fs::symlink_metadata(&at) else { break };
-        if there.file_type().is_symlink() {
-            let shown = at.strip_prefix(root).unwrap_or(&at);
-            bail!(
-                "{} is a symbolic link, so writing there would write outside this folder.\n\n\
-                 Nothing was written. Remove the link, or run this somewhere else.",
-                shown.display()
-            );
-        }
-    }
-    Ok(())
-}
-
-/// The skill's own frontmatter has to name it `jev`, since the folder written is `jev` and the
-/// Agent Skills spec requires the two to match. Checked here so a rename can't ship broken.
-#[cfg(test)]
-fn declared_name(skill: &str) -> Option<&str> {
-    skill.lines().find_map(|line| line.strip_prefix("name: ").map(str::trim))
+    jev::skill::refuse_symlinks(root, file)
+        .map_err(|why| anyhow::anyhow!("{why}.\n\nNothing was written. Remove the link, or run this somewhere else."))
 }
 
 #[cfg(test)]
@@ -239,14 +238,21 @@ mod tests {
         assert!(plan(&["add-skill"]).is_none());
 
         let asked = |argv: &[&str]| plan(argv).unwrap().unwrap();
-        assert_eq!(asked(&["add", "skill"]), (Home::Agents, false));
-        assert_eq!(asked(&["add", "skill", "--agents"]), (Home::Agents, false));
-        assert_eq!(asked(&["add", "skill", "--claude"]), (Home::Claude, false));
+        let plain = Asked { home: Home::Agents, flavour: Flavour::Command, force: false };
+        assert_eq!(asked(&["add", "skill"]), plain);
+        assert_eq!(asked(&["add", "skill", "--agents"]), plain);
+        assert_eq!(asked(&["add", "skill", "--claude"]), Asked { home: Home::Claude, ..plain });
         // --force goes with either folder, in either order, and twice is not a mistake.
-        assert_eq!(asked(&["add", "skill", "--force"]), (Home::Agents, true));
-        assert_eq!(asked(&["add", "skill", "--claude", "--force"]), (Home::Claude, true));
-        assert_eq!(asked(&["add", "skill", "--force", "--claude"]), (Home::Claude, true));
-        assert_eq!(asked(&["add", "skill", "--force", "--force"]), (Home::Agents, true));
+        assert_eq!(asked(&["add", "skill", "--force"]), Asked { force: true, ..plain });
+        assert_eq!(asked(&["add", "skill", "--claude", "--force"]), Asked { home: Home::Claude, force: true, ..plain });
+        assert_eq!(asked(&["add", "skill", "--force", "--claude"]), Asked { home: Home::Claude, force: true, ..plain });
+        assert_eq!(asked(&["add", "skill", "--force", "--force"]), Asked { force: true, ..plain });
+        // --tool picks the other skill, and goes with the rest in any order.
+        assert_eq!(asked(&["add", "skill", "--tool"]), Asked { flavour: Flavour::Tool, ..plain });
+        assert_eq!(
+            asked(&["add", "skill", "--tool", "--claude", "--force"]),
+            Asked { home: Home::Claude, flavour: Flavour::Tool, force: true }
+        );
 
         // `jev add` alone is named, since a state with no questions can't be asked anyway. Any
         // other `add …` is left to clap, so a state that happens to be `add` still works.
@@ -257,8 +263,9 @@ mod tests {
         assert!(error(&["add", "skill", "--vscode"]).contains("unexpected --vscode"));
         assert!(error(&["add", "skill", "--claude", "--agents"]).contains("takes one folder, not two"));
         // Every usage message says how to call it, --force included.
-        assert!(error(&["add"]).contains("Usage: jev add skill [--agents|--claude] [--force]"));
+        assert!(error(&["add"]).contains("Usage: jev add skill [--agents|--claude] [--tool] [--force]"));
         assert!(error(&["add"]).contains("--force   replace files"));
+        assert!(error(&["add"]).contains("--tool    teach an agent whose jev is a tool"));
     }
 
     #[test]
@@ -275,11 +282,11 @@ mod tests {
     fn writes_the_skill_where_the_flag_says() {
         let temp = Temp::new("where");
         for (home, dir) in [(Home::Agents, ".agents"), (Home::Claude, ".claude")] {
-            let (skill, written) = install(&temp.0, home, false).unwrap();
+            let (skill, written) = install(&temp.0, home, Flavour::Command, false).unwrap();
             assert_eq!(skill, temp.0.join(dir).join("skills").join("jev"));
             assert!(written.iter().all(|(_, wrote)| *wrote == Wrote::Created));
-            assert_eq!(fs::read_to_string(skill.join("SKILL.md")).unwrap(), SKILL);
-            assert_eq!(fs::read_to_string(skill.join("references/patterns.md")).unwrap(), PATTERNS);
+            assert_eq!(fs::read_to_string(skill.join("SKILL.md")).unwrap(), Flavour::Command.files()[0].1);
+            assert_eq!(fs::read_to_string(skill.join("references/patterns.md")).unwrap(), Flavour::Command.files()[1].1);
         }
     }
 
@@ -291,7 +298,7 @@ mod tests {
         fs::create_dir_all(&other).unwrap();
         fs::write(other.join("SKILL.md"), "not ours").unwrap();
 
-        let (skill, _) = install(&temp.0, Home::Agents, false).unwrap();
+        let (skill, _) = install(&temp.0, Home::Agents, Flavour::Command, false).unwrap();
         assert!(skill.exists());
         // The neighbour is untouched, and no second skills folder was made.
         assert_eq!(fs::read_to_string(other.join("SKILL.md")).unwrap(), "not ours");
@@ -302,7 +309,7 @@ mod tests {
     #[test]
     fn a_second_run_writes_nothing() {
         let temp = Temp::new("again");
-        let wrote = |temp: &Temp| install(&temp.0, Home::Agents, false).unwrap().1;
+        let wrote = |temp: &Temp| install(&temp.0, Home::Agents, Flavour::Command, false).unwrap().1;
         assert!(wrote(&temp).iter().all(|(_, w)| *w == Wrote::Created));
         // Twice over changes nothing, so it says so rather than claiming to have written.
         assert!(wrote(&temp).iter().all(|(_, w)| *w == Wrote::Unchanged));
@@ -311,23 +318,23 @@ mod tests {
     #[test]
     fn refuses_to_overwrite_what_is_already_there() {
         let temp = Temp::new("refuses");
-        install(&temp.0, Home::Agents, false).unwrap();
+        install(&temp.0, Home::Agents, Flavour::Command, false).unwrap();
         let edited = temp.0.join(".agents/skills/jev/SKILL.md");
         fs::write(&edited, "someone's own work").unwrap();
 
-        let error = format!("{:#}", install(&temp.0, Home::Agents, false).unwrap_err());
+        let error = format!("{:#}", install(&temp.0, Home::Agents, Flavour::Command, false).unwrap_err());
         assert!(error.contains(".agents/skills/jev/SKILL.md"), "{error}");
         assert!(error.contains("nothing was written"), "{error}");
         assert!(error.contains("jev add skill --force"), "{error}");
         // Refused means refused: the edit is still there, and so is the file that did match.
         assert_eq!(fs::read_to_string(&edited).unwrap(), "someone's own work");
-        assert_eq!(fs::read_to_string(temp.0.join(".agents/skills/jev/references/patterns.md")).unwrap(), PATTERNS);
+        assert_eq!(fs::read_to_string(temp.0.join(".agents/skills/jev/references/patterns.md")).unwrap(), Flavour::Command.files()[1].1);
 
         // --force is the way through, and says `replaced` for the one it replaced.
-        let written = install(&temp.0, Home::Agents, true).unwrap().1;
+        let written = install(&temp.0, Home::Agents, Flavour::Command, true).unwrap().1;
         assert_eq!(written[0], ("SKILL.md", Wrote::Replaced));
         assert_eq!(written[1], ("references/patterns.md", Wrote::Unchanged));
-        assert_eq!(fs::read_to_string(&edited).unwrap(), SKILL);
+        assert_eq!(fs::read_to_string(&edited).unwrap(), Flavour::Command.files()[0].1);
     }
 
     #[test]
@@ -339,7 +346,7 @@ mod tests {
         fs::create_dir_all(skill.join("references")).unwrap();
         fs::write(skill.join("references/patterns.md"), "mine").unwrap();
 
-        assert!(install(&temp.0, Home::Agents, false).is_err());
+        assert!(install(&temp.0, Home::Agents, Flavour::Command, false).is_err());
         assert!(!skill.join("SKILL.md").exists(), "a refused run created a file");
         assert_eq!(fs::read_to_string(skill.join("references/patterns.md")).unwrap(), "mine");
     }
@@ -352,7 +359,7 @@ mod tests {
         fs::write(skill.join("SKILL.md"), "mine").unwrap();
         fs::write(skill.join("references/patterns.md"), "also mine").unwrap();
 
-        let error = format!("{:#}", install(&temp.0, Home::Claude, false).unwrap_err());
+        let error = format!("{:#}", install(&temp.0, Home::Claude, Flavour::Command, false).unwrap_err());
         assert!(error.contains("These files are already there"), "{error}");
         assert!(error.contains(".claude/skills/jev/SKILL.md"), "{error}");
         assert!(error.contains(".claude/skills/jev/references/patterns.md"), "{error}");
@@ -373,7 +380,7 @@ mod tests {
         // A folder in the way: writing through it would land outside the project entirely.
         fs::create_dir_all(project.join(".agents")).unwrap();
         std::os::unix::fs::symlink(&outside, project.join(".agents/skills")).unwrap();
-        let error = format!("{:#}", install(&project, Home::Agents, false).unwrap_err());
+        let error = format!("{:#}", install(&project, Home::Agents, Flavour::Command, false).unwrap_err());
         assert!(error.contains(".agents/skills is a symbolic link"), "{error}");
         assert!(error.contains("Nothing was written"), "{error}");
         assert!(!outside.join("jev").exists(), "the write escaped the project");
@@ -382,18 +389,31 @@ mod tests {
         fs::remove_file(project.join(".agents/skills")).unwrap();
         fs::create_dir_all(project.join(".agents/skills/jev/references")).unwrap();
         std::os::unix::fs::symlink(&precious, project.join(".agents/skills/jev/SKILL.md")).unwrap();
-        let error = format!("{:#}", install(&project, Home::Agents, true).unwrap_err());
+        let error = format!("{:#}", install(&project, Home::Agents, Flavour::Command, true).unwrap_err());
         assert!(error.contains(".agents/skills/jev/SKILL.md is a symbolic link"), "{error}");
         assert_eq!(fs::read_to_string(&precious).unwrap(), "someone else's file");
     }
 
     #[test]
-    fn the_bundled_skill_is_the_one_the_folder_is_named_after() {
-        // The Agent Skills spec makes the folder name and the `name` field match; we write `jev`.
-        assert_eq!(declared_name(SKILL), Some("jev"));
-        assert!(SKILL.starts_with("---\n"), "SKILL.md needs YAML frontmatter");
-        // The skill points at the reference by the path we write it to.
-        assert!(SKILL.contains("references/patterns.md"));
-        assert!(!PATTERNS.is_empty());
+    fn either_flavour_can_be_written() {
+        // What each teaches is jev::skill's business; this is that both arrive whole. They share
+        // the folder, so writing the second over the first is what switching shape does.
+        let temp = Temp::new("flavours");
+        let (skill, _) = install(&temp.0, Home::Agents, Flavour::Command, false).unwrap();
+        assert_eq!(fs::read_to_string(skill.join("SKILL.md")).unwrap(), Flavour::Command.files()[0].1);
+        let (again, written) = install(&temp.0, Home::Agents, Flavour::Tool, true).unwrap();
+        assert_eq!(again, skill);
+        assert!(written.iter().any(|(_, wrote)| *wrote == Wrote::Replaced));
+        assert_eq!(fs::read_to_string(skill.join("SKILL.md")).unwrap(), Flavour::Tool.files()[0].1);
+    }
+
+    #[test]
+    fn the_other_flavour_is_in_the_way_without_force() {
+        // Switching shape replaces a file that differs, which is what --force is for: the same
+        // check that protects an edited skill protects one the other flavour wrote.
+        let temp = Temp::new("switch");
+        install(&temp.0, Home::Agents, Flavour::Command, false).unwrap();
+        let error = format!("{:#}", install(&temp.0, Home::Agents, Flavour::Tool, false).unwrap_err());
+        assert!(error.contains("jev add skill --tool --force"), "{error}");
     }
 }

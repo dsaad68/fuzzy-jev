@@ -13,9 +13,9 @@ description: >-
 license: MIT
 compatibility: >-
   Needs OPENROUTER_API_KEY and network access to openrouter.ai. `jev` is a native binary
-  (`cargo install --git https://github.com/dsaad68/jev-cli`); jq is handy for reading `--json`.
+  (`cargo install --git https://github.com/dsaad68/fuzzy-jev`); jq is handy for reading `--json`.
 metadata:
-  source: https://github.com/dsaad68/jev-cli
+  source: https://github.com/dsaad68/fuzzy-jev
 ---
 
 # Jev: typed questions, probabilities back
@@ -56,6 +56,8 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `--state-json` | Parse the state as JSON, so questions can point at named parts. |
 | `--noul` / `--choice` / `--score` | A question, repeatable. Noul criteria: none, or `\|YES MEANS\|NO MEANS`. Choice: two or more `NAME[:DESCRIPTION]`. Score: two to ten levels, lowest first. |
 | `-q FILE` | Questions from a JSON file — the only way to use text containing `\|`, or structured criteria. |
+| `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
+| `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as sent, for `jq`; or a table. The default is one line per question. |
 | `-m ID` | Another model. Default `typesafe/jev-1.13`. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
@@ -86,6 +88,63 @@ jq -r '.answers.team | select(.confidence > 0.6) | .choice'      reply.json
 jq -r '.answers.urgency | .legend[(.score | round | tostring)]'  reply.json
 ```
 
+## Decide with rules
+
+When the decision is several answers combined ("raining and not hot → raincoat"), write it as rules
+rather than as `jq` arithmetic. A rules file names answers as **terms** and combines them with fuzzy
+logic; every answer is already a degree from 0 to 1:
+
+```toml
+[terms]                       # lowercase names for answers
+hot     = "temp.Hot"          # a Score level, by its exact text
+humid   = "humidity.Humid"
+raining = "raining"           # a Noul, by its id
+# billing = "team.billing"    # a Choice option
+
+[[rule]]
+if   = "raining AND NOT hot"  # AND OR NOT ( ), hedges VERY SOMEWHAT EXTREMELY INDEED — uppercase
+then = "raincoat"
+
+[[rule]]
+if     = "VERY humid OR hot"
+then   = "breathable fabric"
+weight = 0.8                  # optional, 0–1
+```
+
+```sh
+jev -f weather.txt -q weather.json -r wear.toml
+```
+
+```text
+raincoat           0.96  yes
+breathable fabric  0.80  yes
+threshold 0.50
+```
+
+AND is `min`, OR is `max`, NOT is `1 − x`; rules with the same `then` are joined by OR. An item is
+a yes at or over `[decide] threshold` (0.5). `--table` adds the rules behind each score, and `--json`
+prints `{"reply", "outcome"}`. The file is checked against the questions before the call, so a term
+naming a level that doesn't exist fails for free, `--dry-run` included. Read
+`references/patterns.md` for `[logic]` (other ANDs and ORs), outputs, and how to design the rules.
+
+For an **amount** rather than a yes/no ("how much to water"), declare an output and conclude in its
+sets. The value is the centroid of the clipped sets:
+
+```toml
+[output.irrigation]
+range = [0, 100]
+drops = [0, 0, 20, 40]       # trapezoid a, b, c, d
+liter = [30, 50, 70]         # triangle a, peak, c
+
+[[rule]]
+if   = "regular"
+then = "irrigation IS liter"
+```
+
+To check the rules before trusting them, `jev -q q.json -r rules.toml --graph` shows every rule's
+tree with no call. With a state, it shows the number at every node, so you can see which rule
+decided.
+
 ## Write criteria that decide something
 
 Criteria exist for the cases that are nearly one thing and nearly another; the obvious ones answer
@@ -112,6 +171,8 @@ one-off question; it works each of these through with `jev` and `jq`.
   putting every request through an expensive model.
 - **Composite scoring** — score independent dimensions separately, normalize each to 0–1, weight
   them and sum. Adjustable, and the individual scores stay visible.
+- **Fuzzy rules** — `-r`: IF–THEN rules over the answers decide what to do, readable and editable
+  by the person who owns the decision.
 
 ## Many items
 
