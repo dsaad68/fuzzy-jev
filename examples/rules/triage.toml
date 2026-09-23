@@ -1,0 +1,54 @@
+# Support triage: who to wake, who to escalate to, and how soon to reply.
+# Questions: triage.json. Run it:
+#   jev -f ticket.txt -q examples/rules/triage.json -r examples/rules/triage.toml
+
+[logic]
+and = "min"
+or  = "probsum"            # independent reasons to act add up
+
+[decide]
+threshold = 0.6            # act only on a fairly clear yes
+
+[terms]
+billing   = "team.billing"          # a Choice option
+security  = "team.security"
+relaxed   = "urgency.No deadline"   # a Score level whose text has a space
+this_week = "urgency.This week"
+today     = "urgency.Today"
+angry     = "anger.Angry"
+blocked   = "blocked"               # a Noul
+
+# Items: yes or no, at the threshold.
+
+[[rule]]
+if   = "blocked AND (security OR today)"
+then = "page on-call"
+
+[[rule]]
+if     = "VERY angry OR INDEED blocked AND billing"
+then   = "escalate to a lead"
+weight = 0.9
+
+[[rule]]
+if   = "billing AND NOT (today OR this_week)"
+then = "weekly billing queue"
+
+# An output: how many hours until the first reply.
+
+[output.reply_within]
+range    = [0, 72]
+soon     = [0, 0, 2, 6]            # a shoulder at the start
+same_day = [4, 12, 24]             # a triangle
+later    = [20, 48, 72, 72]        # a shoulder at the end
+
+[[rule]]
+if   = "today OR blocked"
+then = "reply_within IS soon"
+
+[[rule]]
+if   = "this_week"
+then = "reply_within IS same_day"
+
+[[rule]]
+if   = "relaxed"
+then = "reply_within IS later"

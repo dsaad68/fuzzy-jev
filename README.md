@@ -20,7 +20,9 @@ Jev is [TypeSafe](https://typesafe.ai)'s model. This client reaches it through
 Every answer is already a degree from 0 to 1, so the answers can be used directly as fuzzy truth
 values. A [rules file](#fuzzy-rules) combines them with `AND`, `OR`, `NOT` and hedges into
 decisions, or into a crisp amount through [fuzzy outputs](#outputs-a-crisp-amount).
-`--svg` [draws the whole rule base](#drawing-the-rules):
+`--svg` [draws the whole rule base](#drawing-the-rules). **[`docs/rules.md`](docs/rules.md)** is the
+full guide to `rules.toml`: every table, operator and formula, the output formats, the errors, and
+an example worked by hand.
 
 ![The irrigation rules drawn as a fuzzy rule base: the premises cut at Jev's degrees, each rule's set clipped, and the merged shape with its centroid](docs/irrigation.svg)
 
@@ -194,6 +196,8 @@ jq -r 'if .answers.churn_risk.noul > 0.8 then "page the account team" else "queu
 
 ## Fuzzy rules
 
+> **The complete reference is [`docs/rules.md`](docs/rules.md).** This section is the short tour.
+
 A decision is often several answers combined: "a raincoat when it rains, unless it's hot". A
 **rules file** says that directly. It names the answers it needs as **terms**, combines them with
 fuzzy logic, and gives each outcome a score. The rules are your knowledge; Jev only supplies how
@@ -334,6 +338,11 @@ irrigation  51.02  (drops 0.00, liter 0.98, gallon 0.02)
 `then = "OUTPUT IS SET"` concludes in an output when the file declares that output; any other
 `then` is an item, and one file can have both. When no rule for an output scores above zero, its
 value is `-` (`null` in JSON) rather than a made-up number.
+
+For everything together (a Choice, hedges, parentheses, a weight, `probsum`, a threshold, and items
+alongside an output), see the support-triage example,
+[`examples/rules/triage.toml`](examples/rules/triage.toml), which
+[`docs/rules.md`](docs/rules.md#a-complete-example-worked-by-hand) works through by hand.
 
 ## Drawing the rules
 

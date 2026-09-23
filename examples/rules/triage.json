@@ -1,0 +1,26 @@
+{
+  "team": {
+    "type": "choice",
+    "instructions": "Which team should handle this ticket? Route by what the sender asks for, not by what happened to them.",
+    "criteria": {
+      "billing": "money that has moved or should move: charges, invoices, refunds",
+      "support": "the product not working or not understood",
+      "security": "who can get into the account, and keeping others out",
+      "other": "none of these"
+    }
+  },
+  "urgency": {
+    "type": "score",
+    "instructions": "How soon does the sender need an answer?",
+    "criteria": ["No deadline", "This week", "Today"]
+  },
+  "blocked": {
+    "type": "noul",
+    "instructions": "Is the sender unable to do their work until this is answered?"
+  },
+  "anger": {
+    "type": "score",
+    "instructions": "How angry does the sender sound?",
+    "criteria": ["Calm", "Annoyed", "Angry"]
+  }
+}
