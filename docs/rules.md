@@ -536,7 +536,7 @@ The engine is `jev::rules`, behind the `command` feature (the CLI's default).
 
 ```toml
 [dependencies]
-jev = { git = "https://github.com/dsaad68/fuzzy-jev", default-features = false, features = ["command"] }
+jev = { package = "fuzzy-jev", version = "0.2", default-features = false, features = ["command"] }
 ```
 
 ```rust

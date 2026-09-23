@@ -52,30 +52,39 @@ extra question costs a few tokens and no extra round trip.
 
 ## Install
 
+**From crates.io.** The package is `fuzzy-jev`, since `jev` on crates.io is another project; the
+command it installs is `jev`. Needs a [Rust toolchain](https://rustup.rs).
+
+```sh
+cargo install fuzzy-jev --locked
+```
+
+It lands in `~/.cargo/bin`, which rustup puts on your PATH, so `jev` works in any folder.
+`cargo install fuzzy-jev --locked --force` updates it; `cargo uninstall fuzzy-jev` takes it off
+your PATH again.
+
 **A built binary.** Each [release](https://github.com/dsaad68/fuzzy-jev/releases) carries a
 `.tar.gz` per platform — Linux and macOS, x86-64 and Arm — with a `.sha256` beside it:
 
 ```sh
-tar -xzf jev-0.1.0-aarch64-apple-darwin.tar.gz
+tar -xzf jev-0.2.0-aarch64-apple-darwin.tar.gz
 ./jev --help
 ```
 
-The v0.1.0 binaries predate fuzzy rules and drawing (`-r`, `--graph`, `--svg`). Until the next
-release, install from `main` with cargo, below.
+v0.1.0, from before this repository was renamed, has no fuzzy rules or drawing.
 
-**With cargo, from this repository.** No release needed, and no clone: cargo fetches the source
-and builds it. Needs a [Rust toolchain](https://rustup.rs).
+**With cargo, from this repository.** For what is on `main` before it is released, with no
+clone: cargo fetches the source and builds it.
 
 ```sh
 cargo install --git https://github.com/dsaad68/fuzzy-jev --locked
 ```
 
-It lands in `~/.cargo/bin`, which rustup puts on your PATH, so `jev` works in any folder. A few
-variants:
+A few variants:
 
 ```sh
-# a particular release, rather than whatever main says today
-cargo install --git https://github.com/dsaad68/fuzzy-jev --tag v0.1.0 --locked
+# a particular release
+cargo install --git https://github.com/dsaad68/fuzzy-jev --tag v0.2.0 --locked
 
 # a branch, to try something before it is merged
 cargo install --git https://github.com/dsaad68/fuzzy-jev --branch some-branch --locked
@@ -89,13 +98,12 @@ out to let cargo pick newer ones. To run it from a clone instead:
 
 ```sh
 git clone https://github.com/dsaad68/fuzzy-jev
-cd jev-cli
+cd fuzzy-jev
 cargo install --path . --locked      # or: cargo run -- --help
 ```
 
 Then set `OPENROUTER_API_KEY` from an [OpenRouter key](https://openrouter.ai/keys). `--dry-run`
-prints the request instead of sending it, and needs no key; `cargo uninstall jev` takes it off
-your PATH again.
+prints the request instead of sending it, and needs no key.
 
 ## Asking
 
@@ -442,7 +450,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { git = "https://github.com/dsaad68/fuzzy-jev", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.2", default-features = false }
 ```
 
 ```rust
@@ -473,7 +481,7 @@ cargo run --example triage -- "Could you tell me what the enterprise plan costs?
 ```
 
 CI runs `cargo fmt --check`, clippy for the host and for `wasm32-unknown-unknown`, and the tests.
-Pushing a tag such as `v0.1.0` builds the four binaries and puts them on a Release; the same build
+Pushing a tag such as `v0.2.0` builds the four binaries and puts them on a Release; the same build
 can be started by hand from the Actions tab, which leaves them as artifacts.
 
 Extracted from [wasm-agent](https://github.com/dsaad68/wasm-agent), where this began as

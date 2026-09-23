@@ -1,11 +1,20 @@
 [package]
-name = "jev"
-version = "0.1.0"
+# On crates.io as fuzzy-jev, since `jev` there is another project's; the library is still imported
+# as `jev` and the command is still `jev`.
+name = "fuzzy-jev"
+version = "0.2.0"
 edition = "2021"
 description = "A client for TypeSafe's Jev on OpenRouter's decisions endpoint: typed Choice, Score and Noul answers about a state, fuzzy rules over them, and drawings of those rules. Native and wasm32, and a CLI."
 repository = "https://github.com/dsaad68/fuzzy-jev"
 readme = "README.md"
 license = "MIT"
+keywords = ["fuzzy-logic", "llm", "classification", "openrouter", "cli"]
+categories = ["command-line-utilities", "api-bindings", "science"]
+# What crates.io needs to build it and show the README: the drawings are for GitHub.
+exclude = ["/.github", "/docs/*.svg", "/target"]
+
+[lib]
+name = "jev"
 
 [features]
 default = ["cli"]

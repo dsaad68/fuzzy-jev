@@ -13,7 +13,7 @@ description: >-
 license: MIT
 compatibility: >-
   Needs OPENROUTER_API_KEY and network access to openrouter.ai. `jev` is a native binary
-  (`cargo install --git https://github.com/dsaad68/fuzzy-jev`); jq is handy for reading `--json`.
+  (`cargo install fuzzy-jev`); jq is handy for reading `--json`.
 metadata:
   source: https://github.com/dsaad68/fuzzy-jev
 ---

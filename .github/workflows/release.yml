@@ -59,7 +59,7 @@ jobs:
         id: package
         shell: bash
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"jev","version":"\([^"]*\)".*/\1/p')
+          version=$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"fuzzy-jev","version":"\([^"]*\)".*/\1/p')
           name="jev-${version}-${{ matrix.target }}"
           tar -czf "${name}.tar.gz" -C "target/${{ matrix.target }}/release" jev
           echo "name=${name}" >> "$GITHUB_OUTPUT"
