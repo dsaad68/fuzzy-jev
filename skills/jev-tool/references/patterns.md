@@ -40,8 +40,9 @@ until the first is answered — or when a single question really will do.
 what the criteria are worth paying attention to.
 
 1. Write `questions.json`: the questions the task asks for, with the task's own words as criteria.
-2. Ask about one item. A confident answer that matches what you'd have said means the criteria hold;
-   a middling confidence on an easy item means they don't.
+2. Ask about one item. A middling confidence on an easy item means the criteria are unclear; a
+   confident answer that matches what you'd have said only means they aren't obviously broken. It
+   is a smoke check, not an evaluation.
 3. Then every item, four or five calls to the turn so they run in parallel. Each call carries that
    item's text as the state and the same questions.
 4. Collect the answers into the file the task asks for, taking the most probable option.
@@ -108,28 +109,30 @@ Normalize each score by its top level — levels are numbered from 0, so five le
 then weight and sum: `0.8 × depth + 0.2 × leadership` for one role, `0.3 × depth + 0.7 × leadership`
 for another. Two roles, two weightings, one call.
 
-**Avoid it** when the dimensions aren't independent (scoring them apart and adding them
-double-counts), or when the judgment is genuinely holistic and the weights would be invented.
+**Avoid it** when two dimensions measure the same thing (adding both counts it twice), or when the
+judgment is genuinely holistic and the weights would be invented.
 
 ## Fuzzy rules
 
 **Let Jev read the situation and let rules, written by whoever owns the decision, say what to do.**
-Every answer is already a fuzzy degree: a Noul's probability, each Score level's probability, each
-Choice option's. A rules file combines them, and each outcome gets a score.
+A rules file reads Jev's probabilities (a Noul's, a Score level's, a Choice option's) as the
+degrees to which its terms hold, combines them, and gives each outcome a **support score**. That
+reading is a modelling choice: a score says how strongly the policy supports an outcome, not how
+likely it is, so don't pass it on as a probability. The answers keep the probabilities.
 
 Pass the rules, as TOML text, in the call's `rules` argument; the reply adds an `outcome:` line per
 item after the answers. Ask the inputs as Scores with named levels, 3–5 each: `Cold|Mild|Hot`, not a number. Graded ideas
 belong in a Score; keep Nouls for things that are true or false.
 
 ```json
-{"temp":     {"type": "score", "instructions": "How warm does it feel outside?", "criteria": ["Cold", "Mild", "Hot"]},
- "humidity": {"type": "score", "instructions": "How humid is the air?", "criteria": ["Dry", "Normal", "Humid"]},
+{"temp":     {"type": "score", "instructions": "How warm is it outside? Cold is under 10 °C, Mild 10 to 22 °C, Hot over 22 °C.", "criteria": ["Cold", "Mild", "Hot"]},
+ "humidity": {"type": "score", "instructions": "How humid is the air? Dry is under 40% relative humidity, Normal 40 to 70%, Humid over 70%.", "criteria": ["Dry", "Normal", "Humid"]},
  "raining":  {"type": "noul",  "instructions": "Is it raining, or about to?"}}
 ```
 
 ```toml
 [logic]                  # optional
-and = "min"              # min (default: safe when answers are related) | product | lukasiewicz
+and = "min"              # min (default: the weakest condition decides) | product | lukasiewicz
 or  = "max"              # max (default: the strongest reason decides) | probsum | bounded
 
 [decide]
@@ -167,40 +170,52 @@ Designing them:
    some rule speaks for each; a gap means no outcome in that weather.
 3. **Look for conflicts** — two rules saying opposite things for one situation — and decide which
    wins, or make a third outcome.
-4. **Tune with real states.** Run ten or twenty and fix a rule, a weight or the threshold, never
-   the answers. Keep the rules in `rules.toml` beside `questions.json`, and send the same text each
+4. **Tune with real states.** Run ten or twenty to debug the rules — that is exploration, not
+   evidence that they work — and fix a rule, a weight or the threshold, never the answers. Before
+   relying on them, check them against reviewed cases they weren't tuned on. Keep the rules in `rules.toml` beside `questions.json`, and send the same text each
    call.
 
 Operators: `AND`, `OR`, `NOT`, parentheses, and hedges `VERY` (a²), `SOMEWHAT` (√a), `EXTREMELY`
 (a³), `INDEED` (pushed toward 0 or 1). Hedges and `NOT` bind tightest, then `AND`, then `OR`. Use
-`probsum` for OR when independent reasons should reinforce each other, `product` for AND when
-conditions really are independent.
+`probsum` for OR when distinct reasons should reinforce each other (it counts a reason written twice
+twice), and `bounded` to add up levels or options of one question, which exclude each other: the
+chance of "Today or This week" is their sum. Hedges only reshape a score: `VERY angry` passes 0.5
+when `P(Angry)` is 0.71 or more, and it can't tell angry from furious — ask a level for that. None of
+the operators gives the probability of a compound event.
+
+Nothing is exclusive unless a rule makes it so: at `raining` 0.5, both `raining` and `NOT raining`
+score 0.5 and pass a 0.5 threshold. When two outcomes can't both happen, write what picks between
+them, and send a case near the threshold to a person.
 
 ### Outputs: an amount, not a yes
 
-When the decision is an amount (how much to water, how many minutes to wait), declare an output: a
-crisp axis with named fuzzy sets. Rules conclude `OUTPUT IS SET`. Each such rule clips its set at its
-score, the clipped sets are merged with OR, and the value is the centre of the merged shape
+When the decision is an amount (how long to water, how many minutes to wait), declare an output: a
+crisp axis with named fuzzy sets. Rules conclude `OUTPUT IS SET`, and `X IS Y` always names an
+output, so a typo is an error. A set's rules are joined by OR into its score, the set is clipped at
+that score, the clipped sets are merged with OR, and the value is the centre of the merged shape
 (Mamdani inference, centroid defuzzification).
 
 ```toml
-[output.irrigation]
+[output.irrigation]            # minutes of watering: say the unit, the file has none
 range  = [0, 100]
-drops  = [0, 0, 20, 40]       # trapezoid: a, b, c, d
-liter  = [30, 50, 70]         # triangle: a, peak, c
-gallon = [60, 80, 100, 100]
+short  = [0, 0, 20, 40]       # trapezoid: a, b, c, d
+medium = [30, 50, 70]         # triangle: a, peak, c
+long   = [60, 80, 100, 100]
 
 [[rule]]
 if = "scarce"
-then = "irrigation IS gallon"
+then = "irrigation IS long"
 
 [[rule]]
 if = "regular"
-then = "irrigation IS liter"
+then = "irrigation IS medium"
 ```
 
 Overlap neighbouring sets, as the levels of a Score overlap, so that an answer between two levels
-gives a value between their sets. Gaps between the sets make the value jump.
+gives a value between their sets. The value says where the support is, not how much: a set clipped
+at 0.01 alone gives the same value as one at 1, so check the sets' scores before acting on it. And
+two supported sets far apart give a value between them that neither supports; if that compromise
+is wrong, make the rules choose. Keep hard limits in code.
 
 **Avoid it** when one answer decides alone (read it directly), or when you'd be inventing rules
 nobody holds: then a weighted sum is at least honest about being a guess.

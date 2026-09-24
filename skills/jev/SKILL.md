@@ -12,10 +12,10 @@ description: >-
   summarizing or rewriting text — Jev only answers questions you define.
 license: MIT
 compatibility: >-
-  Needs OPENROUTER_API_KEY and network access to openrouter.ai. `jev` is a native binary
-  (`cargo install fuzzy-jev`); jq is handy for reading `--json`.
+  Needs OPENROUTER_API_KEY and network access to openrouter.ai. `jev` is a native binary from
+  crates/jev (`cargo install --path crates/jev`); jq is handy for reading `--json`.
 metadata:
-  source: https://github.com/dsaad68/fuzzy-jev
+  source: crates/jev
 ---
 
 # Jev: typed questions, probabilities back
@@ -92,14 +92,15 @@ jq -r '.answers.urgency | .legend[(.score | round | tostring)]'  reply.json
 
 When the decision is several answers combined ("raining and not hot → raincoat"), write it as rules
 rather than as `jq` arithmetic. A rules file names answers as **terms** and combines them with fuzzy
-logic; every answer is already a degree from 0 to 1:
+logic into a support score per outcome. It reads each probability as the degree its term holds, a
+modelling choice: a score is the policy's support, not a probability.
 
 ```toml
 [terms]                       # lowercase names for answers
 hot     = "temp.Hot"          # a Score level, by its exact text
 humid   = "humidity.Humid"
 raining = "raining"           # a Noul, by its id
-# stormy  = "sky.storm"       # a Choice option, from a "sky" choice: clear, cloudy, storm
+# stormy  = "sky.storm"       # a Choice option
 
 [[rule]]
 if   = "raining AND NOT hot"  # AND OR NOT ( ), hedges VERY SOMEWHAT EXTREMELY INDEED — uppercase
@@ -127,18 +128,19 @@ prints `{"reply", "outcome"}`. The file is checked against the questions before 
 naming a level that doesn't exist fails for free, `--dry-run` included. Read
 `references/patterns.md` for `[logic]` (other ANDs and ORs), outputs, and how to design the rules.
 
-For an **amount** rather than a yes/no ("how much to water"), declare an output and conclude in its
-sets. The value is the centroid of the clipped sets:
+For an **amount** rather than a yes/no ("how long to water"), declare an output and conclude in its
+sets. The value is the centroid of the clipped sets; it says where the support is, not how much, so
+check the sets' scores (printed beside it) before acting on it:
 
 ```toml
-[output.irrigation]
-range = [0, 100]
-drops = [0, 0, 20, 40]       # trapezoid a, b, c, d
-liter = [30, 50, 70]         # triangle a, peak, c
+[output.irrigation]           # minutes of watering: the file has no units, so say it
+range  = [0, 100]
+short  = [0, 0, 20, 40]       # trapezoid a, b, c, d
+medium = [30, 50, 70]         # triangle a, peak, c
 
 [[rule]]
 if   = "regular"
-then = "irrigation IS liter"
+then = "irrigation IS medium"
 ```
 
 To check the rules before trusting them, `jev -q q.json -r rules.toml --graph` shows every rule's
@@ -193,13 +195,16 @@ Rows arrive as they finish, so sort if order matters.
 - **Jev sees only the state** — not your files, not the conversation, not the question ids. Quote
   into the state everything it needs.
 - **A Noul has no `confidence` field.** Its probability is the answer.
-- **A Score's `score` is an expectation, not an index.** `1.98 of 2` is nearly the top level;
-  `1.2 of 2` is genuinely between two. Round only when you need a discrete label.
+- **A Score's `score` is an expectation, not an index.** `1.98 of 2` is nearly the top level, but
+  `1.2 of 2` may be a case between two levels or a split between distant ones (`[0.4, 0, 0.6]` also
+  expects 1.2): read `probabilities` before rounding.
+- **A Noul's probability is the answer.** 0.01 is a confident no, and 0.5 is a real, uncertain
+  answer, not a missing one.
 - **Refused before anything is sent** (so it costs nothing): a repeated question id, a Choice with
   under two options, a Score outside two to ten levels, an empty state, the state and `-q` both on
   stdin. Anything else is OpenRouter's own error.
 - **Nothing else is validated.** Jev will answer a badly-posed question with a confident-looking
   distribution. Garbage criteria, garbage answer.
-- **Deciding one thing, once, with the context already in front of you? Just decide it.** In this
-  repo's evals, routing every label of a 20-email classification through Jev cost 4–6× and did not
-  classify better than the agent deciding for itself.
+- **Deciding one thing, once, with the context already in front of you? Just decide it.** Jev earns
+  its keep on many items against one set of criteria, not on a single judgment you are already
+  making.

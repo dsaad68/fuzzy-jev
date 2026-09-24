@@ -1,5 +1,11 @@
 {
-  "temp":     {"type": "score", "instructions": "How warm does it feel outside?", "criteria": ["Cold", "Mild", "Hot"]},
-  "humidity": {"type": "score", "instructions": "How humid is the air?", "criteria": ["Dry", "Normal", "Humid"]},
-  "raining":  {"type": "noul",  "instructions": "Is it raining, or about to?"}
+  "temp":     {"type": "score",
+               "instructions": "How warm is it outside? Cold is under 10 °C, Mild 10 to 22 °C, Hot over 22 °C; go by how it feels when no temperature is given.",
+               "criteria": ["Cold", "Mild", "Hot"]},
+  "humidity": {"type": "score",
+               "instructions": "How humid is the air? Dry is under 40% relative humidity, Normal 40 to 70%, Humid over 70%; sticky air is Humid.",
+               "criteria": ["Dry", "Normal", "Humid"]},
+  "raining":  {"type": "noul",
+               "instructions": "Is it raining, or about to?",
+               "criteria": {"true": "Rain is falling, or the state says it is about to start", "false": "No rain, and none expected soon"}}
 }

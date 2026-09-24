@@ -149,9 +149,14 @@ mod tests {
 /// A `-q` file's questions, in the order the file has them. The text is the file's; where it came
 /// from — the terminal's disk or the shell's files — is the caller's business.
 pub fn questions_file(text: &str) -> Result<Vec<(String, Question)>, String> {
-    serde_json::from_str::<Ordered>(text)
-        .map(|Ordered(questions)| questions)
-        .map_err(|error| format!("expected a JSON object of question ids to questions: {error}"))
+    let Ordered(questions) =
+        serde_json::from_str(text).map_err(|error| format!("expected a JSON object of question ids to questions: {error}"))?;
+    // The limits `Client::request` checks, so that a file's question that can't be answered fails
+    // here, before a call, as a flag's does, and `--dry-run` finds it too.
+    for (id, question) in &questions {
+        question.check().map_err(|why| format!("question `{id}`: {why}"))?;
+    }
+    Ok(questions)
 }
 
 /// A JSON object's entries in the order it has them. Read straight into `Question`s rather than
@@ -210,5 +215,13 @@ mod file_tests {
         assert!(questions_file("[]").unwrap_err().contains("expected a JSON object"));
         let error = questions_file(r#"{"q": {"type": "ranking", "instructions": "?"}}"#).unwrap_err();
         assert!(error.contains("question `q`"), "{error}");
+        // What the endpoint can't answer is refused here, as a flag's question is.
+        let empty = questions_file(r#"{"s": {"type": "score", "instructions": "?", "criteria": []}}"#).unwrap_err();
+        assert!(empty.contains("question `s`: a score needs levels"), "{empty}");
+        let eleven =
+            questions_file(&format!(r#"{{"s": {{"type": "score", "instructions": "?", "criteria": {:?}}}}}"#, ["l"; 11])).unwrap_err();
+        assert!(eleven.contains("up to 10 levels"), "{eleven}");
+        let twice = questions_file(r#"{"c": {"type": "choice", "instructions": "?", "criteria": {"a": "", "a": "again"}}}"#).unwrap_err();
+        assert!(twice.contains("option `a` is there twice"), "{twice}");
     }
 }

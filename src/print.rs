@@ -15,7 +15,7 @@ pub enum Format {
     Text,
     /// A table with a column per field.
     Table,
-    /// The reply as the endpoint sent it, for scripts.
+    /// The reply as this crate reads it (the fields it knows, re-encoded), for scripts.
     Json,
 }
 

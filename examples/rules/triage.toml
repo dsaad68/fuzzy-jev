@@ -4,7 +4,7 @@
 
 [logic]
 and = "min"
-or  = "probsum"            # independent reasons to act add up
+or  = "probsum"            # distinct reasons to act add up; a reason written twice counts twice
 
 [decide]
 threshold = 0.6            # act only on a fairly clear yes
@@ -29,11 +29,15 @@ if     = "VERY angry OR INDEED blocked AND billing"
 then   = "escalate to a lead"
 weight = 0.9
 
+# The levels of one Score exclude each other, so "neither Today nor This week" is the No deadline
+# level itself. `NOT (today OR this_week)` would treat them as separate reasons: under probsum, an
+# answer split [0, 0.5, 0.5] would read as 0.25 not-urgent when none of it is.
 [[rule]]
-if   = "billing AND NOT (today OR this_week)"
+if   = "billing AND relaxed"
 then = "weekly billing queue"
 
-# An output: how many hours until the first reply.
+# An output: how many hours until the first reply. It is a recommendation; a contractual reply
+# deadline is enforced in code, since an average of deadlines enforces none of them.
 
 [output.reply_within]
 range    = [0, 72]

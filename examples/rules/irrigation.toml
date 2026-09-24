@@ -1,22 +1,26 @@
+# How long to water a field this week, from how much it has rained. The output's unit is minutes
+# of watering: the file doesn't encode it, so it says it here. A hard limit (a ban on watering,
+# say) belongs in code, not in a shape that is averaged.
+
 [terms]
 scarce  = "rainfall.Scarce"
 regular = "rainfall.Regular"
 large   = "rainfall.Large"
 
-[output.irrigation]
+[output.irrigation]            # minutes of watering this week
 range  = [0, 100]
-drops  = [0, 0, 20, 40]
-liter  = [30, 50, 70]
-gallon = [60, 80, 100, 100]
+short  = [0, 0, 20, 40]
+medium = [30, 50, 70]
+long   = [60, 80, 100, 100]
 
 [[rule]]
 if   = "scarce"
-then = "irrigation IS gallon"
+then = "irrigation IS long"
 
 [[rule]]
 if   = "regular"
-then = "irrigation IS liter"
+then = "irrigation IS medium"
 
 [[rule]]
 if   = "large"
-then = "irrigation IS drops"
+then = "irrigation IS short"

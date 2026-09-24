@@ -8,8 +8,7 @@
 [![OpenRouter](https://img.shields.io/badge/served%20by-OpenRouter%20decisions-6566F1)](https://openrouter.ai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Ask **Jev** typed questions about a piece of text and get calibrated probabilities back, rather
-than prose. A **Choice** between named options, a **Score** on an ordered scale, or a **Noul** —
+Ask **Jev** typed questions about a piece of text and get probabilities back, rather than prose. A **Choice** between named options, a **Score** on an ordered scale, or a **Noul** —
 the probability that something is true.
 
 Jev is [TypeSafe](https://typesafe.ai)'s model. This client reaches it through
@@ -17,14 +16,15 @@ Jev is [TypeSafe](https://typesafe.ai)'s model. This client reaches it through
 (`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one;
 `--url` points the same questions at another endpoint.
 
-Every answer is already a degree from 0 to 1, so the answers can be used directly as fuzzy truth
-values. A [rules file](#fuzzy-rules) combines them with `AND`, `OR`, `NOT` and hedges into
-decisions, or into a crisp amount through [fuzzy outputs](#outputs-a-crisp-amount).
+A [rules file](#fuzzy-rules) is a policy over those answers: it reads each probability as the
+degree to which a condition holds, and combines them with `AND`, `OR`, `NOT` and hedges into a
+support score per decision, or into a crisp amount through [fuzzy outputs](#outputs-a-crisp-amount).
+A support score is the policy's, not a probability: [what the numbers mean](docs/rules.md#what-the-numbers-mean).
 `--svg` [draws the whole rule base](#drawing-the-rules). **[`docs/rules.md`](docs/rules.md)** is the
 full guide to `rules.toml`: every table, operator and formula, the output formats, the errors, and
 an example worked by hand.
 
-![The weather rules drawn as a fuzzy rule base: each question's levels cut at Jev's degrees, each rule's operators, and what to wear against the threshold](docs/wear.svg)
+![The weather rules drawn as a fuzzy rule base: each question's probabilities, each rule's operators, and what to wear against the threshold](docs/wear.svg)
 
 A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, and
 an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
@@ -127,10 +127,11 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | `--url` | Another endpoint. With one, `OPENROUTER_API_KEY` may be unset, for an endpoint that adds the key. |
 | `--text` | One line per question. The default. |
 | `--table` | A table: question, type, answer, confidence, and every option's probability. |
-| `--json` | The reply as the endpoint sent it, for `jq` and scripts. |
+| `--json` | The reply as this crate reads it (the fields it knows, re-encoded), for `jq` and scripts. |
 | `--rules` (`-r`) | [Fuzzy rules](#fuzzy-rules) over the answers, from a TOML file; prints their outcome instead of the answers. |
 | `--graph` | With `-r`: [draw the rules](#drawing-the-rules) in the terminal. |
 | `--svg PATH` | With `-r`: draw the rules as an SVG image. Without a state, either one draws the structure alone, with no call. |
+| `--timeout SECONDS` | Give up on the request after this long; 60 by default. It is not sent again. |
 | `--dry-run` | Print the request instead of sending it. No key needed. |
 
 ### A structured state
@@ -208,16 +209,23 @@ jq -r 'if .answers.churn_risk.noul > 0.8 then "page the account team" else "queu
 
 A decision is often several answers combined: "a raincoat when it rains, unless it's hot". A
 **rules file** says that directly. It names the answers it needs as **terms**, combines them with
-fuzzy logic, and gives each outcome a score. The rules are your knowledge; Jev only supplies how
-much each condition holds.
+fuzzy logic, and gives each outcome a **support score**. The rules are your policy; Jev supplies the
+evidence. Reading a probability as a degree is a modelling choice, so a score says how strongly the
+policy supports an outcome, not how likely it is.
 
 The questions, [`examples/rules/weather.json`](examples/rules/weather.json):
 
 ```json
 {
-  "temp":     {"type": "score", "instructions": "How warm does it feel outside?", "criteria": ["Cold", "Mild", "Hot"]},
-  "humidity": {"type": "score", "instructions": "How humid is the air?", "criteria": ["Dry", "Normal", "Humid"]},
-  "raining":  {"type": "noul",  "instructions": "Is it raining, or about to?"}
+  "temp":     {"type": "score",
+               "instructions": "How warm is it outside? Cold is under 10 °C, Mild 10 to 22 °C, Hot over 22 °C; …",
+               "criteria": ["Cold", "Mild", "Hot"]},
+  "humidity": {"type": "score",
+               "instructions": "How humid is the air? Dry is under 40% relative humidity, Normal 40 to 70%, Humid over 70%; …",
+               "criteria": ["Dry", "Normal", "Humid"]},
+  "raining":  {"type": "noul",
+               "instructions": "Is it raining, or about to?",
+               "criteria": {"true": "Rain is falling, or the state says it is about to start", "false": "No rain, and none expected soon"}}
 }
 ```
 
@@ -271,14 +279,14 @@ jev '16°C, the air feels sticky, and a light drizzle has started.' \
 ```
 
 ```text
-coat               0.03
-light jacket       0.05
-raincoat           0.95  yes
-umbrella           0.95  yes
-t-shirt            0.02
+coat               0.00
+light jacket       0.02
+raincoat           0.98  yes
+umbrella           0.98  yes
+t-shirt            0.00
 breathable fabric  1.00  yes
 threshold 0.50
-369 tokens in, 47 out, $0.000015, typesafe/jev-1.13-20260917
+475 tokens in, 47 out, $0.000020, typesafe/jev-1.13-20260917
 ```
 
 - **Terms** are lowercase names, and every word in a rule is a term or an operator. A term points
@@ -286,25 +294,29 @@ threshold 0.50
   a Choice option by its name.
 - **Operators** are uppercase: `AND`, `OR`, `NOT`, parentheses, and the hedges `VERY` (x²),
   `SOMEWHAT` (√x), `EXTREMELY` (x³) and `INDEED` (pushed toward 0 or 1). Hedges and `NOT` bind
-  tightest, then `AND`, then `OR`.
-- **`[logic]`** picks the AND and the OR for the whole file. `min` and `max`, the defaults, are
-  safe when answers are related, as answers about one state usually are. `product` and `probsum`
-  treat conditions as independent, so doubts compound and reasons reinforce.
+  tightest, then `AND`, then `OR`. A hedge reshapes a score and moves where the threshold falls;
+  it doesn't make "angry" mean "very angry".
+- **`[logic]`** picks the AND and the OR for the whole file. `min` and `max`, the defaults, let the
+  weakest condition and the strongest reason decide. `product` and `probsum` make every doubt lower
+  the score and every reason raise it, and `probsum` counts a reason written twice twice. None of
+  them is the probability of a compound event; levels of one question exclude each other, so their
+  probabilities add (`bounded`).
 - **Rules with the same `then`** are joined by the file's OR, and an item is a yes at or over the
   threshold.
 - **Checked before the call.** Every term is resolved against the questions first, so a typo costs
   nothing, and `--dry-run` catches it too. The error names what does exist:
   ``[terms] hot: `temp` has no level `hot`; its levels are `temp.Cold`, `temp.Mild`, `temp.Hot` ``.
-  An answer or a probability missing from the reply is an error, never a silent zero.
+  An answer or a probability missing from the reply is an error, never a silent zero, and so is a
+  number that isn't a probability or a distribution that doesn't add up to 1.
 - **`--table`** adds the rules behind each score, and **`--json`** prints
   `{"reply": …, "outcome": …}`, so a script keeps every answer.
 
 ### Outputs: a crisp amount
 
-When the answer is an amount ("how much to water?") rather than a yes, a rule can conclude in an
-**output**: a crisp axis with named fuzzy sets. Each rule clips its set at its score, the clipped
-shapes are merged with the file's OR, and the value is the centre of the merged shape. This is
-Mamdani inference with centroid defuzzification.
+When the answer is an amount ("how long to water?") rather than a yes, a rule can conclude in an
+**output**: a crisp axis with named fuzzy sets. A set's rules are joined into its score, each set is
+clipped at its score, the clipped shapes are merged with the file's OR, and the value is the centre
+of the merged shape, worked out exactly. This is Mamdani inference with centroid defuzzification.
 
 [`examples/rules/irrigation.toml`](examples/rules/irrigation.toml), with
 [`examples/rules/rain.json`](examples/rules/rain.json) asking how much it rained:
@@ -315,23 +327,23 @@ scarce  = "rainfall.Scarce"
 regular = "rainfall.Regular"
 large   = "rainfall.Large"
 
-[output.irrigation]
+[output.irrigation]          # minutes of watering this week
 range  = [0, 100]
-drops  = [0, 0, 20, 40]      # a trapezoid: rises a→b, flat b→c, falls c→d
-liter  = [30, 50, 70]        # a triangle: a, peak, c
-gallon = [60, 80, 100, 100]  # a shoulder, held up to the end of the range
+short  = [0, 0, 20, 40]      # a trapezoid: rises a→b, flat b→c, falls c→d
+medium = [30, 50, 70]        # a triangle: a, peak, c
+long   = [60, 80, 100, 100]  # a shoulder, held up to the end of the range
 
 [[rule]]
 if   = "scarce"
-then = "irrigation IS gallon"
+then = "irrigation IS long"
 
 [[rule]]
 if   = "regular"
-then = "irrigation IS liter"
+then = "irrigation IS medium"
 
 [[rule]]
 if   = "large"
-then = "irrigation IS drops"
+then = "irrigation IS short"
 ```
 
 ```sh
@@ -340,12 +352,14 @@ jev 'A fairly normal week: two moderate showers, and the soil is damp but drying
 ```
 
 ```text
-irrigation  51.02  (drops 0.00, liter 0.98, gallon 0.02)
+irrigation  51.02  (short 0.00, medium 0.98, long 0.02)
 ```
 
-`then = "OUTPUT IS SET"` concludes in an output when the file declares that output; any other
-`then` is an item, and one file can have both. When no rule for an output scores above zero, its
-value is `-` (`null` in JSON) rather than a made-up number.
+`then = "OUTPUT IS SET"` always concludes in an output, and a misspelt one is an error that
+suggests the closest name; any other `then` is an item, and one file can have both. The value says
+where the support lies, not how much of it there is, so read it with its sets' scores, printed
+beside it. When no rule for an output scores above zero, its value is `-` (`null` in JSON) rather
+than a made-up number. The file has no units: say them in a comment, as above.
 
 For everything together (a Choice, hedges, parentheses, a weight, `probsum`, a threshold, and items
 alongside an output), see the support-triage example,
@@ -366,9 +380,10 @@ jev '16°C, the air feels sticky, and a light drizzle has started.' \
 
 That is the drawing at the top of this page. The image is laid out the way a fuzzy rule base is usually drawn, with one row per rule:
 
-- **Premises:** a column per question. A Score's levels are drawn as a fuzzy partition, with the
-  term's own level in bold, shaded up to the degree Jev gave it. The red arrow is the expected
-  level, the reading the curves turn into degrees. Choices and Nouls are drawn as bars.
+- **Premises:** a column per question, with a bar per level, option, or no and yes, filled to its
+  probability; the one a rule reads is in bold. Under a Score, the red arrow is its expected level,
+  drawn apart because the rules don't read it. A probability the reply leaves out is marked
+  `missing`.
 - **Rules:** the `if` as a tree of its operators, each with what it came to.
 - **Conclusions:** an output's sets, with the rule's own set clipped at its score, or an item's bar
   against the threshold.
@@ -389,11 +404,11 @@ probability (the term's own in brackets):
 
 ```text
 R3  raining AND NOT hot  ⇒  raincoat
-    AND (min)  0.95
-    ├─ raining  0.95  ← raining: no 0.05 · [yes 0.95]
-    └─ NOT (1 − x)  0.98
-       └─ hot  0.02  ← temp: Cold 0.04 · Mild 0.94 · [Hot 0.02]
-    ⇒ raincoat  0.95  ███████████████████
+    AND (min)  0.98
+    ├─ raining  0.98  ← raining: no 0.02 · [yes 0.98]
+    └─ NOT (1 − x)  1.00
+       └─ hot  0.00  ← temp: Cold 0.00 · Mild 1.00 · [Hot 0.00]
+    ⇒ raincoat  0.98  ███████████████████▋
 ```
 
 An output is drawn as a plot of its merged shape, with `↑` at its centre:
@@ -407,7 +422,7 @@ An output is drawn as a plot of its merged shape, with `↑` at its centre:
       │░░░░░░░░░░░░░░░░░░▁▄████████████████████▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
   0.0 └──────────────────────────────┬─────────────────────────────
        0                             ↑ 51.02                    100
-           drops                   liter                 gallon
+           short                  medium                  long
 ```
 
 ## The Agent Skill

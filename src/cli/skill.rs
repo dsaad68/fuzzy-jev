@@ -139,18 +139,19 @@ fn add(asked: Asked) -> Result<()> {
 /// checked before any is written, so a refusal leaves nothing half-applied.
 pub fn install(root: &Path, home: Home, flavour: Flavour, force: bool) -> Result<(PathBuf, Vec<(&'static str, Wrote)>)> {
     let skill = root.join(home.dir()).join("skills").join(FOLDER);
-    let planned: Vec<(&'static str, &'static str, Wrote)> = flavour
-        .files()
-        .into_iter()
-        .map(|(path, contents)| {
-            let wrote = match fs::read_to_string(skill.join(path)) {
-                Ok(there) if there == contents => Wrote::Unchanged,
-                Ok(_) => Wrote::Replaced,
-                Err(_) => Wrote::Created,
-            };
-            (path, contents, wrote)
-        })
-        .collect();
+    let mut planned: Vec<(&'static str, &'static str, Wrote)> = Vec::new();
+    for (path, contents) in flavour.files() {
+        // Bytes, not text: a file there that isn't UTF-8 is still someone's file. Only a file that
+        // isn't there at all is created; one that can't be read stops it, since it may be in the way.
+        let file = skill.join(path);
+        let wrote = match fs::read(&file) {
+            Ok(there) if there == contents.as_bytes() => Wrote::Unchanged,
+            Ok(_) => Wrote::Replaced,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Wrote::Created,
+            Err(error) => return Err(error).with_context(|| format!("reading {}; nothing was written", file.display())),
+        };
+        planned.push((path, contents, wrote));
+    }
 
     let clashes: Vec<String> = planned
         .iter()
@@ -335,6 +336,28 @@ mod tests {
         assert_eq!(written[0], ("SKILL.md", Wrote::Replaced));
         assert_eq!(written[1], ("references/patterns.md", Wrote::Unchanged));
         assert_eq!(fs::read_to_string(&edited).unwrap(), Flavour::Command.files()[0].1);
+    }
+
+    #[test]
+    fn a_file_that_isnt_text_is_still_in_the_way() {
+        let temp = Temp::new("binary");
+        let skill = temp.0.join(".agents/skills/jev");
+        fs::create_dir_all(&skill).unwrap();
+        fs::write(skill.join("SKILL.md"), [0xff, 0xfe, 0x00]).unwrap();
+        let error = format!("{:#}", install(&temp.0, Home::Agents, Flavour::Command, false).unwrap_err());
+        assert!(error.contains("nothing was written"), "{error}");
+        assert_eq!(fs::read(skill.join("SKILL.md")).unwrap(), [0xff, 0xfe, 0x00]);
+    }
+
+    #[test]
+    fn a_file_that_cant_be_read_stops_it() {
+        // A folder where the file should be can't be read as one, and isn't absent either.
+        let temp = Temp::new("unreadable");
+        let skill = temp.0.join(".agents/skills/jev");
+        fs::create_dir_all(skill.join("SKILL.md")).unwrap();
+        let error = format!("{:#}", install(&temp.0, Home::Agents, Flavour::Command, true).unwrap_err());
+        assert!(error.contains("reading") && error.contains("nothing was written"), "{error}");
+        assert!(!skill.join("references/patterns.md").exists());
     }
 
     #[test]

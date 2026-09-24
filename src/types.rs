@@ -215,6 +215,38 @@ impl Answer {
             Answer::Other(answer) => answer.get("type").and_then(Value::as_str).unwrap_or("an answer of another type"),
         }
     }
+
+    /// Whether its numbers are probabilities: each finite and from 0 to 1, and a Choice's or a
+    /// Score's adding up to 1, give or take the rounding of the two places they arrive with. An
+    /// answer of another type has nothing to check. The error says what is wrong.
+    pub fn check(&self) -> std::result::Result<(), String> {
+        let probability = |what: String, value: f64| match value.is_finite() && (0.0..=1.0).contains(&value) {
+            true => Ok(()),
+            false => Err(format!("{what} is {value}, which isn't a probability from 0 to 1")),
+        };
+        let distribution = |values: Vec<(String, f64)>| {
+            for (what, value) in &values {
+                probability(what.clone(), *value)?;
+            }
+            let sum: f64 = values.iter().map(|(_, value)| value).sum();
+            // Two decimal places each: every one may be off by half a hundredth.
+            let slack = (0.005 * values.len() as f64).max(0.01) + 1e-9;
+            match (sum - 1.0).abs() <= slack {
+                true => Ok(()),
+                false => Err(format!("its probabilities add up to {sum:.3}, not 1")),
+            }
+        };
+        match self {
+            Answer::Noul(answer) => probability("the probability of yes".to_owned(), answer.noul),
+            Answer::Choice(answer) => {
+                distribution(answer.probabilities.iter().map(|(option, value)| (format!("`{option}`'s probability"), *value)).collect())
+            }
+            Answer::Score(answer) => {
+                distribution(answer.probabilities.iter().map(|(level, value)| (format!("level {level}'s probability"), *value)).collect())
+            }
+            Answer::Other(_) => Ok(()),
+        }
+    }
 }
 
 /// The three types this crate knows, tagged as the endpoint tags them. [`Answer`] hands anything

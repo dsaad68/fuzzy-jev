@@ -1,1 +1,3 @@
-{"rainfall": {"type": "score", "instructions": "How much rain has fallen on the field this week?", "criteria": ["Scarce", "Regular", "Large"]}}
+{"rainfall": {"type": "score",
+              "instructions": "How much rain has fallen on the field this week? Scarce is under 10 mm, Regular 10 to 30 mm, Large over 30 mm.",
+              "criteria": ["Scarce", "Regular", "Large"]}}

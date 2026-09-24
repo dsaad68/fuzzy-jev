@@ -32,7 +32,7 @@ const MARK: &str = "#c2410c";
 
 impl Rules {
     /// The rules as an SVG image: a row per rule with its premises (each question's levels or
-    /// options, the term's own in bold, cut at the degree Jev gave it), the tree of operators that
+    /// options as bars of their probabilities, the term's own in bold), the tree of operators that
     /// combine them, and its conclusion (an item's bar, or an output's set clipped at the rule's
     /// score); then a final column with every item against the threshold and each output's merged
     /// shape and its centre. Without `reply`, the structure alone.
@@ -127,55 +127,44 @@ impl Rules {
         Ok(svg.finish(width, height))
     }
 
-    /// A question's panel: a Score's levels as curves along its scale, or a Choice's options and a
-    /// Noul's no and yes as bars. `targets` are the terms of this rule that read it, drawn in bold,
-    /// and with a reply each is cut at its degree.
+    /// A question's panel: a bar per level, option, or no and yes, in order, filled to the
+    /// probability Jev gave it. `targets` are the terms of this rule that read it, drawn in bold with
+    /// their number. A Score's expected level is a marker of its own: it isn't a probability, and two
+    /// different spreads can have the same one. A probability the reply leaves out is marked as
+    /// missing rather than drawn as zero.
     fn premise(&self, svg: &mut Svg, frame: &Frame, targets: &[&Target], reply: Option<&DecisionResponse>) {
         svg.frame(frame);
         let target = targets[0];
         let selected: Vec<usize> = targets.iter().map(|target| target.selected).collect();
         let probabilities = reply.and_then(|reply| target.probabilities(reply));
         let count = target.labels.len();
-        match target.kind {
-            Kind::Score => {
-                let frame = frame.domain(-0.5, count as f64 - 0.5);
-                for (at, label) in target.labels.iter().enumerate() {
-                    let set = Set { name: label.clone(), points: level(at, count) };
-                    let bold = selected.contains(&at);
+        let slot = frame.width / count as f64;
+        let levels = frame.domain(-0.5, count as f64 - 0.5);
+        for (at, label) in target.labels.iter().enumerate() {
+            let bold = selected.contains(&at);
+            let x = frame.x + at as f64 * slot + 4.0;
+            let bar = slot - 8.0;
+            match probabilities.as_ref().map(|probabilities| probabilities[at]) {
+                Some(Some(probability)) => {
+                    let height = probability * (frame.height - 10.0);
+                    let fill = if bold { FILL } else { FRAME };
+                    svg.rect(x, frame.bottom() - height, bar, height, fill, "none", 0.0);
                     if bold {
-                        if let Some(probabilities) = &probabilities {
-                            svg.cut(&frame, &set, probabilities[at]);
-                        }
+                        // Inside the bar's top when it is tall enough, over it when it isn't.
+                        let y = if height > 16.0 { frame.bottom() - height + 12.0 } else { frame.bottom() - height - 3.0 };
+                        svg.text(x + bar / 2.0, y, 10.0, "middle", "bold", INK, &format!("{probability:.2}"));
                     }
-                    svg.shape(&frame, &set, bold);
-                    svg.label(&frame, at as f64, label, count, bold);
                 }
-                // Where the expected level falls: the reading the curves turn into degrees.
-                if let Some(score) = reply.and_then(|reply| reply.score(&target.id).ok()) {
-                    svg.marker(&frame, score.score, &format!("score {:.2}", score.score));
-                }
+                Some(None) => svg.text(x + bar / 2.0, frame.bottom() - 4.0, 9.0, "middle", "normal", MARK, "missing"),
+                None => {}
             }
-            Kind::Choice | Kind::Noul => {
-                let slot = frame.width / count as f64;
-                for (at, label) in target.labels.iter().enumerate() {
-                    let bold = selected.contains(&at);
-                    let x = frame.x + at as f64 * slot + 4.0;
-                    let bar = slot - 8.0;
-                    if let Some(probabilities) = &probabilities {
-                        let height = probabilities[at] * (frame.height - 10.0);
-                        let fill = if bold { FILL } else { FRAME };
-                        svg.rect(x, frame.bottom() - height, bar, height, fill, "none", 0.0);
-                        if bold {
-                            // Inside the bar's top when it is tall enough, over it when it isn't.
-                            let y = if height > 16.0 { frame.bottom() - height + 12.0 } else { frame.bottom() - height - 3.0 };
-                            svg.text(x + bar / 2.0, y, 10.0, "middle", "bold", INK, &format!("{:.2}", probabilities[at]));
-                        }
-                    }
-                    let (stroke, width) = if bold { (INK, 2.0) } else { (FAINT, 1.0) };
-                    svg.rect(x, frame.y + 10.0, bar, frame.height - 10.0, "none", stroke, width);
-                    let frame_x = frame.domain(-0.5, count as f64 - 0.5);
-                    svg.label(&frame_x, at as f64, label, count, bold);
-                }
+            let (stroke, width) = if bold { (INK, 2.0) } else { (FAINT, 1.0) };
+            svg.rect(x, frame.y + 10.0, bar, frame.height - 10.0, "none", stroke, width);
+            svg.label(&levels, at as f64, label, count, bold);
+        }
+        if target.kind == Kind::Score {
+            if let Some(score) = reply.and_then(|reply| reply.score(&target.id).ok()) {
+                svg.tick(&levels, score.score, &format!("expected {:.2}", score.score));
             }
         }
     }
@@ -237,7 +226,7 @@ impl Rules {
         let scores: Option<Vec<f64>> = rows.iter().map(|row| row.score).collect();
         let mut y = TOP;
         for (at, output) in self.outputs.iter().enumerate() {
-            let clipped = scores.as_ref().map(|scores| self.clipped(at, scores));
+            let clipped = scores.as_ref().map(|scores| self.set_scores(at, scores));
             let value = clipped.as_ref().and_then(|clipped| output.centroid(clipped, self.logic.or));
             let caption = match (&clipped, value) {
                 (Some(_), Some(value)) => format!("{} = {value:.2}", output.name),
@@ -306,16 +295,6 @@ fn tree_lines(node: &Node, first: &str, rest: &str, out: &mut Vec<String>) {
         let (branch, under) = if last { ("└ ", "  ") } else { ("├ ", "│ ") };
         tree_lines(child, &format!("{rest}{branch}"), &format!("{rest}{under}"), out);
     }
-}
-
-/// Level `at` of `count` as a set along the scale from -0.5 to `count - 0.5`: a triangle peaking
-/// at its own number, with the lowest and highest held up to the ends, as the outer sets of a fuzzy
-/// partition are.
-fn level(at: usize, count: usize) -> [f64; 4] {
-    let (at, last) = (at as f64, count as f64 - 1.0);
-    let (a, b) = if at == 0.0 { (-0.5, -0.5) } else { (at - 1.0, at) };
-    let (c, d) = if at == last { (last + 0.5, last + 0.5) } else { (at, at + 1.0) };
-    [a, b, c, d]
 }
 
 /// `text` cut to `most` characters, with `…` when it was longer.
@@ -466,7 +445,15 @@ impl Svg {
         self.text(frame.px(x), frame.bottom() + 12.0, 10.0, "middle", weight, fill, &clip(name, room));
     }
 
-    /// An arrow up to the axis at `x`: the expected level of a Score, or an output's centre.
+    /// An arrowhead under the axis at `x`, with no line up through the plot: a Score's expected
+    /// level, which would otherwise cross the bars and their numbers.
+    fn tick(&mut self, frame: &Frame, x: f64, label: &str) {
+        let at = frame.px(x.clamp(frame.low, frame.high));
+        let _ = writeln!(self.body, "<path d=\"M{at:.1},{:.1} l-4,7 h8 z\" fill=\"{MARK}\"/>", frame.bottom() + 14.0);
+        self.text(at, frame.bottom() + 30.0, 10.0, "middle", "bold", MARK, label);
+    }
+
+    /// An arrow up to the axis at `x`: an output's centre.
     fn marker(&mut self, frame: &Frame, x: f64, label: &str) {
         let at = frame.px(x.clamp(frame.low, frame.high));
         let _ = writeln!(
@@ -489,16 +476,6 @@ fn escape(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn levels_make_a_partition_with_shoulders_at_the_ends() {
-        assert_eq!(level(0, 3), [-0.5, -0.5, 0.0, 1.0]);
-        assert_eq!(level(1, 3), [0.0, 1.0, 1.0, 2.0]);
-        assert_eq!(level(2, 3), [1.0, 2.0, 2.5, 2.5]);
-        // Between two levels, their degrees add up to one.
-        let (low, high) = (Set { name: String::new(), points: level(0, 3) }, Set { name: String::new(), points: level(1, 3) });
-        assert!((low.membership(0.3) + high.membership(0.3) - 1.0).abs() < 1e-9);
-    }
 
     #[test]
     fn escapes_text() {

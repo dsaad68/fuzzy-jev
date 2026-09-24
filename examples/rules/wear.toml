@@ -1,3 +1,7 @@
+[logic]
+and = "min"
+or  = "max"
+
 [decide]
 threshold = 0.5
 

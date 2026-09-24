@@ -22,6 +22,9 @@ pub enum Error {
     /// The answer under `id` gives no probability for one of its levels or options, which rules
     /// need: reading it as zero would be a confident no that nothing said.
     MissingProbability { id: String, label: String },
+    /// The answer under `id` isn't one rules can read: a probability outside 0 to 1, a
+    /// distribution that doesn't add up to 1, or a level or option the question doesn't have.
+    BadAnswer { id: String, why: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -37,6 +40,7 @@ impl fmt::Display for Error {
             Error::MissingAnswer(id) => write!(f, "no answer for question `{id}`"),
             Error::WrongType { id, expected, found } => write!(f, "question `{id}` is a {found}, not a {expected}"),
             Error::MissingProbability { id, label } => write!(f, "question `{id}` gives no probability for `{label}`"),
+            Error::BadAnswer { id, why } => write!(f, "the answer to question `{id}` can't be read: {why}"),
         }
     }
 }

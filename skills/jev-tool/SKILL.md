@@ -10,7 +10,7 @@ description: >-
   Jev only answers questions you define.
 license: MIT
 metadata:
-  source: https://github.com/dsaad68/fuzzy-jev (skills/jev), rewritten for the jev tool rather than the jev command
+  source: crates/jev/skills/jev, rewritten for the jev tool rather than the jev command
 ---
 
 # Jev: typed questions, probabilities back
@@ -40,9 +40,10 @@ send that same object with every item:
 1. **Write `questions.json` first.** One question per judgment the task asks for, with the criteria
    the task gives you, close to word for word. It holds exactly the object a call passes under
    `questions`.
-2. **Try it on one item.** Ask about a single item and read the answer: a confident answer on an
-   item you'd have called the same way means the criteria are working, and a confidence near the
-   middle on an easy item means they aren't. Fix the file before spending twenty calls on it.
+2. **Try it on one item.** Ask about a single item and read the answer: a confidence near the middle
+   on an easy item means the criteria are unclear, so fix the file before spending twenty calls on
+   it. A confident answer you agree with only says they aren't obviously broken; it is a smoke
+   check, not an evaluation.
 3. **Fan out.** One call per item: that item's text as the state, the questions from the file in
    each call. Put four or five calls in a turn so they run in parallel, rather than a turn per item.
 4. **Write the results out.** Take the most probable option for each question, and look at the item
@@ -96,14 +97,15 @@ back rather than a sentence.
 ## Decide with rules
 
 When the decision is several answers combined ("raining and not hot → raincoat"), pass `rules`: TOML
-text naming answers as terms and combining them with fuzzy logic. Every answer is already a degree
-from 0 to 1.
+text naming answers as terms and combining them with fuzzy logic into a support score per outcome.
+It reads each probability as the degree its term holds, a modelling choice: a score is the
+policy's support, not a probability.
 
 ```toml
 [terms]                       # lowercase names for answers
 hot     = "temp.Hot"          # a Score level, by its exact text
 raining = "raining"           # a Noul, by its id
-stormy  = "sky.storm"         # a Choice option, from a "sky" choice: clear, cloudy, storm
+stormy  = "sky.storm"         # a Choice option
 
 [[rule]]
 if   = "raining AND NOT hot"  # AND OR NOT ( ), hedges VERY SOMEWHAT EXTREMELY INDEED — uppercase
@@ -111,8 +113,9 @@ then = "raincoat"
 ```
 
 For an amount rather than a yes/no, declare `[output.NAME]` with a `range = [low, high]` and sets
-(`liter = [30, 50, 70]` is a triangle, four numbers a trapezoid), and conclude `then = "NAME IS
-liter"`. The value is the centroid of the sets, each clipped at its rule's score.
+(`medium = [30, 50, 70]` is a triangle, four numbers a trapezoid), and conclude `then = "NAME IS
+medium"`. The value is the centroid of the sets, each clipped at its rules' score; it says where the
+support is, not how much, so check the sets' scores before acting on it.
 
 The reply adds each outcome's score after the answers, `yes` at or over `[decide] threshold` (0.5).
 AND is `min`, OR is `max`, NOT is `1 − x`. The rules are checked against the questions before the
@@ -128,10 +131,11 @@ each worked through.
 
 - **Jev sees only the state** — not your files, not this conversation, not the question ids. Quote
   into the state everything it needs, including the item's own text.
-- **A Noul has no confidence field.** Its probability is the answer: 0.9 is a confident yes, 0.5 is
-  no answer at all.
-- **A Score is an expectation, not an index.** `1.98 of 2` is nearly the top level; `1.2 of 2` is
-  genuinely between two. Round only when you need a discrete label.
+- **A Noul has no confidence field.** Its probability is the answer: 0.9 is a confident yes, 0.01 a
+  confident no, and 0.5 a real, uncertain answer rather than a missing one.
+- **A Score is an expectation, not an index.** `1.98 of 2` is nearly the top level, but `1.2 of 2`
+  may be a case between two levels or a split between distant ones (`[0.4, 0, 0.6]` also expects
+  1.2): read the probabilities before rounding.
 - **Ask every question about one state in one call.** Two calls for two questions about the same
   item costs twice and answers no better.
 - **Nothing validates your criteria.** Jev answers a badly posed question with a confident-looking
