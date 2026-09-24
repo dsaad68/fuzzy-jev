@@ -1,16 +1,8 @@
 # fuzzy-jev
 
-[![CI](https://github.com/dsaad68/fuzzy-jev/actions/workflows/ci.yml/badge.svg)](https://github.com/dsaad68/fuzzy-jev/actions/workflows/ci.yml)
-[![Python](https://github.com/dsaad68/fuzzy-jev/actions/workflows/python.yml/badge.svg)](https://github.com/dsaad68/fuzzy-jev/actions/workflows/python.yml)
-[![Release](https://github.com/dsaad68/fuzzy-jev/actions/workflows/release.yml/badge.svg)](https://github.com/dsaad68/fuzzy-jev/actions/workflows/release.yml)
 [![crates.io](https://img.shields.io/crates/v/fuzzy-jev?logo=rust&logoColor=white)](https://crates.io/crates/fuzzy-jev)
-[![docs.rs](https://img.shields.io/docsrs/fuzzy-jev?logo=docsdotrs)](https://docs.rs/fuzzy-jev)
-[![PyPI](https://img.shields.io/pypi/v/fuzzy-jev?logo=pypi&logoColor=white)](https://pypi.org/project/fuzzy-jev/)
 [![Python versions](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](docs/python.md)
 [![Rust](https://img.shields.io/badge/Rust-2021_edition-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
-[![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20wasm32-informational)](#install)
-[![Model](https://img.shields.io/badge/model-TypeSafe%20Jev-0B7285)](https://typesafe.ai)
-[![OpenRouter](https://img.shields.io/badge/served%20by-OpenRouter%20decisions-6566F1)](https://openrouter.ai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Ask **Jev** typed questions about a piece of text and get probabilities back, rather than prose. A **Choice** between named options, a **Score** on an ordered scale, or a **Noul** —
