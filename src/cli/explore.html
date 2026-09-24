@@ -122,13 +122,22 @@
   .results.loading > .card { opacity: .55; transition: opacity .2s; }
 
   /* Editor */
-  .editor { position: sticky; top: 64px; }
-  .editor .body { display: flex; flex-direction: column; gap: 4px; }
-  .field-head { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 4px; }
-  .field-head:first-child { margin-top: 0; }
-  .field-head label { font-weight: 650; font-size: 15px; }
-  .field-head small { color: var(--muted); font-size: 14px; }
-  .field-head .right { display: inline-flex; gap: 10px; align-items: baseline; }
+  /* The inputs: a card each for the state, the questions and the rules, each folding to a line. */
+  .editor { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .panel > .head { padding: 8px 12px 8px 6px; gap: 8px; flex-wrap: nowrap; cursor: pointer; }
+  .panel > .body { display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+  .panel.collapsed > .head { border-bottom: 0; }
+  .panel.collapsed > .body, .panel.collapsed .when-open { display: none; }
+  .panel:not(.collapsed) .summary { display: none; }
+  .panel .toggle { border: 0; background: none; padding: 2px 6px; gap: 8px; border-radius: 6px; flex-shrink: 0; }
+  .panel .toggle:hover { background: var(--track); }
+  .panel .toggle h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  .panel .chev { color: var(--muted); font-size: 13px; transition: transform .15s; display: inline-block; }
+  .panel.collapsed .chev { transform: rotate(-90deg); }
+  .panel .summary { color: var(--muted); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .panel .right { display: inline-flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  .run-bar { position: sticky; bottom: 12px; z-index: 4; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; }
+  .run-bar .hint { color: var(--muted); font-size: 14px; }
   button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
   button.link:hover { background: none; text-decoration: underline; }
   /* The questions' Form / JSON switch, and a question's type. */
@@ -167,8 +176,6 @@
   #state { min-height: 84px; }
   #questions, #rules { min-height: 240px; }
   .field-error { color: var(--error); font-size: 14px; white-space: pre-wrap; font-family: var(--font); margin-top: 2px; }
-  .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
-  .actions .hint { color: var(--muted); font-size: 14px; }
 
   /* Banners */
   .banner { border-radius: 8px; padding: 10px 14px; font-size: 15px; display: flex; gap: 10px; align-items: center; }
@@ -264,28 +271,53 @@
 </header>
 
 <main>
-  <section class="card editor" aria-label="Inputs">
-    <div class="body">
-      <div class="field-head"><label for="state">State</label><small>what Jev judges</small></div>
-      <div class="code" data-lang="state"><pre aria-hidden="true"></pre><textarea id="state" spellcheck="false" wrap="off" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea></div>
+  <div class="editor" aria-label="Inputs">
+  <section class="card panel" id="statePanel" data-panel="state">
+    <div class="head">
+      <button type="button" class="toggle" aria-expanded="true" aria-controls="stateBody"><span class="chev" aria-hidden="true">▾</span><h2>State</h2></button>
+      <span class="summary" id="stateSummary"></span>
+      <span class="spacer"></span>
+      <span class="sub when-open">what Jev judges</span>
+    </div>
+    <div class="body" id="stateBody">
+      <div class="code" data-lang="state"><pre aria-hidden="true"></pre><textarea id="state" aria-label="State" spellcheck="false" wrap="off" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea></div>
       <div class="state-row"><label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label><button class="link" id="formatState" title="Pretty-print the state's JSON" hidden>Format</button></div>
       <div class="field-error" id="stateError" hidden></div>
-
-      <div class="field-head"><label for="questions">Questions</label><span class="right"><button class="link" id="formatQuestions" title="Pretty-print the questions (⇧⌥F)">Format</button><span class="seg" id="questionsMode" role="tablist" aria-label="Write the questions as"><button type="button" role="tab" data-mode="form" title="A field for each part">Form</button><button type="button" role="tab" data-mode="json" title="JSON: ids to questions">JSON</button></span></span></div>
-      <div class="qform" id="questionsForm" hidden></div>
-      <div class="code" data-lang="json" id="questionsCode"><pre aria-hidden="true"></pre><textarea id="questions" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
-      <div class="field-error" id="questionsError" hidden></div>
-
-      <div class="field-head"><label for="rules">Rules</label><small>TOML, optional</small></div>
-      <div class="code" data-lang="toml"><pre aria-hidden="true"></pre><textarea id="rules" spellcheck="false" wrap="off" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea></div>
-      <div class="field-error" id="rulesError" hidden></div>
-
-      <div class="actions">
-        <button class="primary" id="run"><span class="spinner"></span><span class="label">Run</span></button>
-        <span class="hint"><kbd>⌘</kbd> <kbd>↵</kbd> to run · the diagram redraws as you type</span>
-      </div>
     </div>
   </section>
+
+  <section class="card panel" id="questionsPanel" data-panel="questions">
+    <div class="head">
+      <button type="button" class="toggle" aria-expanded="true" aria-controls="questionsBody"><span class="chev" aria-hidden="true">▾</span><h2>Questions</h2></button>
+      <span class="summary" id="questionsSummary"></span>
+      <span class="spacer"></span>
+      <span class="right when-open"><button class="link" id="formatQuestions" title="Pretty-print the questions (⇧⌥F)">Format</button><span class="seg" id="questionsMode" role="tablist" aria-label="Write the questions as"><button type="button" role="tab" data-mode="form" title="A field for each part">Form</button><button type="button" role="tab" data-mode="json" title="JSON: ids to questions">JSON</button></span></span>
+    </div>
+    <div class="body" id="questionsBody">
+      <div class="qform" id="questionsForm" hidden></div>
+      <div class="code" data-lang="json" id="questionsCode"><pre aria-hidden="true"></pre><textarea id="questions" aria-label="Questions as JSON" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
+      <div class="field-error" id="questionsError" hidden></div>
+    </div>
+  </section>
+
+  <section class="card panel" id="rulesPanel" data-panel="rules">
+    <div class="head">
+      <button type="button" class="toggle" aria-expanded="true" aria-controls="rulesBody"><span class="chev" aria-hidden="true">▾</span><h2>Rules</h2></button>
+      <span class="summary" id="rulesSummary"></span>
+      <span class="spacer"></span>
+      <span class="sub when-open">TOML, optional</span>
+    </div>
+    <div class="body" id="rulesBody">
+      <div class="code" data-lang="toml"><pre aria-hidden="true"></pre><textarea id="rules" aria-label="Rules as TOML" spellcheck="false" wrap="off" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea></div>
+      <div class="field-error" id="rulesError" hidden></div>
+    </div>
+  </section>
+
+  <div class="card run-bar">
+    <button class="primary" id="run"><span class="spinner"></span><span class="label">Run</span></button>
+    <span class="hint"><kbd>⌘</kbd> <kbd>↵</kbd> to run · the diagram redraws as you type</span>
+  </div>
+  </div>
 
   <div class="results" id="results">
     <div class="banner warn" id="noKey" hidden>OPENROUTER_API_KEY isn't set where jev --explore started, so Run can't ask Jev. The diagram still draws.</div>
@@ -579,7 +611,11 @@ function textField(value, placeholder, onInput, attributes = {}) {
   input.addEventListener("input", () => { onInput(input.value); writeQuestions(); });
   return input;
 }
-function grow(textarea) { textarea.style.height = "auto"; textarea.style.height = `${textarea.scrollHeight + 2}px`; }
+function grow(textarea) {
+  if (!textarea.offsetParent) return; // folded away: measured when it shows
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight + 2}px`;
+}
 function iconButton(label, title, onClick) {
   const button = el("button", { type: "button", class: "icon ghost", title, "aria-label": title }, label);
   button.addEventListener("click", onClick);
@@ -681,6 +717,43 @@ for (const tab of document.querySelectorAll("#questionsMode [role=tab]")) tab.ad
 // Typing in the JSON keeps the form's model up to date, for when it is shown again.
 $("questions").addEventListener("input", () => { if (questionsMode === "json") { const read = modelOf($("questions").value); formBlocked = typeof read === "string" ? read : null; if (!formBlocked) model = read; } });
 
+// ---------- the input cards: each folds to a one-line summary ----------
+const panels = ["state", "questions", "rules"];
+function setCollapsed(name, collapsed) {
+  const panel = $(name + "Panel");
+  panel.classList.toggle("collapsed", collapsed);
+  panel.querySelector(".toggle").setAttribute("aria-expanded", String(!collapsed));
+  remember("collapsed." + name, collapsed);
+  // What was laid out while folded away is measured again now it shows.
+  if (!collapsed) {
+    requestAnimationFrame(() => {
+      for (const textarea of panel.querySelectorAll(".qcard textarea")) grow(textarea);
+      if (name !== "questions" || questionsMode === "json") syncScroll($(name));
+    });
+  }
+}
+function summarize() {
+  const state = $("state").value.trim();
+  const firstLine = state.split("\n")[0];
+  $("stateSummary").textContent = state ? ($("stateJson").checked ? "JSON · " : "") + firstLine + (state.includes("\n") ? " …" : "") : "empty";
+  const read = modelOf($("questions").value);
+  $("questionsSummary").textContent = typeof read === "string" ? "not valid yet"
+    : read.length ? `${read.length} question${read.length === 1 ? "" : "s"}: ${read.map((question) => question.id).join(", ")}` : "none";
+  const rules = $("rules").value;
+  const count = (pattern) => (rules.match(pattern) || []).length;
+  const ruleCount = count(/^[ \t]*\[\[rule\]\]/gm), outputs = count(/^[ \t]*\[output\./gm);
+  $("rulesSummary").textContent = !rules.trim() ? "none" : `${ruleCount} rule${ruleCount === 1 ? "" : "s"}` + (outputs ? `, ${outputs} output${outputs === 1 ? "" : "s"}` : "");
+}
+for (const name of panels) {
+  const panel = $(name + "Panel");
+  // The whole header folds the card, except the controls in it.
+  panel.querySelector(".head").addEventListener("click", (event) => {
+    if (event.target.closest("button:not(.toggle), input, a, .seg")) return;
+    setCollapsed(name, !panel.classList.contains("collapsed"));
+  });
+  setCollapsed(name, remembered("collapsed." + name) === "true");
+}
+
 // ---------- start ----------
 async function start() {
   const given = await (await fetch("/start")).json();
@@ -701,6 +774,7 @@ async function start() {
   $("noKey").hidden = given.canAsk;
   highlightAll();
   setMode(questionsMode);
+  summarize();
   for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
   $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
   $("model").addEventListener("input", () => edited("model"));
@@ -720,6 +794,7 @@ function load(name) {
   remember("stateJson", false);
   highlightAll();
   readQuestions();
+  summarize();
   result = ranWith = null;
   $("stale").hidden = $("error").hidden = true;
   zoom = "fit";
@@ -729,6 +804,7 @@ function load(name) {
 // ---------- editing: the results go stale, and the structure is drawn again ----------
 let redrawTimer;
 function edited(name) {
+  summarize();
   $("stale").hidden = !result || same(ranWith, current());
   if (name === "questions" || name === "rules") {
     clearTimeout(redrawTimer);
@@ -774,6 +850,7 @@ function fieldErrors(message) {
   const name = fieldOf[prefix];
   $(name + "Error").textContent = message.replace(/^(questions|rules): /, "").replace(/^--state-json: /, "");
   $(name + "Error").hidden = false;
+  setCollapsed(name, false);
   $(name).parentElement.classList.add("invalid");
   return true;
 }
