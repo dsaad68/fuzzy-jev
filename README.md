@@ -50,6 +50,22 @@ frustration  1.04 of 2, nearest "Frustrated"  confidence 0.94
 Every question sees the same state and is answered on its own, so ask all of them in one call: an
 extra question costs a few tokens and no extra round trip.
 
+## Contents
+
+- [Install](#install)
+- [Asking](#asking)
+  - [A structured state](#a-structured-state)
+- [Fuzzy rules](#fuzzy-rules)
+  - [Outputs: a crisp amount](#outputs-a-crisp-amount)
+- [Drawing the rules](#drawing-the-rules)
+- [The Agent Skill](#the-agent-skill)
+- [As a library](#as-a-library)
+- [From Python](#from-python)
+- [Development](#development)
+- [License](#license)
+
+More in [`docs/`](docs): [the rules guide](docs/rules.md) and [the Python guide](docs/python.md).
+
 ## Install
 
 **From PyPI.** For Python, the package is `fuzzy-jev`, imported as `jev`: see
