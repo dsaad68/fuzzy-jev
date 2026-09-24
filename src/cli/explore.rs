@@ -70,11 +70,11 @@ pub async fn serve(args: &Args) -> anyhow::Result<()> {
         eprintln!("jev: OPENROUTER_API_KEY is not set, so the page can draw rules but not ask");
     }
     let server = Arc::new(Server {
+        start: start(args, !key.is_empty() || args.url != jev::DECISIONS_URL)?,
         key,
         url: args.url.clone(),
         timeout: Duration::from_secs_f64(args.timeout),
         hosts: [format!("127.0.0.1:{port}"), format!("localhost:{port}")],
-        start: start(args)?,
     });
 
     let address = format!("http://127.0.0.1:{port}/");
@@ -92,8 +92,8 @@ pub async fn serve(args: &Args) -> anyhow::Result<()> {
     }
 }
 
-/// The page's starting fields: what the command line gave, if anything.
-fn start(args: &Args) -> anyhow::Result<Value> {
+/// The page's starting fields: what the command line gave, if anything; and whether it can ask.
+fn start(args: &Args, can_ask: bool) -> anyhow::Result<Value> {
     let file = |path: &Option<PathBuf>| path.as_deref().map(read).transpose();
     let state = match (&args.state, &args.state_file) {
         (Some(text), _) => Some(text.clone()),
@@ -110,6 +110,7 @@ fn start(args: &Args) -> anyhow::Result<Value> {
         "questions": file(&args.questions)?,
         "rules": file(&args.rules)?,
         "model": args.model,
+        "canAsk": can_ask,
         "examples": examples,
     }))
 }
@@ -305,7 +306,9 @@ impl Run {
             "answers": print::render(Format::Text, &reply, &ids, 100)?,
         });
         if let Some(rules) = rules {
-            body["outcome"] = print::render_outcome(Format::Text, &reply, &rules.evaluate(&reply)?, 100)?.into();
+            let outcome = rules.evaluate(&reply)?;
+            body["outcome"] = print::render_outcome(Format::Text, &reply, &outcome, 100)?.into();
+            body["decision"] = serde_json::to_value(&outcome)?;
             body["graph"] = rules.graph_text(Some(&reply))?.into();
             body["svg"] = rules.graph_svg(Some(&reply))?.into();
         }

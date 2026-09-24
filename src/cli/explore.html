@@ -6,63 +6,168 @@
 <title>Fuzzy Jev Explore</title>
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --ink: #1f2328; --muted: #656d76; --line: #d0d7de;
-    --accent: #2f7d4a; --accent-ink: #ffffff; --error: #b42318; --error-bg: #fef3f2; --code: #f6f8fa;
+    --bg: #f4f5f7; --panel: #ffffff; --raised: #f8f9fb; --ink: #1f2328; --muted: #656d76; --faint: #8c959f;
+    --line: #d8dee4; --line-strong: #c4ccd4; --accent: #2f7d4a; --accent-ink: #ffffff;
+    --bar: #b8c4d0; --track: #eef1f4; --mark: #c2410c; --error: #b42318; --error-bg: #fef3f2; --warn: #9a6700; --warn-bg: #fff8e1;
+    --code: #f6f8fa; --shadow: 0 1px 2px rgba(31, 35, 40, .06), 0 1px 1px rgba(31, 35, 40, .04);
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0d1117; --panel: #161b22; --ink: #e6edf3; --muted: #8d96a0; --line: #30363d;
-      --accent: #3fa35f; --accent-ink: #0d1117; --error: #ff7b72; --error-bg: #2d1414; --code: #0d1117;
+      --bg: #0d1117; --panel: #161b22; --raised: #1c2129; --ink: #e6edf3; --muted: #9198a1; --faint: #6e7681;
+      --line: #2a3038; --line-strong: #3d444d; --accent: #3fa35f; --accent-ink: #0d1117;
+      --bar: #4a5a6b; --track: #21262d; --mark: #f0883e; --error: #ff7b72; --error-bg: #2d1416; --warn: #d29922; --warn-bg: #2b2111;
+      --code: #0d1117; --shadow: none;
       color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  code, pre, textarea, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  /* Header */
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 650; white-space: nowrap; }
   header h1 span { color: var(--muted); font-weight: 400; }
   header .spacer { flex: 1; }
-  main { display: grid; grid-template-columns: minmax(320px, 5fr) 7fr; gap: 16px; padding: 16px 20px; align-items: start; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
-  label { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; margin: 12px 0 6px; }
-  label:first-child { margin-top: 0; }
-  label small { color: var(--muted); font-weight: 400; }
+  header .controls { display: flex; gap: 8px; align-items: center; }
+  #model { width: 200px; }
+
+  /* Controls */
   textarea, input[type=text], select {
-    width: 100%; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink);
-    background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical;
+    font-size: 12.5px; line-height: 1.5; color: var(--ink); background: var(--code); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 9px;
   }
-  select, input[type=text] { font-family: inherit; font-size: 13px; }
-  header select, header input[type=text] { width: auto; resize: none; }
-  header .row { flex-wrap: nowrap; }
-  @media (max-width: 600px) { header .row { flex-wrap: wrap; } header input[type=text] { width: 100% !important; } }
-  textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  #state { min-height: 80px; }
-  #questions { min-height: 220px; }
-  #rules { min-height: 220px; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .check { font-weight: 400; display: inline-flex; gap: 6px; align-items: center; margin: 6px 0 0; color: var(--muted); }
-  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  select, input[type=text] { font-family: inherit; font-size: 13px; background: var(--panel); }
+  textarea { width: 100%; resize: vertical; tab-size: 2; }
+  textarea:focus, input:focus, select:focus, button:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea.invalid { border-color: var(--error); }
   button, a.button {
-    font: inherit; font-weight: 600; border-radius: 6px; padding: 7px 14px; cursor: pointer; text-decoration: none;
-    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    font: inherit; font-size: 13px; font-weight: 600; border-radius: 6px; padding: 6px 12px; cursor: pointer; text-decoration: none;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   }
+  button:hover, a.button:hover { background: var(--raised); }
   button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
   button:disabled { opacity: .55; cursor: progress; }
-  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: -4px -4px 12px; flex-wrap: wrap; }
-  .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 12px; }
-  .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
-  .tabs button:disabled { opacity: .35; cursor: default; }
-  pre { margin: 0; padding: 12px; background: var(--code); border: 1px solid var(--line); border-radius: 6px; overflow: auto;
-        font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; max-height: 70vh; }
-  .svg { background: #ffffff; border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 75vh; padding: 8px; }
-  .svg svg { display: block; max-width: none; }
-  .svg.fit svg { max-width: 100%; height: auto; }
-  .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-  .bar .hint { color: var(--muted); }
-  .error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
-  .empty { color: var(--muted); padding: 40px 12px; text-align: center; }
+  button.icon { padding: 5px 9px; min-width: 30px; justify-content: center; }
+  kbd { font: 11px ui-monospace, Menlo, monospace; padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); }
+  .spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
+  .busy .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Layout */
+  main { display: grid; grid-template-columns: minmax(340px, 4fr) 8fr; gap: 16px; padding: 16px 20px 32px; align-items: start; }
+  body.expanded main { grid-template-columns: 1fr; }
+  body.expanded .editor { display: none; }
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; padding: 12px 16px 24px; }
+    header { flex-wrap: wrap; padding: 10px 16px; }
+    header .controls { flex: 1 1 100%; }
+    #model { flex: 1; width: auto; }
+    .editor { position: static; }
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); min-width: 0; }
+  .card > .head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .card > .head h2 { font-size: 13px; margin: 0; font-weight: 650; }
+  .card > .head .sub { color: var(--muted); font-size: 12px; }
+  .card > .head .spacer { flex: 1; }
+  .card > .body { padding: 14px; }
+  .results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .results.loading > .card { opacity: .55; transition: opacity .2s; }
+
+  /* Editor */
+  .editor { position: sticky; top: 64px; }
+  .editor .body { display: flex; flex-direction: column; gap: 4px; }
+  .field-head { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 4px; }
+  .field-head:first-child { margin-top: 0; }
+  .field-head label { font-weight: 650; font-size: 13px; }
+  .field-head small { color: var(--muted); font-size: 12px; }
+  .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+  #state { min-height: 70px; }
+  #questions, #rules { min-height: 190px; }
+  .field-error { color: var(--error); font-size: 12px; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; margin-top: 2px; }
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .actions .hint { color: var(--muted); font-size: 12px; }
+
+  /* Banners */
+  .banner { border-radius: 8px; padding: 10px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
+  .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  .banner.warn { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); }
+  .banner .spacer { flex: 1; }
+
+  /* Decision */
+  .decision { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--raised); cursor: pointer; transition: border-color .15s, box-shadow .15s, opacity .15s; }
+  .item:hover, .item.hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .decision.focusing .item:not(.hit) { opacity: .45; }
+  .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .item .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .score { font: 600 13px ui-monospace, Menlo, monospace; }
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; }
+  .badge.yes { background: var(--accent); color: var(--accent-ink); }
+  .badge.no { background: var(--track); color: var(--muted); }
+  .meter { position: relative; height: 8px; background: var(--track); border-radius: 4px; margin-top: 8px; }
+  .meter > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--bar); }
+  .meter.yes > i { background: var(--accent); }
+  .meter > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .6; border-radius: 1px; }
+  .item .why { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .output { grid-column: 1 / -1; }
+  .output .sets { display: grid; grid-template-columns: max-content 1fr max-content; gap: 4px 10px; align-items: center; margin-top: 8px; font-size: 12.5px; }
+  .output .sets .meter { margin: 0; }
+
+  /* Answers */
+  .answers { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 24px; }
+  .answer h3 { font-size: 12.5px; margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
+  .answer h3 .kind { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  .answer h3 .pick { margin-left: auto; font-weight: 600; }
+  .bars { display: grid; grid-template-columns: minmax(40px, max-content) 1fr 34px; gap: 3px 8px; align-items: center; font-size: 12px; }
+  .bars .label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+  .bars .label.top { color: var(--ink); font-weight: 600; }
+  .bars .meter { margin: 0; height: 6px; }
+  .bars .num { text-align: right; font: 11.5px ui-monospace, Menlo, monospace; color: var(--muted); }
+  .usage { color: var(--muted); font-size: 12px; }
+
+  /* Diagram */
+  .toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .toolbar .zoom { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); min-width: 60px; text-align: center; }
+  .toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; }
+  .viewport { overflow: auto; max-height: 72vh; padding: 8px; border-radius: 0 0 10px 10px; cursor: grab; }
+  body.expanded .viewport { max-height: calc(100vh - 150px); }
+  .viewport.dragging { cursor: grabbing; user-select: none; }
+  .viewport svg { display: block; height: auto; margin: 0 auto; }
+  .placeholder { color: var(--muted); text-align: center; padding: 48px 16px; cursor: default; }
+  .placeholder strong { color: var(--ink); display: block; margin-bottom: 4px; }
+  /* jev draws in a fixed, light palette; here each of its colours takes the page's own. */
+  #diagram svg > rect:first-of-type { fill: var(--panel); }
+  #diagram [fill="#1f2328"] { fill: var(--ink); }
+  #diagram [stroke="#1f2328"] { stroke: var(--ink); }
+  #diagram [fill="#9aa0a6"] { fill: var(--faint); }
+  #diagram [stroke="#9aa0a6"] { stroke: var(--faint); }
+  #diagram [fill="#d0d4d9"] { fill: var(--line-strong); }
+  #diagram [stroke="#d0d4d9"] { stroke: var(--line-strong); }
+  #diagram [fill="#b8c4d0"] { fill: var(--bar); }
+  #diagram [fill="#f6f8fa"] { fill: var(--raised); }
+  #diagram [fill="#2f7d4a"] { fill: var(--accent); }
+  #diagram [stroke="#2f7d4a"] { stroke: var(--accent); }
+  #diagram [fill="#c2410c"] { fill: var(--mark); }
+  #diagram [stroke="#c2410c"] { stroke: var(--mark); }
+  #diagram g.rule { transition: opacity .15s; }
+  #diagram.focusing g.rule:not(.hit) { opacity: .18; }
+
+  /* Raw output */
+  details.card > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-weight: 650; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+  details.card[open] > summary::before { transform: rotate(90deg); }
+  details.card[open] > summary { border-bottom: 1px solid var(--line); }
+  .tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); padding: 0 10px; }
+  .tabs [role=tab] { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 10px; }
+  .tabs [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tabs .spacer { flex: 1; }
+  .tabs a.button { margin: 4px 0; }
+  pre { margin: 0; padding: 12px 14px; background: var(--code); overflow: auto; font-size: 12.5px; line-height: 1.45; white-space: pre; max-height: 60vh; border-radius: 0 0 10px 10px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -70,78 +175,107 @@
 <header>
   <h1>Fuzzy Jev <span>Explore</span></h1>
   <div class="spacer"></div>
-  <div class="row">
+  <div class="controls">
     <select id="example" aria-label="Load an example"><option value="">Load an example…</option></select>
-    <input type="text" id="model" aria-label="Model" style="width: 220px" spellcheck="false">
+    <input type="text" id="model" aria-label="Model" spellcheck="false" title="The model to ask">
   </div>
 </header>
+
 <main>
-  <section>
-    <label for="state">State <small>what Jev judges</small></label>
-    <textarea id="state" spellcheck="false" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea>
-    <label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label>
+  <section class="card editor" aria-label="Inputs">
+    <div class="body">
+      <div class="field-head"><label for="state">State</label><small>what Jev judges</small></div>
+      <textarea id="state" spellcheck="false" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea>
+      <label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label>
+      <div class="field-error" id="stateError" hidden></div>
 
-    <label for="questions">Questions <small>JSON: ids to questions</small></label>
-    <textarea id="questions" spellcheck="false" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea>
+      <div class="field-head"><label for="questions">Questions</label><small>JSON: ids to questions</small></div>
+      <textarea id="questions" spellcheck="false" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea>
+      <div class="field-error" id="questionsError" hidden></div>
 
-    <label for="rules">Rules <small>TOML, optional</small></label>
-    <textarea id="rules" spellcheck="false" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea>
+      <div class="field-head"><label for="rules">Rules</label><small>TOML, optional</small></div>
+      <textarea id="rules" spellcheck="false" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea>
+      <div class="field-error" id="rulesError" hidden></div>
 
-    <div class="actions">
-      <button class="primary" id="run" title="Ctrl/⌘ + Enter">Run</button>
-      <button id="draw" title="Draw the rules' structure, without asking Jev">Draw rules only</button>
-    </div>
-  </section>
-
-  <section>
-    <div class="tabs" role="tablist">
-      <button role="tab" data-tab="outcome">Outcome</button>
-      <button role="tab" data-tab="svg">SVG</button>
-      <button role="tab" data-tab="graph">Graph</button>
-      <button role="tab" data-tab="answers">Answers</button>
-      <button role="tab" data-tab="json">JSON</button>
-    </div>
-    <div id="error" class="error" hidden></div>
-    <div id="empty" class="empty">Write a state and questions, then Run.<br>With rules, the outcome and their drawing show here too.</div>
-
-    <div data-pane="outcome" hidden>
-      <div class="bar"><span class="hint">What the rules make of the answers</span><a class="button" data-save="outcome" download="outcome.txt">Save .txt</a></div>
-      <pre id="outcome"></pre>
-    </div>
-    <div data-pane="svg" hidden>
-      <div class="bar">
-        <label class="check"><input type="checkbox" id="fit" checked> fit to width</label>
-        <a class="button" data-save="svg" download="rules.svg">Save .svg</a>
+      <div class="actions">
+        <button class="primary" id="run"><span class="spinner"></span><span class="label">Run</span></button>
+        <span class="hint"><kbd>⌘</kbd> <kbd>↵</kbd> to run · the diagram redraws as you type</span>
       </div>
-      <div class="svg fit" id="svg" role="img" aria-label="The rules, drawn"></div>
-    </div>
-    <div data-pane="graph" hidden>
-      <div class="bar"><span class="hint">The rules as a tree, as <code>--graph</code> prints them</span><a class="button" data-save="graph" download="rules.txt">Save .txt</a></div>
-      <pre id="graph"></pre>
-    </div>
-    <div data-pane="answers" hidden>
-      <div class="bar"><span class="hint">Jev's answers, as <code>jev</code> prints them</span><a class="button" data-save="answers" download="answers.txt">Save .txt</a></div>
-      <pre id="answers"></pre>
-    </div>
-    <div data-pane="json" hidden>
-      <div class="bar"><span class="hint">The request sent and the reply</span><a class="button" data-save="json" download="jev.json">Save .json</a></div>
-      <pre id="json"></pre>
     </div>
   </section>
+
+  <div class="results" id="results">
+    <div class="banner warn" id="noKey" hidden>OPENROUTER_API_KEY isn't set where jev --explore started, so Run can't ask Jev. The diagram still draws.</div>
+    <div class="banner warn" id="stale" hidden><span>The inputs changed since this run: the results are for the earlier inputs.</span><span class="spacer"></span><button id="rerun">Run again</button></div>
+    <div class="banner error" id="error" hidden></div>
+
+    <section class="card" id="decisionCard" hidden>
+      <div class="head"><h2>Decision</h2><span class="sub" id="threshold"></span><span class="spacer"></span><span class="sub">hover a card to see its rules in the diagram</span></div>
+      <div class="body"><div class="decision" id="decision"></div></div>
+    </section>
+
+    <section class="card" id="diagramCard">
+      <div class="head">
+        <h2>Rules diagram</h2><span class="sub" id="diagramNote"></span>
+        <span class="spacer"></span>
+        <div class="toolbar">
+          <button class="icon" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+          <span class="zoom" id="zoomLevel">–</span>
+          <button class="icon" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+          <button id="fit" title="Fit to width">Fit</button>
+          <span class="sep"></span>
+          <button id="expand" title="Give the diagram the whole width (Esc to go back)">Expand</button>
+          <a class="button" id="saveSvg" download="rules.svg" hidden>Save .svg</a>
+        </div>
+      </div>
+      <div class="viewport" id="viewport">
+        <div id="diagram"></div>
+        <div class="placeholder" id="diagramEmpty"><strong>No diagram yet</strong>Write rules on the left, or load an example, and they're drawn here as you type.</div>
+      </div>
+    </section>
+
+    <section class="card" id="answersCard" hidden>
+      <div class="head"><h2>Jev's answers</h2><span class="spacer"></span><span class="usage" id="usage"></span></div>
+      <div class="body"><div class="answers" id="answers"></div></div>
+    </section>
+
+    <details class="card" id="rawCard" hidden>
+      <summary>Text and JSON output</summary>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="outcome">Outcome</button>
+        <button role="tab" data-tab="graph">Graph</button>
+        <button role="tab" data-tab="answers">Answers</button>
+        <button role="tab" data-tab="json">JSON</button>
+        <span class="spacer"></span>
+        <a class="button" id="saveText">Save</a>
+      </div>
+      <pre id="raw"></pre>
+    </details>
+  </div>
 </main>
+
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-const fields = ["state", "questions", "rules"];
+const inputs = ["state", "questions", "rules"];
+const saveNames = { outcome: "outcome.txt", graph: "rules.txt", answers: "answers.txt", json: "jev.json" };
 let examples = [];
-let result = {};
-let tab = "outcome";
-const urls = {};
+let result = null;     // the last run: request, reply, answers, outcome, decision, graph, svg
+let ranWith = null;    // the inputs that run was for
+let drawn = null;      // the latest structure-only drawing, { svg, graph }, or null
+let rawTab = "outcome";
+let zoom = "fit";
+const blobs = {};
 
-// Fields are kept across reloads in this browser; what the command line gave comes first.
+// ---------- storage: the fields are kept across reloads in this browser ----------
 function remembered(name) { try { return localStorage.getItem("jev." + name); } catch { return null; } }
 function remember(name, value) { try { localStorage.setItem("jev." + name, value); } catch {} }
 
+function current() {
+  return { state: $("state").value, stateJson: $("stateJson").checked, questions: $("questions").value, rules: $("rules").value, model: $("model").value };
+}
+
+// ---------- start ----------
 async function start() {
   const given = await (await fetch("/start")).json();
   examples = given.examples || [];
@@ -149,12 +283,15 @@ async function start() {
   // A state, questions or rules on the command line start the page from them alone, so what was
   // left from last time can't mix in; the model is always the command line's.
   const fromCommand = given.state != null || given.questions != null || given.rules != null;
-  for (const name of ["state", "questions", "rules"]) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
+  for (const name of inputs) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
   $("model").value = given.model;
   $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
+  $("noKey").hidden = given.canAsk;
+  for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
+  $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
+  $("model").addEventListener("input", () => edited("model"));
   if (!$("questions").value && examples.length) load(examples[0].name);
-  for (const name of fields) $(name).addEventListener("input", () => remember(name, $(name).value));
-  $("stateJson").addEventListener("change", () => remember("stateJson", $("stateJson").checked));
+  else redraw();
 }
 
 function load(name) {
@@ -164,37 +301,133 @@ function load(name) {
   $("questions").value = example.questions;
   $("rules").value = example.rules;
   $("stateJson").checked = false;
-  for (const name of fields) remember(name, $(name).value);
+  for (const name of inputs) remember(name, $(name).value);
   remember("stateJson", false);
+  result = ranWith = null;
+  $("stale").hidden = $("error").hidden = true;
+  zoom = "fit";
+  redraw();
 }
 
-function show(which) {
-  tab = which;
-  for (const button of document.querySelectorAll(".tabs button")) {
-    button.setAttribute("aria-selected", button.dataset.tab === which);
-    button.disabled = !(button.dataset.tab in available());
+// ---------- editing: the results go stale, and the structure is drawn again ----------
+let redrawTimer;
+function edited(name) {
+  $("stale").hidden = !result || same(ranWith, current());
+  if (name === "questions" || name === "rules") {
+    clearTimeout(redrawTimer);
+    redrawTimer = setTimeout(redraw, 350);
   }
-  const any = Object.keys(available()).length > 0;
-  $("empty").hidden = any || !$("error").hidden;
-  for (const pane of document.querySelectorAll("[data-pane]")) pane.hidden = pane.dataset.pane !== which || !(which in available());
+}
+function same(a, b) { return !!a && JSON.stringify(a) === JSON.stringify(b); }
+
+async function post(body) {
+  const response = await fetch("/run", { method: "POST", headers: { "Content-Type": "application/json", "X-Jev": "1" }, body: JSON.stringify(body) });
+  const answer = await response.json().catch(() => ({ error: `the server answered ${response.status}` }));
+  if (answer.error) throw new Error(answer.error);
+  return answer;
 }
 
-// Each tab's text, for the parts this result has.
-function available() {
-  const parts = {};
-  if (result.outcome) parts.outcome = result.outcome;
-  if (result.svg) parts.svg = result.svg;
-  if (result.graph) parts.graph = result.graph;
-  if (result.answers) parts.answers = result.answers;
-  if (result.reply) parts.json = JSON.stringify({ request: result.request, reply: result.reply }, null, 2) + "\n";
-  return parts;
+// The rules' structure costs no call, so it is drawn whenever the questions or the rules change.
+let drawSeq = 0;
+async function redraw() {
+  const seq = ++drawSeq;
+  const fields = current();
+  if (!fields.rules.trim()) { drawn = null; fieldErrors(null); render(); return; }
+  try {
+    const answer = await post({ ...fields, draw: true });
+    if (seq !== drawSeq) return;
+    drawn = answer;
+    fieldErrors(null);
+  } catch (error) {
+    if (seq !== drawSeq) return;
+    drawn = null;
+    fieldErrors(null);
+    fieldErrors(error.message === "Failed to fetch" ? null : error.message);
+  }
+  render();
+}
+
+// An error that names the field it's about goes under that field. Says whether it found one.
+function fieldErrors(message) {
+  for (const name of inputs) { $(name + "Error").hidden = true; $(name).classList.remove("invalid"); }
+  if (!message) return false;
+  const fieldOf = { "questions:": "questions", "no questions": "questions", "rules:": "rules", "the state": "state", "--state-json": "state" };
+  const prefix = Object.keys(fieldOf).find((start) => message.startsWith(start));
+  if (!prefix) return false;
+  const name = fieldOf[prefix];
+  $(name + "Error").textContent = message.replace(/^(questions|rules): /, "").replace(/^--state-json: /, "");
+  $(name + "Error").hidden = false;
+  $(name).classList.add("invalid");
+  return true;
+}
+
+// ---------- run ----------
+async function run() {
+  const fields = current();
+  const button = $("run");
+  button.disabled = $("rerun").disabled = true;
+  button.classList.add("busy");
+  button.querySelector(".label").textContent = "Asking Jev…";
+  $("results").classList.add("loading");
+  $("error").hidden = true;
+  try {
+    result = await post({ ...fields, draw: false });
+    ranWith = fields;
+    fieldErrors(null);
+  } catch (error) {
+    const message = error.message === "Failed to fetch" ? "jev isn't running any more: start jev --explore again." : error.message;
+    if (!fieldErrors(message)) { $("error").textContent = message; $("error").hidden = false; }
+  } finally {
+    button.disabled = $("rerun").disabled = false;
+    button.classList.remove("busy");
+    button.querySelector(".label").textContent = "Run";
+    $("results").classList.remove("loading");
+    $("stale").hidden = !result || same(ranWith, current());
+    render();
+  }
+}
+
+// ---------- render ----------
+// The run's drawing, with its numbers, holds until the questions or the rules change.
+function runDraws() {
+  return !!(result && result.svg && ranWith && ranWith.rules === $("rules").value && ranWith.questions === $("questions").value);
+}
+
+function render() {
+  const svg = runDraws() ? result.svg : drawn && drawn.svg;
+  $("diagramNote").textContent = runDraws() ? "with Jev's answers" : svg ? "structure only · Run to fill in the numbers" : "";
+  showDiagram(svg);
+  renderDecision();
+  renderAnswers();
+  renderRaw();
+}
+
+function saveable(name, text, type) {
+  if (blobs[name]) URL.revokeObjectURL(blobs[name]);
+  blobs[name] = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
+  return blobs[name];
+}
+
+let shownSvg = null;
+function showDiagram(text) {
+  $("diagramEmpty").hidden = !!text;
+  $("saveSvg").hidden = !text;
+  if (text === shownSvg) return;
+  shownSvg = text;
+  $("diagram").replaceChildren(...(text ? [drawing(text)] : []));
+  if (!text) { applyZoom(); return; }
+  $("saveSvg").href = saveable("svg", text, "image/svg+xml");
+  for (const group of $("diagram").querySelectorAll("g.rule")) {
+    group.addEventListener("mouseenter", () => focus(group.dataset.then, Number(group.dataset.rule)));
+    group.addEventListener("mouseleave", () => focus(null));
+  }
+  applyZoom();
 }
 
 // The drawing as an element of this page, not an image. jev writes it and escapes every name in
 // it, but it is parsed as SVG, not HTML, and anything that could run is dropped all the same.
 function drawing(text) {
-  const parsed = new DOMParser().parseFromString(text, "image/svg+xml");
-  const svg = parsed.documentElement;
+  const svg = new DOMParser().parseFromString(text, "image/svg+xml").documentElement;
   if (svg.nodeName !== "svg") {
     const failed = document.createElement("p");
     failed.textContent = "The drawing isn't SVG this page can show; Save .svg still has it.";
@@ -209,60 +442,193 @@ function drawing(text) {
   return document.importNode(svg, true);
 }
 
-function render() {
-  const parts = available();
-  for (const [name, text] of Object.entries(parts)) {
-    if (urls[name]) URL.revokeObjectURL(urls[name]);
-    const type = name === "svg" ? "image/svg+xml" : name === "json" ? "application/json" : "text/plain";
-    urls[name] = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
-    document.querySelector(`[data-save="${name}"]`).href = urls[name];
-    if (name === "svg") $("svg").replaceChildren(drawing(text));
-    else $(name).textContent = text;
+// Hovering a conclusion lights up the rules behind it; hovering a rule, its conclusion.
+function focus(then, rule) {
+  const diagram = $("diagram"), decision = $("decision");
+  diagram.classList.toggle("focusing", then != null);
+  decision.classList.toggle("focusing", then != null && !!decision.querySelector(`[data-then="${CSS.escape(then)}"]`));
+  for (const group of diagram.querySelectorAll("g.rule")) {
+    group.classList.toggle("hit", then != null && (rule ? Number(group.dataset.rule) === rule : group.dataset.then === then));
   }
-  const order = ["outcome", "svg", "graph", "answers", "json"];
-  show(tab in parts ? tab : order.find((name) => name in parts) || "outcome");
+  for (const card of decision.querySelectorAll("[data-then]")) card.classList.toggle("hit", card.dataset.then === then);
 }
 
-async function run(draw) {
-  const buttons = [$("run"), $("draw")];
-  buttons.forEach((button) => (button.disabled = true));
-  const clicked = draw ? $("draw") : $("run");
-  const label = clicked.textContent;
-  clicked.textContent = draw ? "Drawing…" : "Asking Jev…";
-  $("error").hidden = true;
-  try {
-    const response = await fetch("/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Jev": "1" },
-      body: JSON.stringify({
-        state: $("state").value, stateJson: $("stateJson").checked, questions: $("questions").value,
-        rules: $("rules").value, model: $("model").value, draw,
-      }),
-    });
-    const body = await response.json().catch(() => ({ error: `the server answered ${response.status}` }));
-    if (body.error) throw new Error(body.error);
-    result = body;
-    if (draw) tab = "svg";
-  } catch (error) {
-    result = {};
-    $("error").textContent = error.message === "Failed to fetch" ? "jev isn't running any more: start `jev --explore` again." : error.message;
-    $("error").hidden = false;
-  } finally {
-    clicked.textContent = label;
-    buttons.forEach((button) => (button.disabled = false));
-    render();
-  }
+function scrollToRules(then) {
+  const group = [...$("diagram").querySelectorAll("g.rule")].find((one) => one.dataset.then === then);
+  if (!group) return;
+  const viewport = $("viewport");
+  viewport.scrollBy({ top: group.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12, behavior: "smooth" });
+  $("diagramCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-$("run").addEventListener("click", () => run(false));
-$("draw").addEventListener("click", () => run(true));
-$("example").addEventListener("change", (event) => { load(event.target.value); event.target.value = ""; });
-$("fit").addEventListener("change", () => $("svg").classList.toggle("fit", $("fit").checked));
-for (const button of document.querySelectorAll(".tabs button")) button.addEventListener("click", () => show(button.dataset.tab));
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); run(false); }
+const fixed = (number) => Number(number).toFixed(2);
+function el(tag, attributes = {}, ...children) {
+  const element = document.createElement(tag);
+  for (const [name, value] of Object.entries(attributes)) {
+    if (name === "class") element.className = value;
+    else if (name === "style") element.style.cssText = value;
+    else element.setAttribute(name, value);
+  }
+  element.append(...children.filter((child) => child != null));
+  return element;
+}
+function meter(value, { yes = false, mark = null } = {}) {
+  const box = el("div", { class: "meter" + (yes ? " yes" : "") }, el("i", { style: `width:${Math.max(0, Math.min(1, value)) * 100}%` }));
+  if (mark != null) box.append(el("b", { style: `left:calc(${mark * 100}% - 1px)`, title: `threshold ${fixed(mark)}` }));
+  return box;
+}
+
+function renderDecision() {
+  const decision = result && result.decision;
+  $("decisionCard").hidden = !decision;
+  if (!decision) return;
+  $("threshold").textContent = decision.items.length ? `yes at ${fixed(decision.threshold)} or over` : "";
+  const cards = [];
+  for (const item of decision.items) {
+    const fired = item.rules.filter((rule) => rule.score > 0).length;
+    cards.push(el("div", { class: "item", "data-then": item.item, tabindex: "0" },
+      el("div", { class: "top" }, el("span", { class: "name", title: item.item }, item.item), el("span", { class: "badge " + (item.yes ? "yes" : "no") }, item.yes ? "yes" : "no")),
+      meter(item.score, { yes: item.yes, mark: decision.threshold }),
+      el("div", { class: "why" }, el("span", { class: "score" }, fixed(item.score)), ` · ${item.rules.length} rule${item.rules.length === 1 ? "" : "s"}, ${fired} fired`)));
+  }
+  for (const output of decision.outputs || []) {
+    const sets = el("div", { class: "sets" });
+    for (const set of output.sets) sets.append(el("span", {}, set.set), meter(set.score), el("span", { class: "mono" }, fixed(set.score)));
+    cards.push(el("div", { class: "item output", "data-then": output.output, tabindex: "0" },
+      el("div", { class: "top" }, el("span", { class: "name" }, output.output), el("span", { class: "score" }, output.value == null ? "no rule fired" : fixed(output.value))),
+      sets));
+  }
+  for (const card of cards) {
+    card.addEventListener("mouseenter", () => focus(card.dataset.then));
+    card.addEventListener("mouseleave", () => focus(null));
+    card.addEventListener("focus", () => focus(card.dataset.then));
+    card.addEventListener("blur", () => focus(null));
+    card.addEventListener("click", () => scrollToRules(card.dataset.then));
+  }
+  $("decision").replaceChildren(...cards);
+}
+
+function renderAnswers() {
+  $("answersCard").hidden = !result;
+  if (!result) return;
+  const answers = result.reply.answers;
+  // The questions in the order they were written, which the request's map has lost.
+  let order = Object.keys(answers);
+  try { order = Object.keys(JSON.parse(ranWith.questions)).filter((id) => id in answers); } catch {}
+  const blocks = [];
+  for (const id of order) {
+    const answer = answers[id];
+    const bars = el("div", { class: "bars" });
+    const row = (label, p, top) => bars.append(el("span", { class: "label" + (top ? " top" : ""), title: label }, label), meter(p, { yes: top }), el("span", { class: "num" }, fixed(p)));
+    let pick = "";
+    if (answer.type === "noul") {
+      pick = answer.noul >= 0.5 ? "yes" : "no";
+      row("yes", answer.noul, answer.noul >= 0.5);
+      row("no", 1 - answer.noul, answer.noul < 0.5);
+    } else if (answer.type === "choice") {
+      pick = answer.choice;
+      for (const [option, p] of Object.entries(answer.probabilities).sort((a, b) => b[1] - a[1])) row(option, p, option === answer.choice);
+    } else if (answer.type === "score") {
+      const levels = Object.keys(answer.probabilities).map(Number).sort((a, b) => a - b);
+      const name = (level) => { const legend = answer.legend && answer.legend[level]; return typeof legend === "string" ? legend : `level ${level}`; };
+      const top = levels.reduce((best, level) => (answer.probabilities[level] > answer.probabilities[best] ? level : best), levels[0]);
+      pick = `expected ${fixed(answer.score)}`;
+      for (const level of levels) row(name(level), answer.probabilities[level], level === top);
+    }
+    blocks.push(el("div", { class: "answer" }, el("h3", {}, el("span", {}, id), el("span", { class: "kind" }, answer.type), el("span", { class: "pick" }, pick)), bars));
+  }
+  $("answers").replaceChildren(...blocks);
+  const usage = result.reply.usage || {};
+  const cost = usage.cost != null ? ` · $${usage.cost.toFixed(6)}` : "";
+  $("usage").textContent = `${result.reply.model} · ${usage.input_tokens} in, ${usage.output_tokens} out${cost}`;
+}
+
+function rawTexts() {
+  const parts = {};
+  if (result && result.outcome) parts.outcome = result.outcome;
+  const graph = runDraws() ? result.graph : drawn && drawn.graph;
+  if (graph) parts.graph = graph;
+  if (result && result.answers) parts.answers = result.answers;
+  if (result && result.reply) parts.json = JSON.stringify({ request: result.request, reply: result.reply, outcome: result.decision }, null, 2) + "\n";
+  return parts;
+}
+
+function renderRaw() {
+  const parts = rawTexts();
+  $("rawCard").hidden = Object.keys(parts).length === 0;
+  if (!(rawTab in parts)) rawTab = ["outcome", "graph", "answers", "json"].find((name) => name in parts) || "outcome";
+  for (const tab of document.querySelectorAll(".tabs [role=tab]")) {
+    tab.setAttribute("aria-selected", tab.dataset.tab === rawTab);
+    tab.hidden = !(tab.dataset.tab in parts);
+  }
+  const text = parts[rawTab] || "";
+  $("raw").textContent = text;
+  $("saveText").href = saveable("raw", text, rawTab === "json" ? "application/json" : "text/plain");
+  $("saveText").download = saveNames[rawTab];
+  $("saveText").textContent = "Save " + saveNames[rawTab].replace(/^.*\./, ".");
+}
+
+// ---------- zoom, pan, expand ----------
+function natural(svg) { return svg.viewBox.baseVal.width || svg.width.baseVal.value; }
+function applyZoom() {
+  const svg = $("diagram").querySelector("svg");
+  if (!svg) { $("zoomLevel").textContent = "–"; return; }
+  const scale = zoom === "fit" ? Math.min(1, ($("viewport").clientWidth - 16) / natural(svg)) : zoom;
+  svg.style.width = `${natural(svg) * scale}px`;
+  $("zoomLevel").textContent = (zoom === "fit" ? "fit " : "") + `${Math.round(scale * 100)}%`;
+}
+function zoomBy(factor) {
+  const svg = $("diagram").querySelector("svg");
+  if (!svg) return;
+  const now = parseFloat(svg.style.width) / natural(svg);
+  zoom = Math.max(0.25, Math.min(4, now * factor));
+  applyZoom();
+}
+$("zoomIn").addEventListener("click", () => zoomBy(1.25));
+$("zoomOut").addEventListener("click", () => zoomBy(0.8));
+$("fit").addEventListener("click", () => { zoom = "fit"; applyZoom(); });
+$("viewport").addEventListener("wheel", (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  zoomBy(event.deltaY < 0 ? 1.1 : 0.9);
+}, { passive: false });
+new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("viewport"));
+
+// Drag to pan, once the drawing is bigger than its box.
+let drag = null;
+$("viewport").addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  const viewport = $("viewport");
+  drag = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop, moved: false };
 });
-start().then(() => show(tab));
+window.addEventListener("pointermove", (event) => {
+  if (!drag) return;
+  const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  drag.moved = true;
+  $("viewport").classList.add("dragging");
+  $("viewport").scrollLeft = drag.left - dx;
+  $("viewport").scrollTop = drag.top - dy;
+});
+window.addEventListener("pointerup", () => { drag = null; $("viewport").classList.remove("dragging"); });
+
+function expand(on) {
+  document.body.classList.toggle("expanded", on);
+  $("expand").textContent = on ? "Show inputs" : "Expand";
+  applyZoom();
+}
+$("expand").addEventListener("click", () => expand(!document.body.classList.contains("expanded")));
+
+// ---------- wiring ----------
+$("run").addEventListener("click", run);
+$("rerun").addEventListener("click", run);
+$("example").addEventListener("change", (event) => { load(event.target.value); event.target.value = ""; });
+for (const tab of document.querySelectorAll(".tabs [role=tab]")) tab.addEventListener("click", () => { rawTab = tab.dataset.tab; renderRaw(); });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (!$("run").disabled) run(); }
+  if (event.key === "Escape" && document.body.classList.contains("expanded")) expand(false);
+});
+start();
 </script>
 </body>
 </html>
