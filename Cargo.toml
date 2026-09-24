@@ -11,7 +11,7 @@ license = "MIT"
 keywords = ["fuzzy-logic", "llm", "classification", "openrouter", "cli"]
 categories = ["command-line-utilities", "api-bindings", "science"]
 # What crates.io needs to build it and show the README: the drawings are for GitHub.
-exclude = ["/.github", "/docs/*.svg", "/target"]
+exclude = ["/.github", "/docs/*.svg", "/target", "/python"]
 
 [lib]
 name = "jev"

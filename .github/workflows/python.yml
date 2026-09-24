@@ -1,0 +1,138 @@
+# The Python package (python/) on PyPI, as `fuzzy-jev`: wheels for Linux and macOS on both
+# architectures, and the source distribution for everywhere else.
+#
+# A pull request or a push to main builds and tests the Linux wheels and the sdist, which is enough to
+# know the package builds. A tag (`v1.2.3`) or a run started by hand builds the macOS wheels too, and
+# a tag then publishes all of them: the same tag release.yml builds the binaries for. Publishing uses PyPI's trusted
+# publishing, so there is no token to keep: PyPI is told once that this repository's `python.yml`,
+# in the `pypi` environment, may publish `fuzzy-jev`.
+#
+# The wheels are abi3, one per platform for every CPython from 3.10 on.
+name: Python
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+    paths: ["python/**", "src/**", "Cargo.toml", "Cargo.lock", ".github/workflows/python.yml"]
+  pull_request:
+    paths: ["python/**", "src/**", "Cargo.toml", "Cargo.lock", ".github/workflows/python.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The package's version is python/Cargo.toml's, and it goes with the crate's: a tag that
+  # disagrees with either would put the wrong version on PyPI, where it can never be replaced.
+  # Also which wheels to build: a matrix entry can't be skipped by an `if`, so the list is made here.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check
+        run: |
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          python=$(sed -n 's/^version = "\(.*\)"/\1/p' python/Cargo.toml | head -1)
+          echo "crate ${crate}, python ${python}"
+          [ "${crate}" = "${python}" ] || { echo "::error::python/Cargo.toml is ${python}, Cargo.toml is ${crate}"; exit 1; }
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v${python}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} is not v${python}"
+            exit 1
+          fi
+
+      # macOS only for a release, or when asked for by hand: a macOS runner is the slowest part of a
+      # run, and a pull request learns what it needs from Linux. The Intel wheel is cross-compiled on
+      # the Apple-silicon runner, as release.yml does, so it can't be tested there.
+      - name: Targets
+        id: targets
+        run: |
+          targets='{"target": "x86_64-unknown-linux-gnu", "os": "ubuntu-latest", "test": true}'
+          targets+=', {"target": "aarch64-unknown-linux-gnu", "os": "ubuntu-24.04-arm", "test": true}'
+          if [ "${GITHUB_REF_TYPE}" = tag ] || [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]; then
+            targets+=', {"target": "x86_64-apple-darwin", "os": "macos-latest", "test": false}'
+            targets+=', {"target": "aarch64-apple-darwin", "os": "macos-latest", "test": true}'
+          fi
+          echo "targets=[${targets}]" | tee -a "$GITHUB_OUTPUT"
+
+  wheels:
+    name: ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.version.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.target }}
+          args: --release --locked --out dist
+          # glibc 2.28 and up: every current distribution, and a compiler new enough for aws-lc.
+          manylinux: "2_28"
+
+      # The wheel as a user gets it, not `maturin develop`'s: the tests import the installed `jev`.
+      - name: Test
+        if: matrix.test
+        run: |
+          python -m pip install pytest python/dist/*.whl
+          python -m pytest python/tests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: python/dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # It carries the crate it builds on (`path = ".."`), so `pip install fuzzy-jev` builds on a
+      # platform without a wheel, given a Rust toolchain.
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          command: sdist
+          args: --out dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: python/dist/*.tar.gz
+          if-no-files-found: error
+
+  # Only for a tag. `id-token: write` is what trusted publishing signs in with, and lives here alone.
+  publish:
+    needs: [wheels, sdist]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/fuzzy-jev/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

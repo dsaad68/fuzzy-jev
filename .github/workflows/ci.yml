@@ -48,3 +48,37 @@ jobs:
       # The test that calls OpenRouter is #[ignore]d, so this needs no key and no network.
       - name: Tests
         run: cargo test --locked
+
+  # The Python bindings (python/): their own crate, built by maturin and tested with pytest. Also
+  # needs no key: `decide` is tested against a local server.
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Lint
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Tests
+        run: |
+          uv venv
+          uv pip install maturin pytest
+          .venv/bin/maturin develop
+          .venv/bin/pytest
