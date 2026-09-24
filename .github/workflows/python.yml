@@ -1,8 +1,9 @@
 # The Python package (python/) on PyPI, as `fuzzy-jev`: wheels for Linux and macOS on both
 # architectures, and the source distribution for everywhere else.
 #
-# Every run builds and tests the wheels; a run started by pushing a tag (`v1.2.3`) also publishes
-# them, the same tag release.yml builds the binaries for. Publishing uses PyPI's trusted
+# A pull request or a push to main builds and tests the Linux wheels and the sdist, which is enough to
+# know the package builds. A tag (`v1.2.3`) or a run started by hand builds the macOS wheels too, and
+# a tag then publishes all of them: the same tag release.yml builds the binaries for. Publishing uses PyPI's trusted
 # publishing, so there is no token to keep: PyPI is told once that this repository's `python.yml`,
 # in the `pypi` environment, may publish `fuzzy-jev`.
 #
@@ -28,8 +29,11 @@ permissions:
 jobs:
   # The package's version is python/Cargo.toml's, and it goes with the crate's: a tag that
   # disagrees with either would put the wrong version on PyPI, where it can never be replaced.
+  # Also which wheels to build: a matrix entry can't be skipped by an `if`, so the list is made here.
   version:
     runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +48,20 @@ jobs:
             exit 1
           fi
 
+      # macOS only for a release, or when asked for by hand: a macOS runner is the slowest part of a
+      # run, and a pull request learns what it needs from Linux. The Intel wheel is cross-compiled on
+      # the Apple-silicon runner, as release.yml does, so it can't be tested there.
+      - name: Targets
+        id: targets
+        run: |
+          targets='{"target": "x86_64-unknown-linux-gnu", "os": "ubuntu-latest", "test": true}'
+          targets+=', {"target": "aarch64-unknown-linux-gnu", "os": "ubuntu-24.04-arm", "test": true}'
+          if [ "${GITHUB_REF_TYPE}" = tag ] || [ "${GITHUB_EVENT_NAME}" = workflow_dispatch ]; then
+            targets+=', {"target": "x86_64-apple-darwin", "os": "macos-latest", "test": false}'
+            targets+=', {"target": "aarch64-apple-darwin", "os": "macos-latest", "test": true}'
+          fi
+          echo "targets=[${targets}]" | tee -a "$GITHUB_OUTPUT"
+
   wheels:
     name: ${{ matrix.target }}
     needs: version
@@ -52,20 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            test: true
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-            test: true
-          # Cross-compiled on the Apple-silicon runner, as release.yml does, so it can't run there.
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            test: false
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            test: true
+        include: ${{ fromJSON(needs.version.outputs.targets) }}
     steps:
       - uses: actions/checkout@v4
 

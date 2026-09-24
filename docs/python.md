@@ -353,9 +353,11 @@ uv venv && uv pip install maturin pytest
 
 `maturin develop` rather than `cargo build`: an extension module doesn't link on its own on macOS.
 
-CI (`ci.yml`) checks formatting, runs clippy and runs the tests. `python.yml` builds the wheels and
-the source distribution on every change to the library or the bindings, installs each wheel it can
-run and tests it. Pushing a tag `vX.Y.Z` also publishes them to PyPI through trusted publishing, in
+CI (`ci.yml`) checks formatting, runs clippy and runs the tests. `python.yml` builds the Linux wheels
+and the source distribution on every change to the library or the bindings, installs each wheel and
+tests it. A tag, or a run started by hand from the Actions tab, builds the macOS wheels too (the
+Apple-silicon one tested; the Intel one, cross-compiled, not). Pushing a tag `vX.Y.Z` also publishes
+them all to PyPI through trusted publishing, in
 the `pypi` environment, once it has checked that the tag, `Cargo.toml` and `python/Cargo.toml` all
 say `X.Y.Z`. The same tag builds the command's binaries (`release.yml`).
 
