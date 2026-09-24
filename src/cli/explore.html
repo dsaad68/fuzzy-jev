@@ -4,12 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fuzzy Jev Explore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap">
 <style>
   :root {
     --bg: #f4f5f7; --panel: #ffffff; --raised: #f8f9fb; --ink: #1f2328; --muted: #656d76; --faint: #8c959f;
     --line: #d8dee4; --line-strong: #c4ccd4; --accent: #2f7d4a; --accent-ink: #ffffff;
     --bar: #b8c4d0; --track: #eef1f4; --mark: #c2410c; --error: #b42318; --error-bg: #fef3f2; --warn: #9a6700; --warn-bg: #fff8e1;
     --code: #f6f8fa; --shadow: 0 1px 2px rgba(31, 35, 40, .06), 0 1px 1px rgba(31, 35, 40, .04);
+    --font: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --hl-key: #0550ae; --hl-string: #0a3069; --hl-number: #953800; --hl-literal: #cf222e; --hl-punct: #6e7781;
+    --hl-comment: #6e7781; --hl-table: #8250df; --hl-op: #cf222e;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -18,12 +24,14 @@
       --line: #2a3038; --line-strong: #3d444d; --accent: #3fa35f; --accent-ink: #0d1117;
       --bar: #4a5a6b; --track: #21262d; --mark: #f0883e; --error: #ff7b72; --error-bg: #2d1416; --warn: #d29922; --warn-bg: #2b2111;
       --code: #0d1117; --shadow: none;
+      --hl-key: #79c0ff; --hl-string: #a5d6ff; --hl-number: #ffa657; --hl-literal: #ff7b72; --hl-punct: #8b949e;
+      --hl-comment: #8b949e; --hl-table: #d2a8ff; --hl-op: #ff7b72;
       color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  code, pre, textarea, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font); font-variant-ligatures: contextual; }
+  code, pre, textarea, .mono, button, input, select { font-family: var(--font); }
 
   /* Header */
   header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
@@ -39,10 +47,31 @@
     font-size: 12.5px; line-height: 1.5; color: var(--ink); background: var(--code); border: 1px solid var(--line);
     border-radius: 6px; padding: 7px 9px;
   }
-  select, input[type=text] { font-family: inherit; font-size: 13px; background: var(--panel); }
+  select, input[type=text] { font-size: 12.5px; background: var(--panel); }
   textarea { width: 100%; resize: vertical; tab-size: 2; }
+
+  /* A code field: the text is typed in a transparent textarea over a highlighted copy of it. */
+  .code { position: relative; background: var(--code); border: 1px solid var(--line); border-radius: 6px; }
+  .code:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .code.invalid { border-color: var(--error); }
+  .code textarea, .code pre {
+    margin: 0; padding: 8px 10px; border: 0; border-radius: 6px; font: 12.5px/1.6 var(--font); font-variant-ligatures: contextual;
+    white-space: pre; tab-size: 2; letter-spacing: 0; overflow: auto;
+  }
+  .code pre { position: absolute; inset: 0; pointer-events: none; overflow: hidden; color: var(--ink); background: none; max-height: none; }
+  .code textarea { position: relative; display: block; background: transparent; color: transparent; caret-color: var(--ink); }
+  .code textarea::selection { background: rgba(84, 174, 255, .35); color: transparent; }
+  .code textarea::placeholder { color: var(--faint); }
+  .code textarea:focus { outline: none; }
+  .hl-key { color: var(--hl-key); }
+  .hl-string { color: var(--hl-string); }
+  .hl-number { color: var(--hl-number); }
+  .hl-literal { color: var(--hl-literal); }
+  .hl-punct { color: var(--hl-punct); }
+  .hl-comment { color: var(--hl-comment); font-style: italic; }
+  .hl-table { color: var(--hl-table); font-weight: 600; }
+  .hl-op { color: var(--hl-op); font-weight: 600; }
   textarea:focus, input:focus, select:focus, button:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
-  textarea.invalid { border-color: var(--error); }
   button, a.button {
     font: inherit; font-size: 13px; font-weight: 600; border-radius: 6px; padding: 6px 12px; cursor: pointer; text-decoration: none;
     border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -52,7 +81,7 @@
   button.primary:hover { filter: brightness(1.08); background: var(--accent); }
   button:disabled { opacity: .55; cursor: progress; }
   button.icon { padding: 5px 9px; min-width: 30px; justify-content: center; }
-  kbd { font: 11px ui-monospace, Menlo, monospace; padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); }
+  kbd { font: 11px var(--font); padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); }
   .spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
   .busy .spinner { display: inline-block; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -87,13 +116,13 @@
   .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; cursor: pointer; }
   #state { min-height: 70px; }
   #questions, #rules { min-height: 190px; }
-  .field-error { color: var(--error); font-size: 12px; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; margin-top: 2px; }
+  .field-error { color: var(--error); font-size: 12px; white-space: pre-wrap; font-family: var(--font); margin-top: 2px; }
   .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
   .actions .hint { color: var(--muted); font-size: 12px; }
 
   /* Banners */
   .banner { border-radius: 8px; padding: 10px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
-  .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: var(--font); font-size: 12.5px; }
   .banner.warn { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); }
   .banner .spacer { flex: 1; }
 
@@ -104,7 +133,7 @@
   .decision.focusing .item:not(.hit) { opacity: .45; }
   .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .item .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item .score { font: 600 13px ui-monospace, Menlo, monospace; }
+  .item .score { font: 600 13px var(--font); }
   .badge { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; }
   .badge.yes { background: var(--accent); color: var(--accent-ink); }
   .badge.no { background: var(--track); color: var(--muted); }
@@ -126,12 +155,12 @@
   .bars .label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
   .bars .label.top { color: var(--ink); font-weight: 600; }
   .bars .meter { margin: 0; height: 6px; }
-  .bars .num { text-align: right; font: 11.5px ui-monospace, Menlo, monospace; color: var(--muted); }
+  .bars .num { text-align: right; font: 11.5px var(--font); color: var(--muted); }
   .usage { color: var(--muted); font-size: 12px; }
 
   /* Diagram */
   .toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-  .toolbar .zoom { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); min-width: 60px; text-align: center; }
+  .toolbar .zoom { font: 12px var(--font); color: var(--muted); min-width: 60px; text-align: center; }
   .toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; }
   .viewport { overflow: auto; max-height: 72vh; padding: 8px; border-radius: 0 0 10px 10px; cursor: grab; }
   body.expanded .viewport { max-height: calc(100vh - 150px); }
@@ -185,16 +214,16 @@
   <section class="card editor" aria-label="Inputs">
     <div class="body">
       <div class="field-head"><label for="state">State</label><small>what Jev judges</small></div>
-      <textarea id="state" spellcheck="false" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea>
+      <div class="code" data-lang="state"><pre aria-hidden="true"></pre><textarea id="state" spellcheck="false" wrap="off" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea></div>
       <label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label>
       <div class="field-error" id="stateError" hidden></div>
 
       <div class="field-head"><label for="questions">Questions</label><small>JSON: ids to questions</small></div>
-      <textarea id="questions" spellcheck="false" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea>
+      <div class="code" data-lang="json"><pre aria-hidden="true"></pre><textarea id="questions" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
       <div class="field-error" id="questionsError" hidden></div>
 
       <div class="field-head"><label for="rules">Rules</label><small>TOML, optional</small></div>
-      <textarea id="rules" spellcheck="false" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea>
+      <div class="code" data-lang="toml"><pre aria-hidden="true"></pre><textarea id="rules" spellcheck="false" wrap="off" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea></div>
       <div class="field-error" id="rulesError" hidden></div>
 
       <div class="actions">
@@ -275,6 +304,67 @@ function current() {
   return { state: $("state").value, stateJson: $("stateJson").checked, questions: $("questions").value, rules: $("rules").value, model: $("model").value };
 }
 
+// ---------- highlighting ----------
+const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const span = (kind, text) => `<span class="hl-${kind}">${escapeHtml(text)}</span>`;
+
+// Runs `pattern`'s named groups over `text`: the group that matches is the kind of token, and
+// what matches none is left plain.
+function tokenize(text, pattern, paint) {
+  let out = "", at = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match[0] === "") continue;
+    out += escapeHtml(text.slice(at, match.index));
+    const [kind, token] = Object.entries(match.groups).find(([, value]) => value !== undefined);
+    out += paint(kind, token);
+    at = match.index + match[0].length;
+  }
+  return out + escapeHtml(text.slice(at));
+}
+
+const JSON_TOKENS = /(?<key>"(?:\\.|[^"\\\n])*"(?=\s*:))|(?<string>"(?:\\.|[^"\\\n])*"?)|(?<number>-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(?<literal>\b(?:true|false|null)\b)|(?<punct>[{}\[\],:])/g;
+function highlightJson(text) { return tokenize(text, JSON_TOKENS, span); }
+
+// A rule's `if` is a string, so its operators and hedges are picked out inside strings.
+const OPERATORS = /\b(AND|OR|NOT|VERY|SOMEWHAT|EXTREMELY|INDEED|IS)\b/g;
+const TOML_TOKENS = /(?<comment>#[^\n]*)|(?<string>"""[\s\S]*?(?:"""|$(?![\s\S]))|'''[\s\S]*?(?:'''|$(?![\s\S]))|"(?:\\.|[^"\\\n])*"?|'[^'\n]*'?)|(?<table>^[ \t]*\[\[?[^\]\n]*\]\]?)|(?<key>^[ \t]*(?:[A-Za-z0-9_.-]+|"[^"\n]*")(?=[ \t]*=))|(?<literal>\b(?:true|false)\b)|(?<number>[+-]?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(?<punct>[=,{}\[\]])/gm;
+function highlightToml(text) {
+  return tokenize(text, TOML_TOKENS, (kind, token) => {
+    if (kind !== "string") return span(kind, token);
+    const inner = escapeHtml(token).replace(OPERATORS, '</span><span class="hl-op">$1</span><span class="hl-string">');
+    return `<span class="hl-string">${inner}</span>`;
+  });
+}
+
+function highlightField(textarea) {
+  const box = textarea.parentElement;
+  const lang = box.dataset.lang === "state" ? ($("stateJson").checked ? "json" : "text") : box.dataset.lang;
+  const text = textarea.value;
+  const html = lang === "json" ? highlightJson(text) : lang === "toml" ? highlightToml(text) : escapeHtml(text);
+  // A last empty line still takes a line's height in the textarea.
+  box.querySelector("pre").innerHTML = html + "\n";
+  syncScroll(textarea);
+}
+function syncScroll(textarea) {
+  const pre = textarea.parentElement.querySelector("pre");
+  pre.scrollTop = textarea.scrollTop;
+  pre.scrollLeft = textarea.scrollLeft;
+}
+function highlightAll() { for (const name of inputs) highlightField($(name)); }
+for (const name of inputs) {
+  $(name).addEventListener("input", () => highlightField($(name)));
+  $(name).addEventListener("scroll", () => syncScroll($(name)));
+}
+$("stateJson").addEventListener("change", () => highlightField($("state")));
+// Tab indents, as in an editor, rather than leaving the field.
+for (const name of ["questions", "rules"]) {
+  $(name).addEventListener("keydown", (event) => {
+    if (event.key !== "Tab" || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+    event.preventDefault();
+    document.execCommand("insertText", false, "  ");
+  });
+}
+
 // ---------- start ----------
 async function start() {
   const given = await (await fetch("/start")).json();
@@ -287,6 +377,7 @@ async function start() {
   $("model").value = given.model;
   $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
   $("noKey").hidden = given.canAsk;
+  highlightAll();
   for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
   $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
   $("model").addEventListener("input", () => edited("model"));
@@ -303,6 +394,7 @@ function load(name) {
   $("stateJson").checked = false;
   for (const name of inputs) remember(name, $(name).value);
   remember("stateJson", false);
+  highlightAll();
   result = ranWith = null;
   $("stale").hidden = $("error").hidden = true;
   zoom = "fit";
@@ -349,7 +441,7 @@ async function redraw() {
 
 // An error that names the field it's about goes under that field. Says whether it found one.
 function fieldErrors(message) {
-  for (const name of inputs) { $(name + "Error").hidden = true; $(name).classList.remove("invalid"); }
+  for (const name of inputs) { $(name + "Error").hidden = true; $(name).parentElement.classList.remove("invalid"); }
   if (!message) return false;
   const fieldOf = { "questions:": "questions", "no questions": "questions", "rules:": "rules", "the state": "state", "--state-json": "state" };
   const prefix = Object.keys(fieldOf).find((start) => message.startsWith(start));
@@ -357,7 +449,7 @@ function fieldErrors(message) {
   const name = fieldOf[prefix];
   $(name + "Error").textContent = message.replace(/^(questions|rules): /, "").replace(/^--state-json: /, "");
   $(name + "Error").hidden = false;
-  $(name).classList.add("invalid");
+  $(name).parentElement.classList.add("invalid");
   return true;
 }
 
@@ -562,7 +654,8 @@ function renderRaw() {
     tab.hidden = !(tab.dataset.tab in parts);
   }
   const text = parts[rawTab] || "";
-  $("raw").textContent = text;
+  if (rawTab === "json") $("raw").innerHTML = highlightJson(text);
+  else $("raw").textContent = text;
   $("saveText").href = saveable("raw", text, rawTab === "json" ? "application/json" : "text/plain");
   $("saveText").download = saveNames[rawTab];
   $("saveText").textContent = "Save " + saveNames[rawTab].replace(/^.*\./, ".");
