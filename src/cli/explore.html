@@ -57,8 +57,8 @@
   pre { margin: 0; padding: 12px; background: var(--code); border: 1px solid var(--line); border-radius: 6px; overflow: auto;
         font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; max-height: 70vh; }
   .svg { background: #ffffff; border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 75vh; padding: 8px; }
-  .svg img { display: block; max-width: none; }
-  .svg.fit img { max-width: 100%; height: auto; }
+  .svg svg { display: block; max-width: none; }
+  .svg.fit svg { max-width: 100%; height: auto; }
   .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .bar .hint { color: var(--muted); }
   .error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
@@ -113,7 +113,7 @@
         <label class="check"><input type="checkbox" id="fit" checked> fit to width</label>
         <a class="button" data-save="svg" download="rules.svg">Save .svg</a>
       </div>
-      <div class="svg fit" id="svgBox"><img id="svg" alt="The rules, drawn"></div>
+      <div class="svg fit" id="svg" role="img" aria-label="The rules, drawn"></div>
     </div>
     <div data-pane="graph" hidden>
       <div class="bar"><span class="hint">The rules as a tree, as <code>--graph</code> prints them</span><a class="button" data-save="graph" download="rules.txt">Save .txt</a></div>
@@ -190,6 +190,25 @@ function available() {
   return parts;
 }
 
+// The drawing as an element of this page, not an image. jev writes it and escapes every name in
+// it, but it is parsed as SVG, not HTML, and anything that could run is dropped all the same.
+function drawing(text) {
+  const parsed = new DOMParser().parseFromString(text, "image/svg+xml");
+  const svg = parsed.documentElement;
+  if (svg.nodeName !== "svg") {
+    const failed = document.createElement("p");
+    failed.textContent = "The drawing isn't SVG this page can show; Save .svg still has it.";
+    return failed;
+  }
+  for (const element of [svg, ...svg.querySelectorAll("*")]) {
+    if (element.localName === "script" || element.localName === "foreignObject") { element.remove(); continue; }
+    for (const attribute of [...element.attributes]) {
+      if (attribute.name.startsWith("on") || /^\s*javascript:/i.test(attribute.value)) element.removeAttribute(attribute.name);
+    }
+  }
+  return document.importNode(svg, true);
+}
+
 function render() {
   const parts = available();
   for (const [name, text] of Object.entries(parts)) {
@@ -197,7 +216,7 @@ function render() {
     const type = name === "svg" ? "image/svg+xml" : name === "json" ? "application/json" : "text/plain";
     urls[name] = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
     document.querySelector(`[data-save="${name}"]`).href = urls[name];
-    if (name === "svg") $("svg").src = urls[name];
+    if (name === "svg") $("svg").replaceChildren(drawing(text));
     else $(name).textContent = text;
   }
   const order = ["outcome", "svg", "graph", "answers", "json"];
@@ -238,7 +257,7 @@ async function run(draw) {
 $("run").addEventListener("click", () => run(false));
 $("draw").addEventListener("click", () => run(true));
 $("example").addEventListener("change", (event) => { load(event.target.value); event.target.value = ""; });
-$("fit").addEventListener("change", () => $("svgBox").classList.toggle("fit", $("fit").checked));
+$("fit").addEventListener("change", () => $("svg").classList.toggle("fit", $("fit").checked));
 for (const button of document.querySelectorAll(".tabs button")) button.addEventListener("click", () => show(button.dataset.tab));
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); run(false); }
