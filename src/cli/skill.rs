@@ -208,9 +208,7 @@ pub fn install(root: &Path, home: Home, flavour: Flavour, force: bool) -> Result
     for (path, contents, wrote) in planned {
         if wrote != Wrote::Unchanged {
             let file = skill.join(path);
-            let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-            let staged = file.with_file_name(format!(".{name}.jev-{}", std::process::id()));
-            fs::write(&staged, contents).with_context(|| format!("writing {}", staged.display()))?;
+            let staged = stage(&file, contents)?;
             if let Err(error) = fs::rename(&staged, &file) {
                 let _ = fs::remove_file(&staged);
                 return Err(error).with_context(|| format!("writing {}", file.display()));
@@ -223,6 +221,31 @@ pub fn install(root: &Path, home: Home, flavour: Flavour, force: bool) -> Result
 
 /// Refuses a destination reached through a symbolic link ([`jev::skill::refuse_symlinks`]), with
 /// what to do about it: the check is the library's, since dx writes these files too.
+/// `contents` in a new file beside `file`, for renaming into its place. The file is created new
+/// (`create_new`, which is `O_CREAT | O_EXCL`): anything already at that name, a symbolic link
+/// included, makes it fail rather than be followed, and then the next name is tried. Checking
+/// `file` alone isn't enough, since the staged name is another path a checkout could have put a
+/// link at.
+fn stage(file: &Path, contents: &str) -> Result<PathBuf> {
+    use std::io::Write as _;
+    let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    for attempt in 0..100 {
+        let staged = file.with_file_name(format!(".{name}.jev-{}-{attempt}", std::process::id()));
+        match fs::OpenOptions::new().write(true).create_new(true).open(&staged) {
+            Ok(mut out) => {
+                if let Err(error) = out.write_all(contents.as_bytes()).and_then(|()| out.sync_all()) {
+                    let _ = fs::remove_file(&staged);
+                    return Err(error).with_context(|| format!("writing {}", staged.display()));
+                }
+                return Ok(staged);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error).with_context(|| format!("writing {}", staged.display())),
+        }
+    }
+    bail!("couldn't find a free name to write {} through; nothing was replaced", file.display())
+}
+
 fn refuse_symlinks(root: &Path, file: &Path) -> Result<()> {
     jev::skill::refuse_symlinks(root, file)
         .map_err(|why| anyhow::anyhow!("{why}.\n\nNothing was written. Remove the link, or run this somewhere else."))
@@ -390,6 +413,24 @@ mod tests {
         std::os::unix::fs::symlink("/dev/zero", skill.join("SKILL.md")).unwrap();
         let error = format!("{:#}", install(&temp.0, Home::Agents, Flavour::Command, true).unwrap_err());
         assert!(error.contains("is a symbolic link"), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_staging_name_is_not_followed() {
+        // A checkout that puts a link where the file is staged, pointing outside the project.
+        let temp = Temp::new("stagelink");
+        let skill = temp.0.join(".agents/skills/jev");
+        fs::create_dir_all(skill.join("references")).unwrap();
+        let outside = temp.0.join("outside.txt");
+        fs::write(&outside, "keep me").unwrap();
+        for attempt in 0..3 {
+            let link = skill.join(format!(".SKILL.md.jev-{}-{attempt}", std::process::id()));
+            std::os::unix::fs::symlink(&outside, link).unwrap();
+        }
+        let (skill, _) = install(&temp.0, Home::Agents, Flavour::Command, false).unwrap();
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "keep me");
+        assert_eq!(fs::read_to_string(skill.join("SKILL.md")).unwrap(), Flavour::Command.files()[0].1);
     }
 
     #[test]

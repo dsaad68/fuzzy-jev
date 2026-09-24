@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 
 use super::graph::{trim_number, Node, Row};
-use super::output::Set;
+use super::output::{along, Set};
 use super::{Kind, Rules, Target, Then};
 use crate::DecisionResponse;
 
@@ -182,12 +182,20 @@ impl Rules {
     fn premise_list(&self, svg: &mut Svg, frame: &Frame, target: &Target, selected: &[usize], probabilities: Option<&[Option<f64>]>) {
         const ROWS: usize = 5;
         let chance = |at: usize| probabilities.and_then(|probabilities| probabilities[at]);
-        let mut shown: Vec<usize> = selected.to_vec();
+        // The options the rule reads, then the others from the most probable; as many as the rows
+        // hold, keeping the last row for the rest when there is any.
+        let mut order: Vec<usize> = Vec::new();
+        for at in selected {
+            if !order.contains(at) {
+                order.push(*at);
+            }
+        }
         let mut others: Vec<usize> = (0..target.labels.len()).filter(|at| !selected.contains(at)).collect();
         others.sort_by(|a, b| chance(*b).unwrap_or(0.0).total_cmp(&chance(*a).unwrap_or(0.0)));
-        let room = (ROWS - 1).saturating_sub(shown.len());
-        shown.extend(others.iter().take(room));
-        let rest: Vec<usize> = others.iter().skip(room).copied().collect();
+        order.extend(others);
+        let fits = if order.len() > ROWS { ROWS - 1 } else { ROWS };
+        let (shown, rest) = order.split_at(fits.min(order.len()));
+        let rest_read = rest.iter().filter(|at| selected.contains(at)).count();
         let (label_width, value_width) = (64.0, 30.0);
         let bar_width = frame.width - label_width - value_width - 12.0;
         for (row, at) in shown.iter().enumerate() {
@@ -209,9 +217,13 @@ impl Rules {
         if !rest.is_empty() {
             let y = frame.y + 6.0 + (ROWS - 1) as f64 * 13.0;
             let total: f64 = rest.iter().filter_map(|at| chance(*at)).sum();
+            let read = match rest_read {
+                0 => String::new(),
+                count => format!(" ({count} read by this rule)"),
+            };
             let text = match probabilities {
-                Some(_) => format!("+ {} more options, {total:.2} together", rest.len()),
-                None => format!("+ {} more options", rest.len()),
+                Some(_) => format!("+ {} more options{read}, {total:.2} together", rest.len()),
+                None => format!("+ {} more options{read}", rest.len()),
             };
             svg.text(frame.x + 4.0, y + 9.0, 9.0, "start", "normal", FAINT, &text);
         }
@@ -389,8 +401,7 @@ impl Frame {
     }
 
     fn px(&self, x: f64) -> f64 {
-        // Halved first, so that a range as wide as f64 allows doesn't overflow.
-        self.x + (x / 2.0 - self.low / 2.0) / (self.high / 2.0 - self.low / 2.0) * self.width
+        self.x + along(x, self.low, self.high) * self.width
     }
 
     fn py(&self, degree: f64) -> f64 {

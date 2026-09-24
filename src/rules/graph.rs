@@ -530,6 +530,29 @@ R1  raining AND NOT VERY hot  ⇒  raincoat
     }
 
     #[test]
+    fn a_list_holds_no_more_rows_than_fit() {
+        // Six options read by the rule, in a list of five rows: four shown, the rest on the last.
+        let options: Vec<(String, &str)> = (0..20).map(|at| (format!("o{at}"), "")).collect();
+        let mut probabilities = serde_json::Map::new();
+        for (option, _) in &options {
+            probabilities.insert(option.clone(), json!(0.05));
+        }
+        let terms: String = (0..6).map(|at| format!("t{at} = \"c.o{at}\"\n")).collect();
+        let when: Vec<String> = (0..6).map(|at| format!("t{at}")).collect();
+        let (rules, reply) = drawn(
+            &[("c", Question::choice("?", options.iter().map(|(option, description)| (option.clone(), *description))))],
+            &format!("[terms]\n{terms}[[rule]]\nif = \"{}\"\nthen = \"act\"", when.join(" OR ")),
+            json!({"c": {"type": "choice", "choice": "o0", "confidence": 0.1, "probabilities": probabilities}}),
+        );
+        let svg = rules.graph_svg(Some(&reply)).unwrap();
+        for shown in ["o0", "o1", "o2", "o3"] {
+            assert!(svg.contains(&format!(">{shown}<")), "{shown} is missing");
+        }
+        assert!(!svg.contains(">o4<") && !svg.contains(">o5<"), "a fifth row was drawn");
+        assert!(svg.contains("+ 16 more options (2 read by this rule), 0.80 together"), "{svg}");
+    }
+
+    #[test]
     fn a_huge_range_draws_without_overflowing() {
         // The range's end printed in full was 101 digits, longer than the plot.
         let (rules, _) = drawn(

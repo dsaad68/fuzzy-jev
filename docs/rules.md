@@ -178,7 +178,8 @@ against the questions as soon as it arrives, whatever the output; the rules chec
 answer their terms read, for a reply that came some other way:
 
 - An answer, or a probability a term needs, is missing: a zero would read as a confident "no" that
-  nothing said. So is an answer of another type than its question.
+  nothing said. So is an answer of another type than its question. A reply `jev` receives must
+  give every option and level its probability, since the endpoint sends the whole distribution.
 - A number isn't a probability: outside 0 to 1, or not a number at all. It is not clamped. The
   same goes for a Choice's or a Score's `confidence`.
 - A Choice's or Score's probabilities aren't a distribution that rounds to them. They arrive

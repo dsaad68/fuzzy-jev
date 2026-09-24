@@ -121,14 +121,16 @@ impl Output {
     /// Where `x` is along the range, from 0 at its low end to 1 at its high end. Halved first, so
     /// that a range as wide as `f64` allows doesn't overflow.
     pub(super) fn position(&self, x: f64) -> f64 {
-        let (low, high) = self.range;
-        (x / 2.0 - low / 2.0) / (high / 2.0 - low / 2.0)
+        along(x, self.range.0, self.range.1)
     }
 
     /// The point at `position` along the range: the inverse of [`Output::position`].
     pub(super) fn at(&self, position: f64) -> f64 {
         let (low, high) = self.range;
-        (low / 2.0 + position * (high / 2.0 - low / 2.0)) * 2.0
+        match high - low {
+            span if span.is_finite() => low + position * span,
+            _ => (low / 2.0 + position * (high / 2.0 - low / 2.0)) * 2.0,
+        }
     }
 
     /// The x of each sample along the range, for drawing.
@@ -244,6 +246,16 @@ impl Output {
                 Err(format!("its sets have support, but their shape's area came to {area}: too small or too large to take a centre of"))
             }
         }
+    }
+}
+
+/// Where `x` is between `low` and `high`, from 0 to 1. Directly when `high − low` is a number, and
+/// from the halves only when it would overflow: halving always would turn a range as small as
+/// `[0, 5e-324]` into 0/0.
+pub(super) fn along(x: f64, low: f64, high: f64) -> f64 {
+    match high - low {
+        span if span.is_finite() => (x - low) / span,
+        _ => (x / 2.0 - low / 2.0) / (high / 2.0 - low / 2.0),
     }
 }
 
@@ -649,6 +661,15 @@ mod tests {
         assert!(value(&points, [0.0, 0.5, 0.5]).abs() < 1e300);
         let shape = output("", "[-1.7e308, 1.7e308]", &[("all", "[-1.7e308, -1.7e308, 1.7e308, 1.7e308]")], &[("NOT scarce", "all")]);
         assert!(value(&shape, [0.0, 0.5, 0.5]).is_finite());
+    }
+
+    #[test]
+    fn a_tiny_range_keeps_its_scale() {
+        // Halving 5e-324 gives 0, and 0/0 is no position at all.
+        let point = output("", "[0, 5e-324]", &[("top", "[5e-324, 5e-324, 5e-324]")], &[("NOT scarce", "top")]);
+        assert_eq!(value(&point, [0.0, 0.5, 0.5]), 5e-324);
+        let flat = output("", "[0, 1e-310]", &[("all", "[0, 0, 1e-310, 1e-310]")], &[("NOT scarce", "all")]);
+        assert!((value(&flat, [0.0, 0.5, 0.5]) / 5e-311 - 1.0).abs() < 1e-6);
     }
 
     #[test]

@@ -211,11 +211,21 @@ impl DecisionResponse {
                     if !known(&choice.choice) {
                         return Err(bad(format!("it chose `{}`, which isn't one of the question's options", choice.choice)));
                     }
+                    // Every option has one: the endpoint gives the whole distribution, and a reply
+                    // without one would pass here only to fail when a rule reads it.
+                    if let Some((missing, _)) = options.iter().find(|(option, _)| !choice.probabilities.contains_key(option)) {
+                        return Err(bad(format!("it gives no probability for `{missing}`")));
+                    }
                 }
                 (Question::Score { criteria: levels, .. }, Answer::Score(score)) => {
                     let top = levels.len().saturating_sub(1);
                     if let Some(level) = score.probabilities.keys().find(|level| usize::from(**level) > top) {
                         return Err(bad(format!("it gives a probability for level {level}, and the question's levels are 0 to {top}")));
+                    }
+                    if let Some(missing) =
+                        (0..levels.len()).find(|level| u8::try_from(*level).map_or(true, |level| !score.probabilities.contains_key(&level)))
+                    {
+                        return Err(bad(format!("it gives no probability for level {missing}")));
                     }
                 }
                 (question, answer) => {
@@ -515,6 +525,18 @@ mod tests {
         let mut shorter = asked.clone();
         shorter.insert("frustration".to_owned(), Question::score("?", ["Calm", "Frustrated"]));
         assert!(reply.check_against(&shorter).unwrap_err().to_string().contains("level 2, and the question's levels are 0 to 1"));
+
+        // Every option and level needs its probability, not just the one chosen.
+        let mut partial = reply.clone();
+        let Answer::Choice(department) = partial.answers.get_mut("department").unwrap() else { unreachable!() };
+        department.probabilities = [("billing".to_owned(), 1.0)].into();
+        department.confidence = 1.0;
+        assert!(partial.check_against(&asked).unwrap_err().to_string().contains("no probability for `sales`"));
+        let mut partial = reply.clone();
+        let Answer::Score(frustration) = partial.answers.get_mut("frustration").unwrap() else { unreachable!() };
+        frustration.probabilities = [(1, 1.0)].into();
+        frustration.score = 1.0;
+        assert!(partial.check_against(&asked).unwrap_err().to_string().contains("no probability for level 0"));
 
         let mut other = asked.clone();
         other.insert("is_urgent".to_owned(), Question::score("?", ["No", "Yes"]));
