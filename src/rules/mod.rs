@@ -396,7 +396,17 @@ impl Target {
                 Question::Noul { .. } => Err(format!("`{id}` is a noul, which has no levels or options: write `{id}` alone")),
                 Question::Score { criteria, .. } => {
                     // Levels are numbered in a reply as u8s, so a level past 255 can't be read back.
-                    match criteria.iter().position(|level| level.as_str() == Some(name)).filter(|at| u8::try_from(*at).is_ok()) {
+                    let named: Vec<usize> =
+                        criteria.iter().enumerate().filter(|(_, level)| level.as_str() == Some(name)).map(|(at, _)| at).collect();
+                    if named.len() > 1 {
+                        let at: Vec<String> = named.iter().map(usize::to_string).collect();
+                        return Err(format!(
+                            "`{id}` has the level `{name}` {} times (levels {}), so a term can't say which; give the levels different texts",
+                            named.len(),
+                            at.join(" and ")
+                        ));
+                    }
+                    match named.first().copied().filter(|at| u8::try_from(*at).is_ok()) {
                         Some(selected) => Ok(Target { id: id.to_owned(), kind: Kind::Score, labels: level_labels(criteria), selected }),
                         None => Err(format!("`{id}` has no level `{name}`; its levels are {}", listed(id, &level_names(criteria)))),
                     }
@@ -678,9 +688,15 @@ impl Rules {
             item.yes = item.score >= self.threshold;
         }
         for (at, value) in outputs.iter_mut().enumerate() {
-            value.value = self.outputs[at].centroid(&self.set_scores(at, &scores), self.logic.or);
+            value.value = self.value_of(at, &self.set_scores(at, &scores))?;
         }
         Ok(Outcome { threshold: self.threshold, items, outputs })
+    }
+
+    /// Output `at`'s value for its sets' scores: `None` when none scored above zero.
+    fn value_of(&self, at: usize, set_scores: &[f64]) -> crate::Result<Option<f64>> {
+        let output = &self.outputs[at];
+        output.centroid(set_scores, self.logic.or).map_err(|why| crate::Error::Numerical { output: output.name.clone(), why })
     }
 
     /// Every answer the terms read, checked once per question.
@@ -731,7 +747,8 @@ pub struct Outcome {
 
 /// An output's crisp value: the centroid of its sets, each clipped at the score its rules give it.
 /// The value says where the support lies, not how much there is: a set clipped at 0.01 alone gives
-/// the same value as one clipped at 1, so read the sets' scores before acting on it.
+/// nearly the same value as one clipped at 1 (the same, for a symmetric set), so read the sets'
+/// scores before acting on it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OutputValue {
     pub output: String,
@@ -1015,6 +1032,23 @@ mod tests {
     }
 
     #[test]
+    fn a_level_named_twice_is_ambiguous() {
+        let questions = [("q".to_owned(), Question::score("How much?", ["Low", "High", "High"]))];
+        let parsed = Rules::parse(
+            "[terms]\nhigh = \"q.High\"\n[[rule]]\nif = \"high\"\nthen = \"x\"",
+            questions.iter().map(|(id, q)| (id.as_str(), q)),
+        );
+        let error = parsed.unwrap_err();
+        assert!(error.contains("`q` has the level `High` 2 times (levels 1 and 2)"), "{error}");
+        // The level named once is still fine.
+        let low = Rules::parse(
+            "[terms]\nlow = \"q.Low\"\n[[rule]]\nif = \"low\"\nthen = \"x\"",
+            questions.iter().map(|(id, q)| (id.as_str(), q)),
+        );
+        assert!(low.is_ok());
+    }
+
+    #[test]
     fn a_question_id_may_have_a_dot() {
         let questions = [("weather.temp".to_owned(), Question::score("How warm?", ["Cold", "Hot"]))];
         let parsed = Rules::parse(
@@ -1065,6 +1099,7 @@ mod tests {
         // Its share moved to another level, so that the rest still adds up to 1.
         temp.probabilities.remove(&2);
         temp.probabilities.insert(1, 0.9);
+        temp.score = 0.9;
         assert_eq!(rules.evaluate(&level_gone), Err(crate::Error::MissingProbability { id: "temp".to_owned(), label: "Hot".to_owned() }));
         let mut option_gone = reply();
         let crate::Answer::Choice(sky) = option_gone.answers.get_mut("sky").unwrap() else { unreachable!() };
@@ -1101,7 +1136,7 @@ mod tests {
                 temp.probabilities = levels.into();
             }
         };
-        assert!(why(&temp([(0, 0.1), (1, 0.9), (2, 0.2)])).contains("its probabilities add up to 1.200, not 1"));
+        assert!(why(&temp([(0, 0.1), (1, 0.9), (2, 0.2)])).contains("its probabilities add up to 1.200, which no distribution rounds to"));
         assert!(why(&temp([(0, 0.9), (1, -0.1), (2, 0.2)])).contains("level 1's probability is -0.1"));
         assert!(why(&temp([(0, 0.1), (1, 0.9), (3, 0.0)])).contains("level 3, and the question's levels are 0 to 2"));
         assert!(why(&|reply: &mut DecisionResponse| {

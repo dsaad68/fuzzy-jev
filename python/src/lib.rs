@@ -23,7 +23,13 @@ create_exception!(jev, DecodeError, JevError, "A request could not be encoded, o
 create_exception!(jev, InvalidQuestionError, JevError, "A question the endpoint can't answer as asked, or an id asked twice.");
 create_exception!(jev, MissingAnswerError, JevError, "The reply has no answer under this question id.");
 create_exception!(jev, WrongTypeError, JevError, "The answer under this id is of another type than the one asked for.");
-create_exception!(jev, BadAnswerError, JevError, "An answer rules can't read: a probability missing, out of range, or not adding up.");
+create_exception!(
+    jev,
+    BadAnswerError,
+    JevError,
+    "An answer that isn't well formed: a probability missing, out of range, or not a distribution."
+);
+create_exception!(jev, NumericalError, JevError, "An output whose sets had support, but whose value the arithmetic couldn't give.");
 create_exception!(jev, RulesError, JevError, "A rules file that doesn't parse, or doesn't fit the questions.");
 
 /// The library's error as the exception of its kind, with its message.
@@ -43,6 +49,7 @@ fn error(e: jev::Error) -> PyErr {
         jev::Error::MissingAnswer(_) => MissingAnswerError::new_err(message),
         jev::Error::WrongType { .. } => WrongTypeError::new_err(message),
         jev::Error::MissingProbability { .. } | jev::Error::BadAnswer { .. } => BadAnswerError::new_err(message),
+        jev::Error::Numerical { .. } => NumericalError::new_err(message),
     }
 }
 
@@ -697,6 +704,7 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("MissingAnswerError", py.get_type::<MissingAnswerError>())?;
     m.add("WrongTypeError", py.get_type::<WrongTypeError>())?;
     m.add("BadAnswerError", py.get_type::<BadAnswerError>())?;
+    m.add("NumericalError", py.get_type::<NumericalError>())?;
     m.add("RulesError", py.get_type::<RulesError>())?;
     Ok(())
 }

@@ -125,7 +125,8 @@ pub struct Args {
     #[arg(long, value_name = "PATH", requires = "rules")]
     svg: Option<PathBuf>,
 
-    /// How wide a --table may be; the terminal's width by default
+    /// How wide a --table may be; the terminal's width by default. A table never gets narrower
+    /// than its question ids and answers need, so below that it prints wider
     #[arg(long, value_name = "COLUMNS")]
     width: Option<usize>,
 
@@ -265,7 +266,10 @@ fn questions(
         bail!("no questions: ask with --noul, --choice, --score or --questions (see --help)");
     }
     let mut ids: Vec<String> = Vec::with_capacity(questions.len());
-    for (id, _) in &questions {
+    for (id, question) in &questions {
+        // The limits `Client::request` checks, for a flag's question as much as a file's: a flag
+        // needs at least two options or levels, and this adds the most the endpoint takes.
+        question.check().map_err(|why| anyhow::anyhow!("question `{id}`: {why}"))?;
         if ids.contains(id) {
             bail!("question `{id}` is asked twice");
         }
@@ -433,6 +437,10 @@ mod tests {
         assert!(request_error(&["state", "--choice", "a=?|one"]).contains("at least two options"));
         assert!(request_error(&["--state-file", "-", "--questions", "-"]).contains("only one of"));
         assert!(request_error(&["--questions", "q.json", "--rules", "-"]).contains("only one of"));
+        // A flag's choice is held to the endpoint's limit too, not only a file's.
+        let many: Vec<String> = (0..256).map(|at| format!("o{at}")).collect();
+        let error = request_error(&["state", "--choice", &format!("c=?|{}", many.join("|"))]);
+        assert!(error.contains("question `c`: a choice takes up to 255 options, not 256"), "{error}");
     }
 
     #[test]

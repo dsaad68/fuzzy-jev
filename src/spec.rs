@@ -223,5 +223,10 @@ mod file_tests {
         assert!(eleven.contains("up to 10 levels"), "{eleven}");
         let twice = questions_file(r#"{"c": {"type": "choice", "instructions": "?", "criteria": {"a": "", "a": "again"}}}"#).unwrap_err();
         assert!(twice.contains("option `a` is there twice"), "{twice}");
+        // A misspelt field is an error, not a question quietly asked without it.
+        let typo = questions_file(r#"{"u": {"type": "noul", "instructions": "?", "critera": {"true": "a", "false": "b"}}}"#).unwrap_err();
+        assert!(typo.contains("unknown field `critera`"), "{typo}");
+        let inner = questions_file(r#"{"u": {"type": "noul", "instructions": "?", "criteria": {"ture": "a", "false": "b"}}}"#).unwrap_err();
+        assert!(inner.contains("unknown field `ture`"), "{inner}");
     }
 }
