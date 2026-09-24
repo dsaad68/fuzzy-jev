@@ -138,6 +138,19 @@
   .panel .right { display: inline-flex; gap: 10px; align-items: center; flex-shrink: 0; }
   .run-bar { position: sticky; bottom: 12px; z-index: 4; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; }
   .run-bar .hint { color: var(--muted); font-size: 14px; }
+
+  /* A wide window: the page fills it, and the inputs and the results each scroll on their own,
+     with Run kept at the foot of the inputs. Stacked in a narrow one, the page scrolls as a whole. */
+  @media (min-width: 961px) {
+    body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    header { position: static; flex-shrink: 0; }
+    main { flex: 1; min-height: 0; align-items: stretch; padding-bottom: 0; }
+    .editor, .results { overflow-y: auto; min-height: 0; padding: 2px 8px 16px 2px; margin: -2px -8px 0 -2px; overscroll-behavior: contain; }
+    .editor > *, .results > * { flex-shrink: 0; }
+    .editor { padding-bottom: 0; }
+    /* Pinned to the column's foot, with the page's background under it so nothing shows below. */
+    .run-bar { bottom: 0; margin-bottom: 14px; box-shadow: 0 14px 0 var(--bg), var(--shadow); }
+  }
   button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
   button.link:hover { background: none; text-decoration: underline; }
   /* The questions' Form / JSON switch, and a question's type. */
@@ -148,7 +161,7 @@
   .seg.small button { padding: 3px 8px; font-size: 12.5px; }
 
   /* The questions as a form. */
-  .qform { display: flex; flex-direction: column; gap: 10px; max-height: 62vh; overflow: auto; padding: 2px; }
+  .qform { display: flex; flex-direction: column; gap: 10px; padding: 2px; }
   .qcards { display: flex; flex-direction: column; gap: 10px; }
   .qcard { border: 1px solid var(--line); border-radius: 8px; background: var(--raised); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   .qcard .row { display: flex; gap: 8px; align-items: center; }
@@ -181,6 +194,7 @@
   .banner { border-radius: 8px; padding: 10px 14px; font-size: 15px; display: flex; gap: 10px; align-items: center; }
   .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: var(--font); font-size: 14.5px; }
   .banner.warn { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); }
+  .banner.info { color: var(--ink); background: var(--raised); border: 1px solid var(--line-strong); }
   .banner .spacer { flex: 1; }
 
   /* Decision */
@@ -266,6 +280,7 @@
       <button id="example" aria-haspopup="listbox" aria-expanded="false" aria-controls="exampleList">Load an example <span class="caret" aria-hidden="true">▾</span></button>
       <ul class="menu-list" id="exampleList" role="listbox" aria-label="Examples" tabindex="-1" hidden></ul>
     </div>
+    <button id="reset" title="Clear the state, the questions, the rules and the results">Reset</button>
     <input type="text" id="model" aria-label="Model" spellcheck="false" title="The model to ask">
   </div>
 </header>
@@ -323,6 +338,7 @@
     <div class="banner warn" id="noKey" hidden>OPENROUTER_API_KEY isn't set where jev --explore started, so Run can't ask Jev. The diagram still draws.</div>
     <div class="banner warn" id="stale" hidden><span>The inputs changed since this run: the results are for the earlier inputs.</span><span class="spacer"></span><button id="rerun">Run again</button></div>
     <div class="banner error" id="error" hidden></div>
+    <div class="banner info" id="resetDone" role="status" hidden><span>Cleared the state, the questions, the rules and the results.</span><span class="spacer"></span><button id="undoReset">Undo</button></div>
 
     <section class="card" id="decisionCard" hidden>
       <div class="head"><h2>Decision</h2><span class="sub" id="threshold"></span><span class="spacer"></span><span class="sub">hover a card to see its rules in the diagram</span></div>
@@ -754,6 +770,48 @@ for (const name of panels) {
   setCollapsed(name, remembered("collapsed." + name) === "true");
 }
 
+// ---------- reset ----------
+// Clears the fields and the results, and puts the model back; Undo, for a while, puts it all back.
+let defaultModel = "";
+let beforeReset = null, resetTimer;
+function fill(fields) {
+  for (const name of inputs) { $(name).value = fields[name]; remember(name, fields[name]); }
+  $("stateJson").checked = fields.stateJson;
+  remember("stateJson", fields.stateJson);
+  $("formatState").hidden = !fields.stateJson;
+  $("model").value = fields.model;
+  highlightAll();
+  readQuestions();
+  summarize();
+}
+function reset() {
+  beforeReset = { fields: current(), result, ranWith };
+  fill({ state: "", questions: "", rules: "", stateJson: false, model: defaultModel });
+  result = ranWith = null;
+  $("stale").hidden = $("error").hidden = true;
+  fieldErrors(null);
+  for (const name of panels) setCollapsed(name, false);
+  zoom = "fit";
+  redraw();
+  $("resetDone").hidden = false;
+  clearTimeout(resetTimer);
+  resetTimer = setTimeout(() => { $("resetDone").hidden = true; beforeReset = null; }, 12000);
+}
+function undoReset() {
+  if (!beforeReset) return;
+  const { fields, result: kept, ranWith: keptFor } = beforeReset;
+  beforeReset = null;
+  clearTimeout(resetTimer);
+  $("resetDone").hidden = true;
+  fill(fields);
+  result = kept;
+  ranWith = keptFor;
+  $("stale").hidden = !result || same(ranWith, current());
+  redraw();
+}
+$("reset").addEventListener("click", reset);
+$("undoReset").addEventListener("click", undoReset);
+
 // ---------- start ----------
 async function start() {
   const given = await (await fetch("/start")).json();
@@ -765,6 +823,7 @@ async function start() {
   // left from last time can't mix in; the model is always the command line's.
   const fromCommand = given.state != null || given.questions != null || given.rules != null;
   for (const name of inputs) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
+  defaultModel = given.model;
   $("model").value = given.model;
   $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
   $("formatState").hidden = !$("stateJson").checked;
@@ -778,7 +837,8 @@ async function start() {
   for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
   $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
   $("model").addEventListener("input", () => edited("model"));
-  if (!$("questions").value && examples.length) load(examples[0].name);
+  const firstVisit = !fromCommand && remembered("questions") === null;
+  if (firstVisit && examples.length) load(examples[0].name);
   else redraw();
 }
 
@@ -805,6 +865,7 @@ function load(name) {
 let redrawTimer;
 function edited(name) {
   summarize();
+  if (beforeReset) { beforeReset = null; clearTimeout(resetTimer); $("resetDone").hidden = true; }
   $("stale").hidden = !result || same(ranWith, current());
   if (name === "questions" || name === "rules") {
     clearTimeout(redrawTimer);
