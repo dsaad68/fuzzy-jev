@@ -60,7 +60,7 @@ and later.
 uv add fuzzy-jev        # or: pip install fuzzy-jev
 ```
 
-This is the library, for Python code; the `jev` command comes from cargo or a release below.
+This is the library, for Python code; the `jev` command comes from cargo, below.
 
 **From crates.io.** The package is `fuzzy-jev`, since `jev` on crates.io is another project; the
 command it installs is `jev`. Needs a [Rust toolchain](https://rustup.rs).
@@ -72,45 +72,6 @@ cargo install fuzzy-jev --locked
 It lands in `~/.cargo/bin`, which rustup puts on your PATH, so `jev` works in any folder.
 `cargo install fuzzy-jev --locked --force` updates it; `cargo uninstall fuzzy-jev` takes it off
 your PATH again.
-
-**A built binary.** Each [release](https://github.com/dsaad68/fuzzy-jev/releases) carries a
-`.tar.gz` per platform — Linux and macOS, x86-64 and Arm — with a `.sha256` beside it:
-
-```sh
-tar -xzf jev-0.3.1-aarch64-apple-darwin.tar.gz
-./jev --help
-```
-
-v0.1.0, from before this repository was renamed, has no fuzzy rules or drawing.
-
-**With cargo, from this repository.** For what is on `main` before it is released, with no
-clone: cargo fetches the source and builds it.
-
-```sh
-cargo install --git https://github.com/dsaad68/fuzzy-jev --locked
-```
-
-A few variants:
-
-```sh
-# a particular release
-cargo install --git https://github.com/dsaad68/fuzzy-jev --tag v0.3.1 --locked
-
-# a branch, to try something before it is merged
-cargo install --git https://github.com/dsaad68/fuzzy-jev --branch some-branch --locked
-
-# over an older copy, when cargo says one is already installed
-cargo install --git https://github.com/dsaad68/fuzzy-jev --locked --force
-```
-
-`--locked` builds with the dependency versions in `Cargo.lock`, which is what CI tested; leave it
-out to let cargo pick newer ones. To run it from a clone instead:
-
-```sh
-git clone https://github.com/dsaad68/fuzzy-jev
-cd fuzzy-jev
-cargo install --path . --locked      # or: cargo run -- --help
-```
 
 Then set `OPENROUTER_API_KEY` from an [OpenRouter key](https://openrouter.ai/keys). `--dry-run`
 prints the request instead of sending it, and needs no key.
