@@ -285,6 +285,12 @@ impl Run {
         if questions.is_empty() {
             anyhow::bail!("no questions: the questions are a JSON object of ids to questions");
         }
+        // The form can give two questions one id, which the request's map would make one.
+        for (at, (id, _)) in questions.iter().enumerate() {
+            if questions[..at].iter().any(|(earlier, _)| earlier == id) {
+                anyhow::bail!("questions: question `{id}` is asked twice");
+            }
+        }
         let rules = match self.rules.trim() {
             "" => None,
             text => Some(
@@ -399,5 +405,7 @@ mod tests {
         let noul = r#"{"n": {"type": "noul", "instructions": "?"}}"#;
         assert!(error(run(noul, "[[rule]]\nif = \"m\"\nthen = \"x\"\n")).await.starts_with("rules:"));
         assert!(error(run(noul, "")).await.contains("OPENROUTER_API_KEY"));
+        let twice = r#"{"n": {"type": "noul", "instructions": "?"}, "n": {"type": "noul", "instructions": "Again?"}}"#;
+        assert!(error(run(twice, "")).await.contains("asked twice"));
     }
 }

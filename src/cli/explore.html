@@ -131,6 +131,37 @@
   .field-head .right { display: inline-flex; gap: 10px; align-items: baseline; }
   button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
   button.link:hover { background: none; text-decoration: underline; }
+  /* The questions' Form / JSON switch, and a question's type. */
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+  .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 13px; font-weight: 600; background: var(--panel); color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line-strong); }
+  .seg button[aria-selected=true], .seg button[aria-checked=true] { background: var(--accent); color: var(--accent-ink); }
+  .seg.small button { padding: 3px 8px; font-size: 12.5px; }
+
+  /* The questions as a form. */
+  .qform { display: flex; flex-direction: column; gap: 10px; max-height: 62vh; overflow: auto; padding: 2px; }
+  .qcards { display: flex; flex-direction: column; gap: 10px; }
+  .qcard { border: 1px solid var(--line); border-radius: 8px; background: var(--raised); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .qcard .row { display: flex; gap: 8px; align-items: center; }
+  .qcard input[type=text], .qcard textarea {
+    width: 100%; min-width: 0; background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+    font: 14px/1.45 var(--font); color: var(--ink);
+  }
+  .qcard textarea { resize: none; overflow: hidden; }
+  .qcard input.qid { flex: 1; font-weight: 600; }
+  .qcard input.invalid { border-color: var(--error); }
+  .qcard .sub { color: var(--muted); font-size: 13px; margin-bottom: -2px; }
+  .qcard .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .qcard .options { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; gap: 6px; align-items: center; }
+  .qcard .levels { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; }
+  .qcard .levels .num { color: var(--faint); font-size: 13px; text-align: right; }
+  .qcard .link { align-self: flex-start; }
+  button.ghost { border-color: transparent; background: none; color: var(--muted); padding: 3px 7px; min-width: 0; }
+  button.ghost:hover { color: var(--ink); background: var(--track); }
+  button.ghost:disabled { opacity: .3; cursor: default; }
+  .qform > .add { align-self: flex-start; }
+  .qform .notice { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 8px; padding: 10px 12px; }
+  .qform .empty-form { color: var(--muted); padding: 6px 2px; }
   .state-row { display: flex; justify-content: space-between; align-items: center; }
   .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14.5px; cursor: pointer; }
   #state { min-height: 84px; }
@@ -240,8 +271,9 @@
       <div class="state-row"><label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label><button class="link" id="formatState" title="Pretty-print the state's JSON" hidden>Format</button></div>
       <div class="field-error" id="stateError" hidden></div>
 
-      <div class="field-head"><label for="questions">Questions</label><span class="right"><small>JSON: ids to questions</small><button class="link" id="formatQuestions" title="Pretty-print the questions (⇧⌥F)">Format</button></span></div>
-      <div class="code" data-lang="json"><pre aria-hidden="true"></pre><textarea id="questions" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
+      <div class="field-head"><label for="questions">Questions</label><span class="right"><button class="link" id="formatQuestions" title="Pretty-print the questions (⇧⌥F)">Format</button><span class="seg" id="questionsMode" role="tablist" aria-label="Write the questions as"><button type="button" role="tab" data-mode="form" title="A field for each part">Form</button><button type="button" role="tab" data-mode="json" title="JSON: ids to questions">JSON</button></span></span></div>
+      <div class="qform" id="questionsForm" hidden></div>
+      <div class="code" data-lang="json" id="questionsCode"><pre aria-hidden="true"></pre><textarea id="questions" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
       <div class="field-error" id="questionsError" hidden></div>
 
       <div class="field-head"><label for="rules">Rules</label><small>TOML, optional</small></div>
@@ -376,9 +408,7 @@ function highlightAll() { for (const name of inputs) highlightField($(name)); }
 
 // JSON pretty-printed with two spaces, its keys in their order, and a short list of plain values,
 // such as a question's levels, kept on one line; null when it isn't JSON.
-function pretty(text) {
-  let value;
-  try { value = JSON.parse(text); } catch { return null; }
+function layout(value, indent = "") {
   const write = (value, indent) => {
     const inner = indent + "  ";
     if (Array.isArray(value)) {
@@ -394,7 +424,12 @@ function pretty(text) {
     }
     return JSON.stringify(value);
   };
-  return write(value, "");
+  return write(value, indent);
+}
+function pretty(text) {
+  let value;
+  try { value = JSON.parse(text); } catch { return null; }
+  return layout(value);
 }
 // Formats a field as typing would, so undo takes it back; says why when it can't.
 function format(name) {
@@ -437,6 +472,215 @@ for (const name of ["questions", "rules"]) {
   });
 }
 
+// ---------- the questions as a form ----------
+// The JSON is what is sent; the form is another way to write it. Each edit in the form writes the
+// JSON again, and the form is read from the JSON when it is shown or the JSON is replaced.
+let questionsMode = remembered("questionsMode") === "json" ? "json" : "form";
+let model = [];        // [{ id, type, instructions, options: [{name, about}], levels: [..], yes, no }]
+let formBlocked = null; // why the JSON can't be shown as a form, or null
+
+// The JSON as the form's model, or a string saying why it can't be one.
+function modelOf(text) {
+  if (!text.trim()) return [];
+  let value;
+  try { value = JSON.parse(text); } catch (error) { return `it isn't JSON (${error.message})`; }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "it isn't an object of ids to questions";
+  const questions = [];
+  for (const [id, question] of Object.entries(value)) {
+    const where = `question \`${id}\``;
+    if (!question || typeof question !== "object" || Array.isArray(question)) return `${where} isn't an object`;
+    const extra = Object.keys(question).find((key) => !["type", "instructions", "criteria"].includes(key));
+    if (extra) return `${where} has \`${extra}\`, which the form has no field for`;
+    if (!["noul", "choice", "score"].includes(question.type)) return `${where} has no type the form knows`;
+    if (question.instructions != null && typeof question.instructions !== "string") return `the instructions of ${where} aren't text`;
+    const entry = { id, type: question.type, instructions: question.instructions ?? "", options: [], levels: [], yes: "", no: "" };
+    const criteria = question.criteria;
+    if (question.type === "noul" && criteria != null) {
+      if (typeof criteria !== "object" || Object.keys(criteria).some((key) => key !== "true" && key !== "false")
+        || [criteria.true, criteria.false].some((text) => text != null && typeof text !== "string")) return `the criteria of ${where} aren't text for true and false`;
+      entry.yes = criteria.true ?? "";
+      entry.no = criteria.false ?? "";
+    } else if (question.type === "choice") {
+      if (!criteria || typeof criteria !== "object" || Array.isArray(criteria)) return `the options of ${where} aren't an object of names to descriptions`;
+      for (const [name, about] of Object.entries(criteria)) {
+        if (about != null && typeof about !== "string") return `option \`${name}\` of ${where} has a description that isn't text`;
+        entry.options.push({ name, about: about ?? "" });
+      }
+    } else if (question.type === "score") {
+      if (!Array.isArray(criteria) || criteria.some((level) => typeof level !== "string")) return `the levels of ${where} aren't a list of text`;
+      entry.levels = [...criteria];
+    }
+    questions.push(entry);
+  }
+  return questions;
+}
+
+// The model as JSON, laid out as `pretty` does. Written out by hand so that two questions with one
+// id both stay, for the server to refuse, rather than one quietly replacing the other.
+function jsonOf(questions) {
+  if (!questions.length) return "{}";
+  const body = questions.map((question) => {
+    const out = { type: question.type, instructions: question.instructions };
+    if (question.type === "noul" && (question.yes || question.no)) out.criteria = { true: question.yes, false: question.no };
+    if (question.type === "choice") out.criteria = Object.fromEntries(question.options.map((option) => [option.name, option.about || null]));
+    if (question.type === "score") out.criteria = question.levels;
+    return `  ${JSON.stringify(question.id)}: ${layout(out, "  ")}`;
+  });
+  return `{\n${body.join(",\n")}\n}`;
+}
+
+// Writes the form's model into the JSON field, as if it were typed there.
+function writeQuestions() {
+  $("questions").value = jsonOf(model);
+  highlightField($("questions"));
+  remember("questions", $("questions").value);
+  edited("questions");
+  markIds();
+}
+
+// Reads the form again from the JSON, and draws it.
+function readQuestions() {
+  const read = modelOf($("questions").value);
+  formBlocked = typeof read === "string" ? read : null;
+  if (!formBlocked) model = read;
+  if (questionsMode === "form") renderForm();
+}
+
+function setMode(mode) {
+  if (mode === "form") {
+    const read = modelOf($("questions").value);
+    if (typeof read === "string") { formBlocked = read; }
+    else { formBlocked = null; model = read; }
+  }
+  questionsMode = mode;
+  remember("questionsMode", mode);
+  for (const tab of document.querySelectorAll("#questionsMode [role=tab]")) tab.setAttribute("aria-selected", tab.dataset.mode === mode);
+  $("questionsForm").hidden = mode !== "form";
+  $("questionsCode").hidden = mode !== "json";
+  $("formatQuestions").hidden = mode !== "json";
+  if (mode === "form") renderForm();
+  else highlightField($("questions"));
+}
+
+// Ids that are empty or given twice are marked, since the JSON can't tell them apart.
+function markIds() {
+  const inputs = [...$("questionsForm").querySelectorAll("input.qid")];
+  inputs.forEach((input, at) => {
+    const id = model[at] ? model[at].id : "";
+    const twice = model.some((other, index) => index !== at && other.id === id);
+    input.classList.toggle("invalid", !id.trim() || twice);
+    input.title = !id.trim() ? "Give the question an id" : twice ? `Another question is also \`${id}\`` : "";
+  });
+}
+
+function textField(value, placeholder, onInput, attributes = {}) {
+  const input = el("input", { type: "text", spellcheck: "false", placeholder, ...attributes });
+  input.value = value;
+  input.addEventListener("input", () => { onInput(input.value); writeQuestions(); });
+  return input;
+}
+function grow(textarea) { textarea.style.height = "auto"; textarea.style.height = `${textarea.scrollHeight + 2}px`; }
+function iconButton(label, title, onClick) {
+  const button = el("button", { type: "button", class: "icon ghost", title, "aria-label": title }, label);
+  button.addEventListener("click", onClick);
+  return button;
+}
+// A structural change: write the JSON, draw the form again, and put the cursor where it belongs.
+function changed(focusSelector) {
+  writeQuestions();
+  renderForm();
+  // The last match: what was just added.
+  const target = focusSelector && [...$("questionsForm").querySelectorAll(focusSelector)].pop();
+  if (target) target.focus();
+}
+
+function renderForm() {
+  const form = $("questionsForm");
+  if (formBlocked) {
+    const button = el("button", { type: "button" }, "Edit as JSON");
+    button.addEventListener("click", () => setMode("json"));
+    form.replaceChildren(el("div", { class: "notice" }, el("span", {}, `The form can't show these questions: ${formBlocked}.`), button));
+    return;
+  }
+  const cards = model.map((question, at) => {
+    const card = el("div", { class: "qcard" });
+    const types = el("div", { class: "seg small", role: "radiogroup", "aria-label": "Type" });
+    for (const [type, label, title] of [["noul", "yes/no", "Noul: is it true?"], ["choice", "choice", "Choice: one of several options"], ["score", "score", "Score: a level from lowest to highest"]]) {
+      const button = el("button", { type: "button", role: "radio", "aria-checked": question.type === type, title }, label);
+      button.addEventListener("click", () => {
+        if (question.type === type) return;
+        // Options and levels are both lists of names, so they carry over.
+        if (type === "score" && question.options.length) question.levels = question.options.map((option) => option.name);
+        if (type === "choice" && question.levels.length) question.options = question.levels.map((name) => ({ name, about: "" }));
+        if (type === "choice" && question.options.length < 2) while (question.options.length < 2) question.options.push({ name: "", about: "" });
+        if (type === "score" && question.levels.length < 2) while (question.levels.length < 2) question.levels.push("");
+        question.type = type;
+        changed();
+      });
+      types.append(button);
+    }
+    const remove = iconButton("✕", "Remove this question", () => { model.splice(at, 1); changed(); });
+    card.append(el("div", { class: "row" }, textField(question.id, "id, such as is_urgent", (value) => (question.id = value), { class: "qid", "aria-label": "Question id" }), types, remove));
+
+    const instructions = el("textarea", { rows: "2", spellcheck: "true", placeholder: "Instructions: what to judge about the state", "aria-label": "Instructions" });
+    instructions.value = question.instructions;
+    instructions.addEventListener("input", () => { question.instructions = instructions.value; grow(instructions); writeQuestions(); });
+    card.append(instructions);
+    requestAnimationFrame(() => grow(instructions));
+
+    if (question.type === "noul") {
+      card.append(el("div", { class: "sub" }, "What yes and no mean (optional)"),
+        el("div", { class: "pair" },
+          textField(question.yes, "yes means…", (value) => (question.yes = value), { "aria-label": "What yes means" }),
+          textField(question.no, "no means…", (value) => (question.no = value), { "aria-label": "What no means" })));
+    } else if (question.type === "choice") {
+      const list = el("div", { class: "options" });
+      question.options.forEach((option, index) => {
+        list.append(
+          textField(option.name, "option", (value) => (option.name = value), { class: "oname", "aria-label": `Option ${index + 1}` }),
+          textField(option.about, "description (optional)", (value) => (option.about = value), { "aria-label": `Option ${index + 1}'s description` }),
+          iconButton("✕", "Remove this option", () => { question.options.splice(index, 1); changed(); }));
+      });
+      const add = el("button", { type: "button", class: "link" }, "+ option");
+      add.addEventListener("click", () => { question.options.push({ name: "", about: "" }); changed(`.qcard:nth-child(${at + 1}) .oname`); });
+      card.append(el("div", { class: "sub" }, "Options: two or more"), list, add);
+    } else {
+      const list = el("div", { class: "levels" });
+      question.levels.forEach((level, index) => {
+        const move = (by) => () => { const [moved] = question.levels.splice(index, 1); question.levels.splice(index + by, 0, moved); changed(); };
+        const up = iconButton("↑", "Move this level down the scale", move(-1));
+        const down = iconButton("↓", "Move this level up the scale", move(1));
+        up.disabled = index === 0;
+        down.disabled = index === question.levels.length - 1;
+        list.append(el("span", { class: "num" }, String(index)),
+          textField(level, index === 0 ? "lowest level" : index === question.levels.length - 1 ? "highest level" : "level", (value) => (question.levels[index] = value), { class: "lname", "aria-label": `Level ${index}` }),
+          up, down, iconButton("✕", "Remove this level", () => { question.levels.splice(index, 1); changed(); }));
+      });
+      const add = el("button", { type: "button", class: "link" }, "+ level");
+      add.disabled = question.levels.length >= 10;
+      add.addEventListener("click", () => { question.levels.push(""); changed(`.qcard:nth-child(${at + 1}) .lname`); });
+      card.append(el("div", { class: "sub" }, "Levels, lowest first: two to ten"), list, add);
+    }
+    return card;
+  });
+  const add = el("button", { type: "button", class: "add" }, "+ Add question");
+  add.addEventListener("click", () => {
+    let n = model.length + 1;
+    while (model.some((question) => question.id === `question_${n}`)) n++;
+    model.push({ id: `question_${n}`, type: "noul", instructions: "", options: [], levels: [], yes: "", no: "" });
+    changed(".qcard .qid");
+    document.activeElement.select();
+  });
+  const list = el("div", { class: "qcards" }, ...cards);
+  if (!cards.length) list.append(el("div", { class: "empty-form" }, "No questions yet."));
+  form.replaceChildren(list, add);
+  markIds();
+}
+
+for (const tab of document.querySelectorAll("#questionsMode [role=tab]")) tab.addEventListener("click", () => setMode(tab.dataset.mode));
+// Typing in the JSON keeps the form's model up to date, for when it is shown again.
+$("questions").addEventListener("input", () => { if (questionsMode === "json") { const read = modelOf($("questions").value); formBlocked = typeof read === "string" ? read : null; if (!formBlocked) model = read; } });
+
 // ---------- start ----------
 async function start() {
   const given = await (await fetch("/start")).json();
@@ -456,6 +700,7 @@ async function start() {
   if ($("stateJson").checked) $("state").value = pretty($("state").value) ?? $("state").value;
   $("noKey").hidden = given.canAsk;
   highlightAll();
+  setMode(questionsMode);
   for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
   $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
   $("model").addEventListener("input", () => edited("model"));
@@ -474,6 +719,7 @@ function load(name) {
   for (const name of inputs) remember(name, $(name).value);
   remember("stateJson", false);
   highlightAll();
+  readQuestions();
   result = ranWith = null;
   $("stale").hidden = $("error").hidden = true;
   zoom = "fit";
