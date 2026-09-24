@@ -20,6 +20,7 @@ command prints, and the errors you can get.
 - [A complete example, worked by hand](#a-complete-example-worked-by-hand)
 - [Errors](#errors)
 - [From Rust](#from-rust)
+- [From Python](#from-python)
 - [Designing rules](#designing-rules)
 
 The examples are in [`examples/rules/`](../examples/rules):
@@ -657,6 +658,29 @@ std::fs::write("triage.svg", rules.graph_svg(Some(&reply))?)?;
 `Outcome` has `threshold`, `items: Vec<Item>` (`item`, `score`, `yes`, `rules`) and
 `outputs: Vec<OutputValue>` (`output`, `value: Option<f64>`, `sets`). Each rule entry is a `Fired`
 (`when`, `weight`, `score`), serialized with the key `if`.
+
+## From Python
+
+The same engine, from `pip install fuzzy-jev`:
+
+```python
+import jev
+
+questions = jev.load_questions(open("triage.json").read())
+rules = jev.Rules(open("triage.toml").read(), questions)   # RulesError if it doesn't fit
+
+reply = jev.Client().decide(ticket, questions)
+outcome = rules.evaluate(reply)
+for item in outcome.items:
+    if item.yes:
+        print(f"{item.name}: {item.score:.2f}")
+hours = outcome["reply_within"].value     # None when no rule concluding it fired
+if hours is not None:
+    print(f"reply within {hours:.1f} hours")
+open("triage.svg", "w").write(rules.graph_svg(reply))
+```
+
+[`python.md`](python.md#rules) has the rest.
 
 ## Designing rules
 

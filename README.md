@@ -26,8 +26,8 @@ an example worked by hand.
 
 ![The weather rules drawn as a fuzzy rule base: each question's probabilities, each rule's operators, and what to wear against the threshold](docs/wear.svg)
 
-A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, and
-an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
+A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, a
+[Python package](docs/python.md), and an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
 by eye — `jev add skill` writes it into your project. The crate and the command are both called
 `jev`.
 
@@ -105,8 +105,7 @@ cargo install --path . --locked      # or: cargo run -- --help
 Then set `OPENROUTER_API_KEY` from an [OpenRouter key](https://openrouter.ai/keys). `--dry-run`
 prints the request instead of sending it, and needs no key.
 
-**From Python.** [`python/`](python/README.md) has bindings for the library, the same questions,
-replies and rules: `pip install fuzzy-jev`, then `import jev`.
+**From Python.** `pip install fuzzy-jev`, then `import jev`: see [From Python](#from-python).
 
 ## Asking
 
@@ -490,6 +489,31 @@ let outcome = rules.evaluate(&reply)?;       // items and outputs, with their sc
 let svg = rules.graph_svg(Some(&reply))?;    // or graph_text, for a terminal
 ```
 
+## From Python
+
+```sh
+pip install fuzzy-jev
+```
+
+```python
+import jev
+
+client = jev.Client()  # the key from OPENROUTER_API_KEY
+questions = jev.load_questions(open("examples/rules/triage.json").read())
+rules = jev.Rules(open("examples/rules/triage.toml").read(), questions)  # checked now, before a call
+
+reply = client.decide("I can't log in and payroll is due today", questions)
+reply.choice("team").choice, reply.noul("blocked")
+outcome = rules.evaluate(reply)
+outcome.yes                                        # the items at or over the threshold
+open("triage.svg", "w").write(rules.graph_svg(reply))
+```
+
+The package is the Rust library underneath, so questions, replies and rules files mean the same in
+both. `decide_async` is the awaitable form, and `decide` releases the GIL while it waits.
+**[`docs/python.md`](docs/python.md)** is the whole guide: questions, the reply, rules, drawings,
+errors, threads and asyncio, and releasing.
+
 ## Development
 
 ```sh
@@ -501,6 +525,7 @@ cargo run --example triage -- "Could you tell me what the enterprise plan costs?
 CI runs `cargo fmt --check`, clippy for the host and for `wasm32-unknown-unknown`, and the tests.
 Pushing a tag such as `v0.2.0` builds the four binaries and puts them on a Release; the same build
 can be started by hand from the Actions tab, which leaves them as artifacts.
+The same tag publishes the Python package to PyPI; [building and releasing it](docs/python.md#building-and-releasing).
 
 Extracted from [wasm-agent](https://github.com/dsaad68/wasm-agent), where this began as
 `crates/jev` and where dx's shell offers the same command to an agent. This repository was called

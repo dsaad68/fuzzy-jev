@@ -82,6 +82,11 @@ open("triage.svg", "w").write(rules.graph_svg(reply))
 
 See [`docs/rules.md`](https://github.com/dsaad68/fuzzy-jev/blob/main/docs/rules.md) for the whole of the rules file.
 
+## More
+
+**[The whole guide](https://github.com/dsaad68/fuzzy-jev/blob/main/docs/python.md)**: questions, the
+reply, rules, drawings, errors, threads and asyncio, and releasing.
+
 ## Tests
 
 ```sh

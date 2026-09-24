@@ -1,0 +1,40 @@
+# fuzzy-jev
+
+> A client for TypeSafe's Jev on OpenRouter's decisions endpoint (`https://openrouter.ai/api/alpha/decisions`): ask typed questions about a state (text, or any JSON) and get probabilities back instead of prose, with a Choice between named options, a Score on an ordered scale of up to ten levels, or a Noul, the probability that something is true. Fuzzy rules (a TOML file) combine those answers with AND, OR, NOT and hedges into decisions and crisp amounts, and draw themselves as SVG. It comes as the `jev` command, a Rust library (crate `fuzzy-jev`, imported as `jev`, which also builds for wasm32), and a Python package (`pip install fuzzy-jev`, `import jev`).
+
+Things to know before using it:
+
+- It needs an OpenRouter key in `OPENROUTER_API_KEY`. The default model is `typesafe/jev-1.13`.
+- Jev doesn't write, summarize or rewrite text. It only answers the questions you define.
+- Every question sees the same state and is answered on its own, so ask them all in one call.
+- The id a question is sent under is never shown to the model, so its instructions must say everything.
+- Choice and Score answers carry a `confidence` (0 to 1) as well as each option's or level's probability. Gate on it, and send unsure answers to a person. A Noul's probability is its whole answer.
+- A rules file's support score is the policy's, not a probability. An output's value says where the support lies, not how much there is.
+- Questions and rules files are checked before any call, so a mistake in them costs nothing.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/README.md): installing, the `jev` command and its flags, a first rules file, drawings, the Agent Skill, and the Rust library
+- [Rules guide](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/docs/rules.md): the whole of `rules.toml`, including terms, operators and hedges, AND/OR choices, items and thresholds, outputs, every formula, output formats, errors, and an example worked by hand
+- [Python guide](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/docs/python.md): `import jev`, covering the client, questions, the reply, rules, drawings, errors, threads and asyncio, and the API reference
+
+## Examples
+
+- [Triage questions](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/triage.json): a questions file (`jev -q`), with a Choice, two Scores and a Noul in the endpoint's JSON shape
+- [Triage rules](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/triage.toml): hedges, parentheses, a weight, `probsum`, a threshold, items and an output together
+- [Weather rules](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/wear.toml): items from Scores and a Noul with AND, OR and NOT
+- [Irrigation rules](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/irrigation.toml): an output, a crisp amount from fuzzy sets
+- [Rust example](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/triage.rs): triage a support message with the library
+- [Python example](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/python/examples/triage.py): ask the triage questions, evaluate the rules, and write `triage.svg`
+
+## Agent Skills
+
+- [jev skill](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/skills/jev/SKILL.md): when and how an agent with a shell should ask Jev through the `jev` command
+- [jev-tool skill](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/skills/jev-tool/SKILL.md): the same for an agent whose jev is a JSON tool call
+
+## Optional
+
+- [Python type stubs](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/python/jev/_jev.pyi): every Python class, method and exception, with types
+- [Rust API on docs.rs](https://docs.rs/fuzzy-jev): `Client`, `Question`, `DecisionResponse`, and the `rules`, `spec` and `print` modules
+- [A reply](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/tests/fixtures/decision.json): the endpoint's JSON for a Noul, a Choice and a Score, with usage
+- [TypeSafe's primitives](https://docs.typesafe.ai/primitives): the endpoint's own documentation of the question types
