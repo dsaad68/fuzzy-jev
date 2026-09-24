@@ -623,7 +623,7 @@ The engine is `jev::rules`, behind the `command` feature (the CLI's default).
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.2", default-features = false, features = ["command"] }
+jev = { package = "fuzzy-jev", version = "0.3", default-features = false, features = ["command"] }
 ```
 
 ```rust

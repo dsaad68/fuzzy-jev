@@ -84,7 +84,7 @@ A few variants:
 
 ```sh
 # a particular release
-cargo install --git https://github.com/dsaad68/fuzzy-jev --tag v0.2.0 --locked
+cargo install --git https://github.com/dsaad68/fuzzy-jev --tag v0.3.1 --locked
 
 # a branch, to try something before it is merged
 cargo install --git https://github.com/dsaad68/fuzzy-jev --branch some-branch --locked
@@ -467,7 +467,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.2", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.3", default-features = false }
 ```
 
 ```rust

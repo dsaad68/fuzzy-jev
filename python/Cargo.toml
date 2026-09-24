@@ -2,7 +2,7 @@
 # The Python bindings: `pip install fuzzy-jev`, then `import jev`. Built by maturin
 # (pyproject.toml), not published to crates.io.
 name = "fuzzy-jev-python"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Python bindings for fuzzy-jev: typed Choice, Score and Noul answers from TypeSafe's Jev, and fuzzy rules over them."
 repository = "https://github.com/dsaad68/fuzzy-jev"
