@@ -52,6 +52,16 @@ extra question costs a few tokens and no extra round trip.
 
 ## Install
 
+**From PyPI.** For Python, the package is `fuzzy-jev`, imported as `jev`: see
+[From Python](#from-python). Wheels are built for Linux and macOS, x86-64 and Arm, for CPython 3.10
+and later.
+
+```sh
+uv add fuzzy-jev        # or: pip install fuzzy-jev
+```
+
+This is the library, for Python code; the `jev` command comes from cargo or a release below.
+
 **From crates.io.** The package is `fuzzy-jev`, since `jev` on crates.io is another project; the
 command it installs is `jev`. Needs a [Rust toolchain](https://rustup.rs).
 
@@ -67,7 +77,7 @@ your PATH again.
 `.tar.gz` per platform — Linux and macOS, x86-64 and Arm — with a `.sha256` beside it:
 
 ```sh
-tar -xzf jev-0.2.0-aarch64-apple-darwin.tar.gz
+tar -xzf jev-0.3.1-aarch64-apple-darwin.tar.gz
 ./jev --help
 ```
 
@@ -104,8 +114,6 @@ cargo install --path . --locked      # or: cargo run -- --help
 
 Then set `OPENROUTER_API_KEY` from an [OpenRouter key](https://openrouter.ai/keys). `--dry-run`
 prints the request instead of sending it, and needs no key.
-
-**From Python.** `pip install fuzzy-jev`, then `import jev`: see [From Python](#from-python).
 
 ## Asking
 
