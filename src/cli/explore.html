@@ -30,24 +30,39 @@
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font); font-variant-ligatures: contextual; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); font-variant-ligatures: contextual; }
   code, pre, textarea, .mono, button, input, select { font-family: var(--font); }
 
   /* Header */
   header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
            border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 15px; margin: 0; font-weight: 650; white-space: nowrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; white-space: nowrap; }
   header h1 span { color: var(--muted); font-weight: 400; }
   header .spacer { flex: 1; }
   header .controls { display: flex; gap: 8px; align-items: center; }
-  #model { width: 200px; }
+  #model { width: 240px; }
+
+  /* The examples menu: the page's own, so it takes the page's font and theme. */
+  .menu { position: relative; }
+  .menu .caret { color: var(--muted); font-size: 12.5px; transition: transform .15s; }
+  .menu button[aria-expanded=true] .caret { transform: rotate(180deg); }
+  .menu-list {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; margin: 0; padding: 6px; list-style: none; min-width: 320px;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18), 0 2px 6px rgba(0, 0, 0, .08);
+  }
+  .menu-list:focus { outline: none; }
+  .menu-list li { padding: 8px 10px; border-radius: 6px; cursor: pointer; display: grid; gap: 2px; }
+  .menu-list li .title { font-weight: 600; }
+  .menu-list li .about { color: var(--muted); font-size: 13px; }
+  .menu-list li[aria-selected=true] { background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
 
   /* Controls */
   textarea, input[type=text], select {
-    font-size: 12.5px; line-height: 1.5; color: var(--ink); background: var(--code); border: 1px solid var(--line);
+    font-size: 14.5px; line-height: 1.5; color: var(--ink); background: var(--code); border: 1px solid var(--line);
     border-radius: 6px; padding: 7px 9px;
   }
-  select, input[type=text] { font-size: 12.5px; background: var(--panel); }
+  select, input[type=text] { font-size: 14.5px; background: var(--panel); }
   textarea { width: 100%; resize: vertical; tab-size: 2; }
 
   /* A code field: the text is typed in a transparent textarea over a highlighted copy of it. */
@@ -55,7 +70,7 @@
   .code:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
   .code.invalid { border-color: var(--error); }
   .code textarea, .code pre {
-    margin: 0; padding: 8px 10px; border: 0; border-radius: 6px; font: 12.5px/1.6 var(--font); font-variant-ligatures: contextual;
+    margin: 0; padding: 8px 10px; border: 0; border-radius: 6px; font: 14.5px/1.6 var(--font); font-variant-ligatures: contextual;
     white-space: pre; tab-size: 2; letter-spacing: 0; overflow: auto;
   }
   .code pre { position: absolute; inset: 0; pointer-events: none; overflow: hidden; color: var(--ink); background: none; max-height: none; }
@@ -73,7 +88,7 @@
   .hl-op { color: var(--hl-op); font-weight: 600; }
   textarea:focus, input:focus, select:focus, button:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
   button, a.button {
-    font: inherit; font-size: 13px; font-weight: 600; border-radius: 6px; padding: 6px 12px; cursor: pointer; text-decoration: none;
+    font: inherit; font-size: 15px; font-weight: 600; border-radius: 6px; padding: 6px 12px; cursor: pointer; text-decoration: none;
     border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   }
   button:hover, a.button:hover { background: var(--raised); }
@@ -81,13 +96,13 @@
   button.primary:hover { filter: brightness(1.08); background: var(--accent); }
   button:disabled { opacity: .55; cursor: progress; }
   button.icon { padding: 5px 9px; min-width: 30px; justify-content: center; }
-  kbd { font: 11px var(--font); padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); }
+  kbd { font: 12.5px var(--font); padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); }
   .spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
   .busy .spinner { display: inline-block; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* Layout */
-  main { display: grid; grid-template-columns: minmax(340px, 4fr) 8fr; gap: 16px; padding: 16px 20px 32px; align-items: start; }
+  main { display: grid; grid-template-columns: minmax(380px, 4fr) 8fr; gap: 16px; padding: 16px 20px 32px; align-items: start; }
   body.expanded main { grid-template-columns: 1fr; }
   body.expanded .editor { display: none; }
   @media (max-width: 960px) {
@@ -99,8 +114,8 @@
   }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); min-width: 0; }
   .card > .head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .card > .head h2 { font-size: 13px; margin: 0; font-weight: 650; }
-  .card > .head .sub { color: var(--muted); font-size: 12px; }
+  .card > .head h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  .card > .head .sub { color: var(--muted); font-size: 14px; }
   .card > .head .spacer { flex: 1; }
   .card > .body { padding: 14px; }
   .results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -111,56 +126,56 @@
   .editor .body { display: flex; flex-direction: column; gap: 4px; }
   .field-head { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 4px; }
   .field-head:first-child { margin-top: 0; }
-  .field-head label { font-weight: 650; font-size: 13px; }
-  .field-head small { color: var(--muted); font-size: 12px; }
-  .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; cursor: pointer; }
-  #state { min-height: 70px; }
-  #questions, #rules { min-height: 190px; }
-  .field-error { color: var(--error); font-size: 12px; white-space: pre-wrap; font-family: var(--font); margin-top: 2px; }
+  .field-head label { font-weight: 650; font-size: 15px; }
+  .field-head small { color: var(--muted); font-size: 14px; }
+  .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14.5px; cursor: pointer; }
+  #state { min-height: 84px; }
+  #questions, #rules { min-height: 240px; }
+  .field-error { color: var(--error); font-size: 14px; white-space: pre-wrap; font-family: var(--font); margin-top: 2px; }
   .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
-  .actions .hint { color: var(--muted); font-size: 12px; }
+  .actions .hint { color: var(--muted); font-size: 14px; }
 
   /* Banners */
-  .banner { border-radius: 8px; padding: 10px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
-  .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: var(--font); font-size: 12.5px; }
+  .banner { border-radius: 8px; padding: 10px 14px; font-size: 15px; display: flex; gap: 10px; align-items: center; }
+  .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: var(--font); font-size: 14.5px; }
   .banner.warn { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); }
   .banner .spacer { flex: 1; }
 
   /* Decision */
-  .decision { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .decision { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
   .item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--raised); cursor: pointer; transition: border-color .15s, box-shadow .15s, opacity .15s; }
   .item:hover, .item.hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .decision.focusing .item:not(.hit) { opacity: .45; }
   .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .item .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item .score { font: 600 13px var(--font); }
-  .badge { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; }
+  .item .score { font: 600 15px var(--font); }
+  .badge { font-size: 12.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; }
   .badge.yes { background: var(--accent); color: var(--accent-ink); }
   .badge.no { background: var(--track); color: var(--muted); }
   .meter { position: relative; height: 8px; background: var(--track); border-radius: 4px; margin-top: 8px; }
   .meter > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--bar); }
   .meter.yes > i { background: var(--accent); }
   .meter > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .6; border-radius: 1px; }
-  .item .why { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .item .why { color: var(--muted); font-size: 13px; margin-top: 6px; }
   .output { grid-column: 1 / -1; }
-  .output .sets { display: grid; grid-template-columns: max-content 1fr max-content; gap: 4px 10px; align-items: center; margin-top: 8px; font-size: 12.5px; }
+  .output .sets { display: grid; grid-template-columns: max-content 1fr max-content; gap: 4px 10px; align-items: center; margin-top: 8px; font-size: 14.5px; }
   .output .sets .meter { margin: 0; }
 
   /* Answers */
-  .answers { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 24px; }
-  .answer h3 { font-size: 12.5px; margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
-  .answer h3 .kind { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  .answers { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 24px; }
+  .answer h3 { font-size: 14.5px; margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
+  .answer h3 .kind { color: var(--muted); font-weight: 400; font-size: 13px; }
   .answer h3 .pick { margin-left: auto; font-weight: 600; }
-  .bars { display: grid; grid-template-columns: minmax(40px, max-content) 1fr 34px; gap: 3px 8px; align-items: center; font-size: 12px; }
+  .bars { display: grid; grid-template-columns: minmax(40px, max-content) 1fr 34px; gap: 3px 8px; align-items: center; font-size: 14px; }
   .bars .label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
   .bars .label.top { color: var(--ink); font-weight: 600; }
   .bars .meter { margin: 0; height: 6px; }
-  .bars .num { text-align: right; font: 11.5px var(--font); color: var(--muted); }
-  .usage { color: var(--muted); font-size: 12px; }
+  .bars .num { text-align: right; font: 13px var(--font); color: var(--muted); }
+  .usage { color: var(--muted); font-size: 14px; }
 
   /* Diagram */
   .toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-  .toolbar .zoom { font: 12px var(--font); color: var(--muted); min-width: 60px; text-align: center; }
+  .toolbar .zoom { font: 14px var(--font); color: var(--muted); min-width: 60px; text-align: center; }
   .toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; }
   .viewport { overflow: auto; max-height: 72vh; padding: 8px; border-radius: 0 0 10px 10px; cursor: grab; }
   body.expanded .viewport { max-height: calc(100vh - 150px); }
@@ -186,7 +201,7 @@
   #diagram.focusing g.rule:not(.hit) { opacity: .18; }
 
   /* Raw output */
-  details.card > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-weight: 650; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  details.card > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-weight: 650; font-size: 15px; display: flex; gap: 8px; align-items: center; }
   details.card > summary::-webkit-details-marker { display: none; }
   details.card > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
   details.card[open] > summary::before { transform: rotate(90deg); }
@@ -196,7 +211,7 @@
   .tabs [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
   .tabs .spacer { flex: 1; }
   .tabs a.button { margin: 4px 0; }
-  pre { margin: 0; padding: 12px 14px; background: var(--code); overflow: auto; font-size: 12.5px; line-height: 1.45; white-space: pre; max-height: 60vh; border-radius: 0 0 10px 10px; }
+  pre { margin: 0; padding: 12px 14px; background: var(--code); overflow: auto; font-size: 14.5px; line-height: 1.45; white-space: pre; max-height: 60vh; border-radius: 0 0 10px 10px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -205,7 +220,10 @@
   <h1>Fuzzy Jev <span>Explore</span></h1>
   <div class="spacer"></div>
   <div class="controls">
-    <select id="example" aria-label="Load an example"><option value="">Load an example…</option></select>
+    <div class="menu" id="exampleMenu">
+      <button id="example" aria-haspopup="listbox" aria-expanded="false" aria-controls="exampleList">Load an example <span class="caret" aria-hidden="true">▾</span></button>
+      <ul class="menu-list" id="exampleList" role="listbox" aria-label="Examples" tabindex="-1" hidden></ul>
+    </div>
     <input type="text" id="model" aria-label="Model" spellcheck="false" title="The model to ask">
   </div>
 </header>
@@ -369,7 +387,9 @@ for (const name of ["questions", "rules"]) {
 async function start() {
   const given = await (await fetch("/start")).json();
   examples = given.examples || [];
-  for (const example of examples) $("example").add(new Option(example.name, example.name));
+  $("exampleList").replaceChildren(...examples.map((example, at) =>
+    el("li", { role: "option", id: `example-${at}`, "data-name": example.name, "aria-selected": "false" },
+      el("span", { class: "title" }, example.name), el("span", { class: "about" }, example.about))));
   // A state, questions or rules on the command line start the page from them alone, so what was
   // left from last time can't mix in; the model is always the command line's.
   const fromCommand = given.state != null || given.questions != null || given.rules != null;
@@ -715,7 +735,55 @@ $("expand").addEventListener("click", () => expand(!document.body.classList.cont
 // ---------- wiring ----------
 $("run").addEventListener("click", run);
 $("rerun").addEventListener("click", run);
-$("example").addEventListener("change", (event) => { load(event.target.value); event.target.value = ""; });
+// The examples menu: opens on a click or ↓, is walked with the arrows, picks with Enter or a
+// click, and closes on Esc, Tab or a click anywhere else.
+let menuAt = -1;
+function menuOpen() { return !$("exampleList").hidden; }
+function openMenu() {
+  $("exampleList").hidden = false;
+  $("example").setAttribute("aria-expanded", "true");
+  moveMenu(0);
+  $("exampleList").focus();
+}
+function closeMenu(refocus) {
+  if (!menuOpen()) return;
+  $("exampleList").hidden = true;
+  $("example").setAttribute("aria-expanded", "false");
+  if (refocus) $("example").focus();
+}
+function moveMenu(at) {
+  const options = [...$("exampleList").children];
+  if (!options.length) return;
+  menuAt = (at + options.length) % options.length;
+  options.forEach((option, index) => option.setAttribute("aria-selected", index === menuAt));
+  $("exampleList").setAttribute("aria-activedescendant", options[menuAt].id);
+}
+function pickMenu(at) {
+  const option = $("exampleList").children[at];
+  closeMenu(true);
+  if (option) load(option.dataset.name);
+}
+$("example").addEventListener("click", () => (menuOpen() ? closeMenu(true) : openMenu()));
+$("example").addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); openMenu(); }
+});
+$("exampleList").addEventListener("keydown", (event) => {
+  const keys = { ArrowDown: () => moveMenu(menuAt + 1), ArrowUp: () => moveMenu(menuAt - 1), Home: () => moveMenu(0), End: () => moveMenu(-1),
+    Enter: () => pickMenu(menuAt), " ": () => pickMenu(menuAt), Escape: () => closeMenu(true), Tab: () => closeMenu(false) };
+  if (!keys[event.key]) return;
+  if (event.key !== "Tab") event.preventDefault();
+  event.stopPropagation();
+  keys[event.key]();
+});
+$("exampleList").addEventListener("mousemove", (event) => {
+  const option = event.target.closest("li");
+  if (option) moveMenu([...$("exampleList").children].indexOf(option));
+});
+$("exampleList").addEventListener("click", (event) => {
+  const option = event.target.closest("li");
+  if (option) pickMenu([...$("exampleList").children].indexOf(option));
+});
+document.addEventListener("pointerdown", (event) => { if (!$("exampleMenu").contains(event.target)) closeMenu(false); });
 for (const tab of document.querySelectorAll(".tabs [role=tab]")) tab.addEventListener("click", () => { rawTab = tab.dataset.tab; renderRaw(); });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (!$("run").disabled) run(); }

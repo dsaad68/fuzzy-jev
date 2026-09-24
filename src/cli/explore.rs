@@ -24,22 +24,26 @@ use super::{parse_state, read, Args};
 
 const PAGE: &str = include_str!("explore.html");
 
-/// The examples the page offers, as the files in `examples/rules`.
-const EXAMPLES: [(&str, &str, &str, &str); 3] = [
+/// The examples the page offers, as the files in `examples/rules`: a name, what it shows, a state,
+/// the questions and the rules.
+const EXAMPLES: [(&str, &str, &str, &str, &str); 3] = [
     (
         "wear",
+        "What to wear for the weather: items decided at a threshold",
         "16°C, the air feels sticky, and a light drizzle has started.",
         include_str!("../../examples/rules/weather.json"),
         include_str!("../../examples/rules/wear.toml"),
     ),
     (
         "irrigation",
+        "How long to water: a crisp output from fuzzy sets",
         "A fairly normal week: two moderate showers, and the soil is damp but drying at the surface.",
         include_str!("../../examples/rules/rain.json"),
         include_str!("../../examples/rules/irrigation.toml"),
     ),
     (
         "triage",
+        "Routing a support ticket: a Choice, hedges and weights, with an output",
         "Help! My payouts have been failing for 3 days and nobody answers my emails. We are losing customers.",
         include_str!("../../examples/rules/triage.json"),
         include_str!("../../examples/rules/triage.toml"),
@@ -102,7 +106,7 @@ fn start(args: &Args, can_ask: bool) -> anyhow::Result<Value> {
     };
     let examples: Vec<Value> = EXAMPLES
         .iter()
-        .map(|(name, state, questions, rules)| json!({"name": name, "state": state, "questions": questions, "rules": rules}))
+        .map(|(name, about, state, questions, rules)| json!({"name": name, "about": about, "state": state, "questions": questions, "rules": rules}))
         .collect();
     Ok(json!({
         "state": state,
