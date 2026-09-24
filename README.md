@@ -105,6 +105,9 @@ cargo install --path . --locked      # or: cargo run -- --help
 Then set `OPENROUTER_API_KEY` from an [OpenRouter key](https://openrouter.ai/keys). `--dry-run`
 prints the request instead of sending it, and needs no key.
 
+**From Python.** [`python/`](python/README.md) has bindings for the library, the same questions,
+replies and rules: `pip install fuzzy-jev`, then `import jev`.
+
 ## Asking
 
 A question on the command line is `ID=INSTRUCTIONS`, then `|`-separated criteria:
