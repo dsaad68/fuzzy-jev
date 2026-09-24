@@ -25,6 +25,9 @@ pub enum Error {
     /// The answer under `id` isn't one rules can read: a probability outside 0 to 1, a
     /// distribution that doesn't add up to 1, or a level or option the question doesn't have.
     BadAnswer { id: String, why: String },
+    /// An output's sets had support, but the arithmetic couldn't turn it into a value: a range or a
+    /// support too extreme for `f64`. Kept apart from an output no rule supported, which has no value.
+    Numerical { output: String, why: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -41,6 +44,7 @@ impl fmt::Display for Error {
             Error::WrongType { id, expected, found } => write!(f, "question `{id}` is a {found}, not a {expected}"),
             Error::MissingProbability { id, label } => write!(f, "question `{id}` gives no probability for `{label}`"),
             Error::BadAnswer { id, why } => write!(f, "the answer to question `{id}` can't be read: {why}"),
+            Error::Numerical { output, why } => write!(f, "[output.{output}] has no value: {why}"),
         }
     }
 }

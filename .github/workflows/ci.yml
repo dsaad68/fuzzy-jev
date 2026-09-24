@@ -45,6 +45,13 @@ jobs:
       - name: Lint for WebAssembly
         run: cargo clippy --lib --locked --target wasm32-unknown-unknown -- -D warnings
 
+      # The library as other crates take it: with no features (the client alone), and with
+      # `command` but not the CLI (what the Python bindings use).
+      - name: Lint the library's feature sets
+        run: |
+          cargo clippy --lib --locked --no-default-features -- -D warnings
+          cargo clippy --lib --locked --no-default-features --features command -- -D warnings
+
       # The test that calls OpenRouter is #[ignore]d, so this needs no key and no network.
       - name: Tests
         run: cargo test --locked

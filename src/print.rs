@@ -23,8 +23,8 @@ pub enum Format {
 /// columns. Ends with a newline.
 pub fn render(format: Format, reply: &DecisionResponse, ids: &[String], width: usize) -> serde_json::Result<String> {
     Ok(match format {
-        Format::Text => text(reply, ids),
-        Format::Table => table(reply, ids, width),
+        Format::Text => for_terminal(&text(reply, ids)),
+        Format::Table => for_terminal(&table(reply, ids, width)),
         Format::Json => serde_json::to_string_pretty(reply)? + "\n",
     })
 }
@@ -34,10 +34,29 @@ pub fn render(format: Format, reply: &DecisionResponse, ids: &[String], width: u
 /// newline.
 pub fn render_outcome(format: Format, reply: &DecisionResponse, outcome: &Outcome, width: usize) -> serde_json::Result<String> {
     Ok(match format {
-        Format::Text => outcome.text() + &usage(reply),
-        Format::Table => outcome_table(outcome, width) + &usage(reply),
+        Format::Text => for_terminal(&(outcome.text() + &usage(reply))),
+        Format::Table => for_terminal(&(outcome_table(outcome, width) + &usage(reply))),
         Format::Json => serde_json::to_string_pretty(&json!({"reply": reply, "outcome": outcome}))? + "\n",
     })
+}
+
+/// `text` safe to print to a terminal: a control character (other than a newline) or a
+/// bidirectional override in a model's name, a label or an option would move the cursor, recolour
+/// or reorder what follows, so each shows as its escape (`\u{1b}`) instead. JSON output keeps the
+/// text as it is; this is only for what a person reads.
+pub fn for_terminal(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for character in text.chars() {
+        let hidden =
+            (character.is_control() && character != '\n') || matches!(character, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}');
+        match hidden {
+            true => {
+                let _ = write!(out, "\\u{{{:x}}}", u32::from(character));
+            }
+            false => out.push(character),
+        }
+    }
+    out
 }
 
 /// One answer's cells: its type, the answer, its confidence, and every option's probability.
@@ -52,9 +71,11 @@ impl Row {
     fn of(answer: Option<&Answer>) -> Row {
         match answer {
             None => Row { kind: "-", answer: "no answer".to_owned(), confidence: None, probabilities: String::new() },
+            // The probability with the yes or no: a table narrow enough to drop the probabilities
+            // column would otherwise say `yes` for 0.51 and for 0.99 alike.
             Some(Answer::Noul(answer)) => Row {
                 kind: "noul",
-                answer: if answer.noul >= 0.5 { "yes" } else { "no" }.to_owned(),
+                answer: format!("{:.2} {}", answer.noul, if answer.noul >= 0.5 { "yes" } else { "no" }),
                 confidence: None,
                 probabilities: format!("yes {:.2}", answer.noul),
             },
@@ -111,11 +132,7 @@ fn text(reply: &DecisionResponse, ids: &[String]) -> String {
     let mut out = String::new();
     for id in ids {
         let row = Row::of(reply.answers.get(id));
-        let mut line = match reply.answers.get(id) {
-            // A noul's answer is its probability; yes or no alone would hide it.
-            Some(Answer::Noul(answer)) => format!("{:.2} {}", answer.noul, row.answer),
-            _ => row.answer.clone(),
-        };
+        let mut line = row.answer.clone();
         if row.confidence.is_some() {
             let _ = write!(line, "  confidence {}", row.confidence());
         }
@@ -174,7 +191,9 @@ fn outcome_table(outcome: &Outcome, width: usize) -> String {
                 format!("{}: {}", set.set, rules.join(", "))
             })
             .collect();
-        rows.push(vec![output.output.clone(), output.value_text(), String::new(), sets.join("; ")]);
+        // The value with every set's support, in the score column, which a narrow table keeps: a
+        // value alone doesn't say whether one rule backed it at 1.00 or at 0.01.
+        rows.push(vec![output.output.clone(), format!("{} ({})", output.value_text(), output.sets_text()), String::new(), sets.join("; ")]);
     }
     let threshold = if outcome.items.is_empty() { String::new() } else { format!("threshold {:.2}\n", outcome.threshold) };
     boxed(rows, &OUTCOME_DROP_ORDER, &OUTCOME_SQUEEZE_ORDER, width) + &threshold
@@ -339,6 +358,25 @@ fn level_text(level: &Value) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_narrow_table_keeps_a_nouls_probability() {
+        let reply: DecisionResponse = serde_json::from_str(include_str!("../tests/fixtures/decision.json")).unwrap();
+        let narrow = render(Format::Table, &reply, &["is_urgent".to_owned()], 40).unwrap();
+        assert!(!narrow.contains("probabilities"), "the probabilities column was meant to go: {narrow}");
+        assert!(narrow.contains("0.95 yes"), "{narrow}");
+    }
+
+    #[test]
+    fn terminal_text_shows_control_characters_instead_of_obeying_them() {
+        assert_eq!(for_terminal("red\u{1b}[31m\rover\ttab\nnext \u{202e}evil"), "red\\u{1b}[31m\\u{d}over\\u{9}tab\nnext \\u{202e}evil");
+        let mut reply: DecisionResponse = serde_json::from_str(include_str!("../tests/fixtures/decision.json")).unwrap();
+        reply.model = "jev\u{1b}[2J".to_owned();
+        let printed = render(Format::Text, &reply, &["is_urgent".to_owned()], 80).unwrap();
+        assert!(printed.contains("jev\\u{1b}[2J") && !printed.contains('\u{1b}'), "{printed}");
+        // JSON keeps the text as it is.
+        assert!(render(Format::Json, &reply, &[], 80).unwrap().contains("\\u001b"));
+    }
+
     fn fixture() -> (DecisionResponse, [String; 4]) {
         let reply = serde_json::from_str(include_str!("../tests/fixtures/decision.json")).unwrap();
         (reply, ["is_urgent", "department", "frustration", "missing"].map(String::from))
@@ -368,7 +406,7 @@ missing      no answer
 ┌─────────────┬────────┬─────────────────────────────────┬────────────┬─────────────────────────────────────────────┐
 │ question    │ type   │ answer                          │ confidence │ probabilities                               │
 ├─────────────┼────────┼─────────────────────────────────┼────────────┼─────────────────────────────────────────────┤
-│ is_urgent   │ noul   │ yes                             │ -          │ yes 0.95                                    │
+│ is_urgent   │ noul   │ 0.95 yes                        │ -          │ yes 0.95                                    │
 │ department  │ choice │ billing                         │ 0.82       │ billing 0.88, technical 0.12, sales 0.00    │
 │ frustration │ score  │ 1.04 of 2, nearest \"Frustrated\" │ 0.94       │ Calm 0.00, Frustrated 0.96, Very angry 0.04 │
 │ missing     │ -      │ no answer                       │ -          │                                             │

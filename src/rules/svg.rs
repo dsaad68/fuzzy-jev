@@ -8,6 +8,10 @@ use super::output::Set;
 use super::{Kind, Rules, Target, Then};
 use crate::DecisionResponse;
 
+/// How many bars a question's panel draws before it lists its options instead: at 180 pixels,
+/// more would leave each bar too thin to see, and at 23 none at all.
+const MOST_BARS: usize = 12;
+
 /// A panel's plot, and the gaps around it.
 const PANEL_WIDTH: f64 = 180.0;
 const PANEL_HEIGHT: f64 = 76.0;
@@ -117,7 +121,7 @@ impl Rules {
             }
         }
 
-        let bottom = self.finals(&mut svg, &rows, final_x, reply);
+        let bottom = self.finals(&mut svg, &rows, final_x, reply)?;
         let height = (TOP + rows.len() as f64 * ROW).max(bottom) + 28.0;
         let note = match reply {
             Some(reply) => format!("{} · AND = {}, OR = {}", reply.model, self.logic.and.describe(), self.logic.or.describe()),
@@ -138,6 +142,9 @@ impl Rules {
         let selected: Vec<usize> = targets.iter().map(|target| target.selected).collect();
         let probabilities = reply.and_then(|reply| target.probabilities(reply));
         let count = target.labels.len();
+        if count > MOST_BARS {
+            return self.premise_list(svg, frame, target, &selected, probabilities.as_deref());
+        }
         let slot = frame.width / count as f64;
         let levels = frame.domain(-0.5, count as f64 - 0.5);
         for (at, label) in target.labels.iter().enumerate() {
@@ -166,6 +173,47 @@ impl Rules {
             if let Some(score) = reply.and_then(|reply| reply.score(&target.id).ok()) {
                 svg.tick(&levels, score.score, &format!("expected {:.2}", score.score));
             }
+        }
+    }
+
+    /// A question with more options than bars fit: a list instead, the options the rule reads
+    /// first and then the most probable others, each with its bar and number, and a last line for
+    /// the rest and their probability together.
+    fn premise_list(&self, svg: &mut Svg, frame: &Frame, target: &Target, selected: &[usize], probabilities: Option<&[Option<f64>]>) {
+        const ROWS: usize = 5;
+        let chance = |at: usize| probabilities.and_then(|probabilities| probabilities[at]);
+        let mut shown: Vec<usize> = selected.to_vec();
+        let mut others: Vec<usize> = (0..target.labels.len()).filter(|at| !selected.contains(at)).collect();
+        others.sort_by(|a, b| chance(*b).unwrap_or(0.0).total_cmp(&chance(*a).unwrap_or(0.0)));
+        let room = (ROWS - 1).saturating_sub(shown.len());
+        shown.extend(others.iter().take(room));
+        let rest: Vec<usize> = others.iter().skip(room).copied().collect();
+        let (label_width, value_width) = (64.0, 30.0);
+        let bar_width = frame.width - label_width - value_width - 12.0;
+        for (row, at) in shown.iter().enumerate() {
+            let y = frame.y + 6.0 + row as f64 * 13.0;
+            let bold = selected.contains(at);
+            let (weight, colour) = if bold { ("bold", INK) } else { ("normal", FAINT) };
+            svg.text(frame.x + 4.0, y + 9.0, 9.0, "start", weight, colour, &clip(&target.labels[*at], 12));
+            let bar_x = frame.x + label_width;
+            svg.rect(bar_x, y + 2.0, bar_width, 8.0, "none", FRAME, 1.0);
+            match (probabilities.is_some(), chance(*at)) {
+                (true, Some(probability)) => {
+                    svg.rect(bar_x, y + 2.0, bar_width * probability, 8.0, if bold { FILL } else { FRAME }, "none", 0.0);
+                    svg.text(frame.x + frame.width - 4.0, y + 9.0, 9.0, "end", weight, colour, &format!("{probability:.2}"));
+                }
+                (true, None) => svg.text(frame.x + frame.width - 4.0, y + 9.0, 9.0, "end", "normal", MARK, "missing"),
+                _ => {}
+            }
+        }
+        if !rest.is_empty() {
+            let y = frame.y + 6.0 + (ROWS - 1) as f64 * 13.0;
+            let total: f64 = rest.iter().filter_map(|at| chance(*at)).sum();
+            let text = match probabilities {
+                Some(_) => format!("+ {} more options, {total:.2} together", rest.len()),
+                None => format!("+ {} more options", rest.len()),
+            };
+            svg.text(frame.x + 4.0, y + 9.0, 9.0, "start", "normal", FAINT, &text);
         }
     }
 
@@ -222,12 +270,12 @@ impl Rules {
 
     /// The final column: each output's merged shape and its centre, then every item against the
     /// threshold. Returns where it ends.
-    fn finals(&self, svg: &mut Svg, rows: &[Row], x: f64, reply: Option<&DecisionResponse>) -> f64 {
+    fn finals(&self, svg: &mut Svg, rows: &[Row], x: f64, reply: Option<&DecisionResponse>) -> crate::Result<f64> {
         let scores: Option<Vec<f64>> = rows.iter().map(|row| row.score).collect();
         let mut y = TOP;
         for (at, output) in self.outputs.iter().enumerate() {
             let clipped = scores.as_ref().map(|scores| self.set_scores(at, scores));
-            let value = clipped.as_ref().and_then(|clipped| output.centroid(clipped, self.logic.or));
+            let value = clipped.as_ref().map(|clipped| self.value_of(at, clipped)).transpose()?.flatten();
             let caption = match (&clipped, value) {
                 (Some(_), Some(value)) => format!("{} = {value:.2}", output.name),
                 (Some(_), None) => format!("{}: no rule fired", output.name),
@@ -237,8 +285,18 @@ impl Rules {
             let frame = Frame { x, y: y + CAPTION, width: FINAL_WIDTH, height: PANEL_HEIGHT, low: output.range.0, high: output.range.1 };
             svg.frame(&frame);
             if let Some(clipped) = &clipped {
-                let points: Vec<(f64, f64)> = output.samples(241).map(|at| (at, output.merged(clipped, self.logic.or, at))).collect();
-                svg.area(&frame, &points);
+                if output.is_points() {
+                    // Points have no area: each is a stem as tall as its set's score.
+                    for (set, score) in output.sets.iter().zip(clipped).filter(|(_, score)| **score > 0.0) {
+                        svg.stem(&frame, set.points[0], *score);
+                    }
+                } else {
+                    // The samples and every corner, so that no narrow set falls between two samples.
+                    let mut xs: Vec<f64> = output.samples(241).chain(output.corners(clipped)).collect();
+                    xs.sort_by(f64::total_cmp);
+                    let points: Vec<(f64, f64)> = xs.into_iter().map(|at| (at, output.merged(clipped, self.logic.or, at))).collect();
+                    svg.area(&frame, &points);
+                }
             }
             for set in &output.sets {
                 svg.shape(&frame, set, false);
@@ -254,7 +312,7 @@ impl Rules {
 
         let items = self.item_names();
         if items.is_empty() {
-            return y;
+            return Ok(y);
         }
         let outcome = reply.and_then(|reply| self.evaluate(reply).ok());
         svg.text(x, y + 13.0, 12.0, "start", "bold", INK, &format!("items (threshold {:.2})", self.threshold));
@@ -274,7 +332,7 @@ impl Rules {
         let bottom = top + 8.0 + items.len() as f64 * 22.0;
         let threshold = x + label + bar * self.threshold;
         svg.dashed(threshold, top + 2.0, threshold, bottom, MARK);
-        bottom + 10.0
+        Ok(bottom + 10.0)
     }
 }
 
@@ -331,7 +389,8 @@ impl Frame {
     }
 
     fn px(&self, x: f64) -> f64 {
-        self.x + (x - self.low) / (self.high - self.low) * self.width
+        // Halved first, so that a range as wide as f64 allows doesn't overflow.
+        self.x + (x / 2.0 - self.low / 2.0) / (self.high / 2.0 - self.low / 2.0) * self.width
     }
 
     fn py(&self, degree: f64) -> f64 {
@@ -453,6 +512,17 @@ impl Svg {
         self.text(at, frame.bottom() + 30.0, 10.0, "middle", "bold", MARK, label);
     }
 
+    /// A point output's set at `x`: a stem up to its score, with a dot on top.
+    fn stem(&mut self, frame: &Frame, x: f64, score: f64) {
+        let (at, top) = (frame.px(x), frame.py(score));
+        let _ = writeln!(
+            self.body,
+            "<line x1=\"{at:.1}\" y1=\"{:.1}\" x2=\"{at:.1}\" y2=\"{top:.1}\" stroke=\"{INK}\" stroke-width=\"2\"/>\n\
+             <circle cx=\"{at:.1}\" cy=\"{top:.1}\" r=\"3\" fill=\"{FILL}\" stroke=\"{INK}\" stroke-width=\"1\"/>",
+            frame.bottom()
+        );
+    }
+
     /// An arrow up to the axis at `x`: an output's centre.
     fn marker(&mut self, frame: &Frame, x: f64, label: &str) {
         let at = frame.px(x.clamp(frame.low, frame.high));
@@ -469,8 +539,19 @@ impl Svg {
 }
 
 /// Text made safe to put inside an SVG element.
+///
+/// A character XML doesn't allow at all (a control character other than tab, newline and carriage
+/// return, or U+FFFE and U+FFFF) would make the whole file unreadable, so it becomes U+FFFD.
 fn escape(text: &str) -> String {
-    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    let allowed =
+        |character: char| !matches!(character, '\u{0}'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{fffe}' | '\u{ffff}');
+    text.chars()
+        .map(|character| if allowed(character) { character } else { '\u{fffd}' })
+        .collect::<String>()
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 #[cfg(test)]
@@ -480,6 +561,8 @@ mod tests {
     #[test]
     fn escapes_text() {
         assert_eq!(escape("a < b & \"c\""), "a &lt; b &amp; &quot;c&quot;");
+        // A character XML forbids would make the whole image unreadable.
+        assert_eq!(escape("a\u{1}b\u{1b}c\td"), "a\u{fffd}b\u{fffd}c\td");
     }
 
     #[test]

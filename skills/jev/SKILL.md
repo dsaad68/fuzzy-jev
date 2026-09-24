@@ -2,7 +2,7 @@
 name: jev
 description: >-
   Ask Jev (TypeSafe's System One model, on OpenRouter's decisions endpoint) typed questions about a
-  piece of text and get calibrated probabilities back instead of prose — a Choice between named
+  piece of text and get probabilities back instead of prose — a Choice between named
   options, a Score on an ordered scale, or a Noul, the probability that something is true. Use when
   classifying, routing, triaging, labelling, rating, scoring or flagging text, especially many items
   against one set of criteria; when a judgment needs a confidence number to gate on rather than an
@@ -13,9 +13,10 @@ description: >-
 license: MIT
 compatibility: >-
   Needs OPENROUTER_API_KEY and network access to openrouter.ai. `jev` is a native binary from
-  crates/jev (`cargo install --path crates/jev`); jq is handy for reading `--json`.
+  the fuzzy-jev crate (`cargo install fuzzy-jev`, or `cargo install --path .` in a clone of its
+  repository); jq is handy for reading `--json`.
 metadata:
-  source: crates/jev
+  source: https://github.com/dsaad68/fuzzy-jev
 ---
 
 # Jev: typed questions, probabilities back
@@ -58,7 +59,7 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `-q FILE` | Questions from a JSON file — the only way to use text containing `\|`, or structured criteria. |
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
-| `--json` / `--table` | The reply as sent, for `jq`; or a table. The default is one line per question. |
+| `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
 | `-m ID` | Another model. Default `typesafe/jev-1.13`. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 

@@ -118,40 +118,89 @@ impl Output {
         Ok(Output { name, range: (low, high), sets })
     }
 
+    /// Where `x` is along the range, from 0 at its low end to 1 at its high end. Halved first, so
+    /// that a range as wide as `f64` allows doesn't overflow.
+    pub(super) fn position(&self, x: f64) -> f64 {
+        let (low, high) = self.range;
+        (x / 2.0 - low / 2.0) / (high / 2.0 - low / 2.0)
+    }
+
+    /// The point at `position` along the range: the inverse of [`Output::position`].
+    pub(super) fn at(&self, position: f64) -> f64 {
+        let (low, high) = self.range;
+        (low / 2.0 + position * (high / 2.0 - low / 2.0)) * 2.0
+    }
+
     /// The x of each sample along the range, for drawing.
     pub(super) fn samples(&self, count: usize) -> impl Iterator<Item = f64> + '_ {
-        let (low, high) = self.range;
-        (0..count).map(move |at| low + (high - low) * at as f64 / (count - 1) as f64)
+        (0..count).map(move |at| self.at(at as f64 / (count - 1) as f64))
+    }
+
+    /// Where the merged shape changes course: every scoring set's corners and the points where its
+    /// clip meets its sides. A drawing that includes them misses no narrow set and no point.
+    pub(super) fn corners(&self, scores: &[f64]) -> Vec<f64> {
+        let mut corners: Vec<f64> = Vec::new();
+        for (set, &score) in self.sets.iter().zip(scores).filter(|(_, score)| **score > 0.0) {
+            let [a, b, c, d] = set.points;
+            corners.extend([a, b, c, d, a + (b - a) * score.min(1.0), d - (d - c) * score.min(1.0)]);
+        }
+        corners.sort_by(f64::total_cmp);
+        corners.dedup();
+        corners
     }
 
     /// The merged shape at `x`: each set clipped at its score (`scores`, one per set), joined by `or`.
     pub(super) fn merged(&self, scores: &[f64], or: Or, x: f64) -> f64 {
-        self.sets
-            .iter()
-            .zip(scores)
-            .filter(|(_, score)| **score > 0.0)
-            .fold(0.0, |merged, (set, &score)| or.apply(merged, set.membership(x).min(score)))
+        let clipped = self.sets.iter().zip(scores).filter(|(_, score)| **score > 0.0).map(|(set, &score)| set.membership(x).min(score));
+        or.join(clipped)
     }
 
-    /// The centre of the merged shape, or `None` when no set scored above zero. `scores` has one
-    /// score per set.
+    /// Whether every set is a point, so that the output is a weighted average of points.
+    pub(super) fn is_points(&self) -> bool {
+        self.sets.iter().all(Set::is_point)
+    }
+
+    /// The centre of the merged shape: `Ok(None)` when no set scored above zero, and an error when
+    /// sets did but the arithmetic couldn't give a finite centre inside the range, which is never
+    /// passed off as no support. `scores` has one score per set.
     ///
-    /// The integral is exact, not sampled. Between two neighbouring breaks (a set's corners, and
-    /// where its clip meets its sides) every clipped set is a straight line; `or` joins those lines
-    /// into a polynomial on each piece, once the pieces are cut where max's lines cross or where
-    /// bounded's sum reaches 1; and a polynomial's area and moment have a closed form.
-    pub(super) fn centroid(&self, scores: &[f64], or: Or) -> Option<f64> {
+    /// The integral is taken piece by piece, in closed form rather than by sampling, on the range
+    /// scaled to 0–1 (so that a wide range can't overflow). Between two neighbouring corners every
+    /// clipped set is a straight line. Under max and bounded the join of those lines is itself
+    /// straight once each piece is cut where max's lines cross or bounded's sum reaches 1, and a
+    /// straight piece's area and moment are exact. Under probsum the join `1 − Π(1 − aᵢ)` is a
+    /// polynomial of degree n in the n sets active on the piece: it is evaluated as
+    /// `−expm1(Σ ln(1 − aᵢ))`, which keeps a tiny support and cancels nothing, and integrated by
+    /// Gauss–Legendre with enough points to be exact for that degree. What remains is ordinary
+    /// floating-point rounding.
+    pub(super) fn centroid(&self, scores: &[f64], or: Or) -> Result<Option<f64>, String> {
         let scoring: Vec<(&Set, f64)> =
-            self.sets.iter().zip(scores).filter(|(_, score)| **score > 0.0).map(|(set, score)| (set, *score)).collect();
+            self.sets.iter().zip(scores).filter(|(_, score)| **score > 0.0).map(|(set, score)| (set, score.min(1.0))).collect();
         if scoring.is_empty() {
-            return None;
+            return Ok(None);
         }
-        if scoring.iter().all(|(set, _)| set.is_point()) {
+        let centre = if scoring.iter().all(|(set, _)| set.is_point()) {
+            // A weighted average of positions from 0 to 1, which can't overflow.
             let weight: f64 = scoring.iter().map(|(_, score)| score).sum();
-            return Some(scoring.iter().map(|(set, score)| set.points[0] * score).sum::<f64>() / weight);
+            scoring.iter().map(|(set, score)| self.position(set.points[0]) * (score / weight)).sum::<f64>()
+        } else {
+            self.shape_centre(&scoring, or)?
+        };
+        if !centre.is_finite() || !(-1e-9..=1.0 + 1e-9).contains(&centre) {
+            return Err(format!("the centre came to {centre} of the range, which isn't inside it; the numbers are too extreme to add up"));
         }
+        Ok(Some(self.at(centre.clamp(0.0, 1.0))))
+    }
+
+    /// The centre of the clipped shapes of `scoring`, as a position from 0 to 1 along the range.
+    fn shape_centre(&self, scoring: &[(&Set, f64)], or: Or) -> Result<f64, String> {
+        // Each set in positions from 0 to 1.
+        let sets: Vec<(Set, f64)> = scoring
+            .iter()
+            .map(|(set, score)| (Set { name: String::new(), points: set.points.map(|point| self.position(point)) }, *score))
+            .collect();
         let mut breaks: Vec<f64> = Vec::new();
-        for (set, score) in &scoring {
+        for (set, score) in &sets {
             let [a, b, c, d] = set.points;
             breaks.extend([a, b, c, d, a + (b - a) * score, d - (d - c) * score]);
         }
@@ -159,35 +208,59 @@ impl Output {
         breaks.dedup();
         let (mut area, mut moment) = (0.0, 0.0);
         for pair in breaks.windows(2) {
-            let (x0, width) = (pair[0], pair[1] - pair[0]);
+            let (u0, width) = (pair[0], pair[1] - pair[0]);
             if width <= 0.0 {
                 continue;
             }
-            // Each set's line across the piece, as its values at the two ends. They are read from
-            // inside, at a third and two thirds, since a vertical side at an end has two values.
-            let lines: Vec<(f64, f64)> = scoring
+            // Each set's line across the piece, as its values at the two ends, read from inside (at
+            // a third and two thirds), since a vertical side at an end has two values. A set that
+            // is zero all along the piece adds nothing, whatever the OR, and is left out.
+            let lines: Vec<(f64, f64)> = sets
                 .iter()
                 .map(|(set, score)| {
-                    let at = |t: f64| set.membership(x0 + width * t).min(*score);
+                    let at = |t: f64| set.membership(u0 + width * t).min(*score);
                     let (first, second) = (at(1.0 / 3.0), at(2.0 / 3.0));
-                    (2.0 * first - second, 2.0 * second - first)
+                    ((2.0 * first - second).clamp(0.0, 1.0), (2.0 * second - first).clamp(0.0, 1.0))
                 })
+                .filter(|(from, to)| *from > 0.0 || *to > 0.0)
                 .collect();
+            if lines.is_empty() {
+                continue;
+            }
             for (t0, t1) in or.pieces(&lines) {
+                let (start, span) = (u0 + width * t0, width * (t1 - t0));
                 let ends: Vec<(f64, f64)> = lines.iter().map(|(from, to)| (from + (to - from) * t0, from + (to - from) * t1)).collect();
-                let (piece_area, piece_moment) = integrate(&or.polynomial(&ends), x0 + width * t0, width * (t1 - t0));
+                let (piece_area, piece_moment) = match or {
+                    Or::Max | Or::Bounded => straight(or.straight_ends(&ends), start, span),
+                    Or::Probsum => gauss(&ends, start, span),
+                };
                 area += piece_area;
                 moment += piece_moment;
             }
         }
-        (area > 0.0).then(|| moment / area)
+        match area > 0.0 && area.is_finite() && moment.is_finite() {
+            true => Ok(moment / area),
+            false => {
+                Err(format!("its sets have support, but their shape's area came to {area}: too small or too large to take a centre of"))
+            }
+        }
     }
 }
 
 impl Or {
+    /// Joins degrees, as the file's OR does. Probsum is taken as `−expm1(Σ ln(1 − a))`: the same
+    /// `1 − Π(1 − a)`, without subtracting from 1 a number close to 1, which would lose a small
+    /// degree altogether.
+    pub(super) fn join(self, degrees: impl Iterator<Item = f64>) -> f64 {
+        match self {
+            Or::Probsum => -degrees.map(|degree| (-degree.min(1.0)).ln_1p()).sum::<f64>().exp_m1(),
+            _ => degrees.fold(0.0, |joined, degree| self.apply(joined, degree)),
+        }
+    }
+
     /// Where, between 0 and 1 along a piece, `lines` (each its values at the two ends) must be cut
-    /// for their join to be one polynomial on each part: where two cross, for max, and where their
-    /// sum reaches 1, for bounded. Probsum's product of lines is a polynomial already.
+    /// for their join to be straight on each part: where two cross, for max, and where their sum
+    /// reaches 1, for bounded. Probsum is integrated as the polynomial it is, with no cuts.
     fn pieces(self, lines: &[(f64, f64)]) -> Vec<(f64, f64)> {
         let crossing = |from: f64, to: f64| (from * to < 0.0).then(|| from / (from - to));
         let mut cuts: Vec<f64> = match self {
@@ -206,44 +279,68 @@ impl Or {
         bounds.windows(2).map(|pair| (pair[0], pair[1])).filter(|(t0, t1)| t1 > t0).collect()
     }
 
-    /// The join of `lines` (each its values at the two ends) on a piece with no cut inside, as a
-    /// polynomial's coefficients in `t` from 0 to 1, lowest power first.
-    fn polynomial(self, lines: &[(f64, f64)]) -> Vec<f64> {
-        let line = |(from, to): (f64, f64)| vec![from, to - from];
+    /// The join's values at the two ends of a piece with no cut inside, for max and bounded, whose
+    /// join is straight there.
+    fn straight_ends(self, lines: &[(f64, f64)]) -> (f64, f64) {
         match self {
             // No two lines cross inside, so the highest at the middle is the highest throughout.
-            Or::Max => lines.iter().copied().max_by(|a, b| (a.0 + a.1).total_cmp(&(b.0 + b.1))).map_or_else(|| vec![0.0], line),
+            Or::Max => lines.iter().copied().max_by(|a, b| (a.0 + a.1).total_cmp(&(b.0 + b.1))).unwrap_or((0.0, 0.0)),
             // The sum doesn't reach 1 inside, so it is either under 1 throughout or at it.
-            Or::Bounded => {
+            _ => {
                 let (from, to) = lines.iter().fold((0.0, 0.0), |(from, to), line| (from + line.0, to + line.1));
-                line((from.min(1.0), to.min(1.0)))
-            }
-            // 1 − (1 − a)(1 − b)…, which is a + b − ab joined over every line.
-            Or::Probsum => {
-                let mut none = vec![1.0];
-                for &(from, to) in lines {
-                    let (constant, slope) = (1.0 - from, from - to);
-                    let mut next = vec![0.0; none.len() + 1];
-                    for (power, coefficient) in none.iter().enumerate() {
-                        next[power] += coefficient * constant;
-                        next[power + 1] += coefficient * slope;
-                    }
-                    none = next;
-                }
-                let mut any: Vec<f64> = none.iter().map(|coefficient| -coefficient).collect();
-                any[0] += 1.0;
-                any
+                (from.min(1.0), to.min(1.0))
             }
         }
     }
 }
 
-/// The area under `y(t) = Σ cₖ tᵏ` over `x` from `start` to `start + width` (with `t` going from 0
-/// to 1 across it), and its moment about zero.
-fn integrate(polynomial: &[f64], start: f64, width: f64) -> (f64, f64) {
-    let over = |shift: usize| polynomial.iter().enumerate().map(|(power, coefficient)| coefficient / (power + shift) as f64).sum::<f64>();
-    let area = width * over(1);
-    (area, start * area + width * width * over(2))
+/// The area under a straight piece from `from` to `to` over `start` to `start + width`, and its
+/// moment about zero: exact.
+fn straight((from, to): (f64, f64), start: f64, width: f64) -> (f64, f64) {
+    let area = width * (from + to) / 2.0;
+    (area, start * area + width * width * (from / 6.0 + to / 3.0))
+}
+
+/// The area and moment of probsum's join of `lines` over `start` to `start + width`, by
+/// Gauss–Legendre: with n lines the join is a polynomial of degree n and the moment's integrand of
+/// degree n + 1, which m points integrate exactly when 2m − 1 ≥ n + 1, so m = ⌈(n + 2) / 2⌉.
+fn gauss(lines: &[(f64, f64)], start: f64, width: f64) -> (f64, f64) {
+    let (mut area, mut moment) = (0.0, 0.0);
+    for (node, weight) in legendre(lines.len().div_ceil(2) + 1) {
+        let t = (node + 1.0) / 2.0;
+        let height = Or::Probsum.join(lines.iter().map(|(from, to)| from + (to - from) * t));
+        let w = weight / 2.0 * width;
+        area += w * height;
+        moment += w * height * (start + width * t);
+    }
+    (area, moment)
+}
+
+/// The nodes and weights of `count`-point Gauss–Legendre quadrature on −1 to 1, by Newton's method
+/// on the Legendre polynomial from the usual first guesses.
+fn legendre(count: usize) -> Vec<(f64, f64)> {
+    let n = count as f64;
+    (0..count)
+        .map(|i| {
+            let mut x = (std::f64::consts::PI * (i as f64 + 0.75) / (n + 0.5)).cos();
+            let mut derivative = 1.0;
+            for _ in 0..100 {
+                // P_n(x) and P_{n−1}(x) by the three-term recurrence, then P_n'(x).
+                let (mut p, mut previous) = (1.0, 0.0);
+                for k in 1..=count {
+                    let k = k as f64;
+                    (p, previous) = (((2.0 * k - 1.0) * x * p - (k - 1.0) * previous) / k, p);
+                }
+                derivative = n * (x * p - previous) / (x * x - 1.0);
+                let step = p / derivative;
+                x -= step;
+                if step.abs() < 1e-15 {
+                    break;
+                }
+            }
+            (x, 2.0 / ((1.0 - x * x) * derivative * derivative))
+        })
+        .collect()
 }
 
 impl Then {
@@ -354,7 +451,7 @@ mod tests {
     fn reply(levels: [f64; 3]) -> DecisionResponse {
         serde_json::from_value(json!({
             "model": "m",
-            "answers": {"rainfall": {"type": "score", "score": 1.0, "confidence": 0.5,
+            "answers": {"rainfall": {"type": "score", "score": levels[1] + 2.0 * levels[2], "confidence": 0.5,
                 "probabilities": {"0": levels[0], "1": levels[1], "2": levels[2]},
                 "legend": {"0": "Scarce", "1": "Regular", "2": "Large"}}},
             "usage": {"input_tokens": 1, "output_tokens": 1},
@@ -508,6 +605,50 @@ mod tests {
             let got = value(&twice, [0.0, 0.5, 0.5]);
             assert!((got - 65.0).abs() < 1e-9, "{logic}: {got}");
         }
+    }
+
+    #[test]
+    fn many_overlapping_sets_keep_their_centre() {
+        // Identical triangles, all at 1: the shape is symmetric about 0.5 however high probsum
+        // stacks it. Expanding 1 − Π(1 − a) into powers of x lost this by 60 sets and gave no value
+        // by 100.
+        for count in [1, 3, 20, 60, 100, 200] {
+            let names: Vec<String> = (0..count).map(|at| format!("s{at}")).collect();
+            let sets: Vec<(&str, &str)> = names.iter().map(|name| (name.as_str(), "[0, 0.5, 1]")).collect();
+            let thens: Vec<(&str, &str)> = names.iter().map(|name| ("NOT scarce", name.as_str())).collect();
+            for logic in ["", "[logic]\nor = \"probsum\"", "[logic]\nor = \"bounded\""] {
+                let rules = output(logic, "[0, 1]", &sets, &thens);
+                let got = value(&rules, [0.0, 0.5, 0.5]);
+                assert!((got - 0.5).abs() < 1e-9, "{count} sets, {logic}: {got}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_tiny_support_is_still_support() {
+        // A weight of 1e-20: 1 − (1 − 1e-20) is 0 in f64, which read as no support at all.
+        let text = "[logic]\nor = \"probsum\"\n[terms]\nscarce = \"rainfall.Scarce\"\n[output.y]\nrange = [0, 1]\nflat = [0, 0, 1, 1]\n\
+                    [[rule]]\nif = \"NOT scarce\"\nthen = \"y IS flat\"\nweight = 1e-20\n";
+        let got = value(&rules(text).unwrap(), [0.0, 0.5, 0.5]);
+        assert!((got - 0.5).abs() < 1e-9, "{got}");
+    }
+
+    #[test]
+    fn a_wide_range_does_not_overflow() {
+        // Squaring a width of 1e200 made the moment infinite.
+        let wide = output("", "[0, 1e200]", &[("all", "[0, 0, 1e200, 1e200]")], &[("NOT scarce", "all")]);
+        let got = value(&wide, [0.0, 0.5, 0.5]);
+        assert!((got / 5e199 - 1.0).abs() < 1e-9, "{got}");
+        // And across the whole of f64, points and shapes alike.
+        let points = output(
+            "",
+            "[-1.7e308, 1.7e308]",
+            &[("low", "[-1.6e308, -1.6e308, -1.6e308]"), ("high", "[1.6e308, 1.6e308, 1.6e308]")],
+            &[("NOT scarce", "low"), ("NOT scarce", "high")],
+        );
+        assert!(value(&points, [0.0, 0.5, 0.5]).abs() < 1e300);
+        let shape = output("", "[-1.7e308, 1.7e308]", &[("all", "[-1.7e308, -1.7e308, 1.7e308, 1.7e308]")], &[("NOT scarce", "all")]);
+        assert!(value(&shape, [0.0, 0.5, 0.5]).is_finite());
     }
 
     #[test]

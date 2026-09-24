@@ -248,8 +248,8 @@ lies, not how much there is, so read its sets' scores before acting on it
 ([what the numbers mean](rules.md#what-the-numbers-mean)).
 
 `evaluate` checks every answer the terms read: a probability outside 0 to 1, a distribution that
-doesn't add up to 1, or a level the question doesn't have raises `BadAnswerError`, never a number
-that only looks like an answer.
+can't be one rounded to two places, or a level the question doesn't have raises `BadAnswerError`,
+never a number that only looks like an answer.
 
 ## Drawing the rules
 
@@ -283,7 +283,8 @@ wrong shape (a Noul with only `yes`, a timeout of 0, an unknown render format).
 | `DecodeError` | A reply that couldn't be decoded. |
 | `MissingAnswerError` | No answer under that id. |
 | `WrongTypeError` | The answer under that id is of another type than the one asked for. |
-| `BadAnswerError` | An answer the rules can't read: a probability missing, outside 0 to 1, or not adding up. |
+| `BadAnswerError` | An answer that isn't well formed: a probability missing or outside 0 to 1, a distribution no real one rounds to, or a level or option the question doesn't have. `decide` and `send` check every reply this way too. |
+| `NumericalError` | An output whose sets had support, but whose value the arithmetic couldn't give (a range or a support too extreme for a float). Never reported as no support. |
 
 ```python
 try:

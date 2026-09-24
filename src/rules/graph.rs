@@ -117,9 +117,16 @@ impl Rules {
     }
 
     /// Every term's degree in `reply`.
+    ///
+    /// Only the terms a rule uses: evaluating reads no other, so a drawing mustn't need a
+    /// probability that evaluating doesn't (an unused term's level can be missing from the reply).
     pub(super) fn degrees(&self, reply: &DecisionResponse) -> crate::Result<BTreeMap<String, f64>> {
         self.check(reply)?;
-        self.terms.iter().map(|(name, target)| Ok((name.clone(), target.degree(reply)?))).collect()
+        let mut used = Vec::new();
+        for rule in &self.rules {
+            rule.when.terms(&mut used);
+        }
+        used.into_iter().map(|name| Ok((name.to_owned(), self.terms[name].degree(reply)?))).collect()
     }
 
     /// What a rule concludes, as written.
@@ -180,7 +187,7 @@ impl Rules {
             }
             let scores: Option<Vec<f64>> = rows.iter().map(|row| row.score).collect();
             let clipped = scores.as_ref().map(|scores| self.set_scores(at, scores));
-            let value = clipped.as_ref().and_then(|clipped| output.centroid(clipped, self.logic.or));
+            let value = clipped.as_ref().map(|clipped| self.value_of(at, clipped)).transpose()?.flatten();
             let _ = match (&clipped, value) {
                 (Some(_), Some(value)) => writeln!(out, "  {} = {value:.2}", output.name),
                 (Some(_), None) => writeln!(out, "  {} = -  (no rule fired)", output.name),
@@ -188,7 +195,7 @@ impl Rules {
             };
             self.plot(at, clipped.as_deref(), value, &mut out);
         }
-        Ok(out)
+        Ok(crate::print::for_terminal(&out))
     }
 
     /// Every item a `then` names, in the order the file first names it.
@@ -252,9 +259,18 @@ impl Rules {
         const HEIGHT: usize = 5;
         const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
         let output = &self.outputs[at];
-        let xs: Vec<f64> = output.samples(WIDTH).collect();
-        let outline: Vec<f64> = xs.iter().map(|x| output.sets.iter().map(|set| set.membership(*x)).fold(0.0, f64::max)).collect();
-        let merged: Vec<f64> = xs.iter().map(|x| clipped.map_or(0.0, |clipped| output.merged(clipped, self.logic.or, *x))).collect();
+        let column_of = |x: f64| ((output.position(x) * (WIDTH - 1) as f64).round().max(0.0) as usize).min(WIDTH - 1);
+        // Each column is the highest the shape reaches in its cell: its sample, and any corner that
+        // falls in it, so that a point or a set narrower than a cell still shows.
+        let mut xs: Vec<Vec<f64>> = output.samples(WIDTH).map(|x| vec![x]).collect();
+        let every: Vec<f64> = output.sets.iter().map(|_| 1.0).collect();
+        for corner in output.corners(clipped.unwrap_or(&every)).into_iter().chain(output.corners(&every)) {
+            xs[column_of(corner)].push(corner);
+        }
+        let highest =
+            |f: &dyn Fn(f64) -> f64| -> Vec<f64> { xs.iter().map(|cell| cell.iter().map(|x| f(*x)).fold(0.0, f64::max)).collect() };
+        let outline = highest(&|x| output.sets.iter().map(|set| set.membership(x)).fold(0.0, f64::max));
+        let merged = highest(&|x| clipped.map_or(0.0, |clipped| output.merged(clipped, self.logic.or, x)));
         for line in (0..HEIGHT).rev() {
             let axis = match line {
                 l if l == HEIGHT - 1 => "  1.0 ┤",
@@ -274,7 +290,6 @@ impl Rules {
             }
             let _ = writeln!(out, "{}", text.trim_end());
         }
-        let column_of = |x: f64| (((x - output.range.0) / (output.range.1 - output.range.0)) * (WIDTH - 1) as f64).round() as usize;
         let mut axis: Vec<char> = "─".repeat(WIDTH).chars().collect();
         if let Some(value) = value {
             axis[column_of(value).min(WIDTH - 1)] = '┬';
@@ -297,7 +312,7 @@ impl Rules {
         }
         place(&mut under, 0, &trim_number(output.range.0));
         let high = trim_number(output.range.1);
-        place(&mut under, WIDTH - high.chars().count(), &high);
+        place(&mut under, WIDTH.saturating_sub(high.chars().count()), &high);
         let _ = writeln!(out, "       {}", under.into_iter().collect::<String>().trim_end());
         let mut names = vec![' '; WIDTH + 12];
         for set in &output.sets {
@@ -308,9 +323,16 @@ impl Rules {
     }
 }
 
-/// A number without a needless `.0`.
+/// A number without a needless `.0`, and never long: past a million, or below a ten-thousandth,
+/// in scientific notation (`1e100`, not a hundred and one digits).
 pub(super) fn trim_number(number: f64) -> String {
-    if number.fract() == 0.0 {
+    let size = number.abs();
+    if size >= 1e7 || (size > 0.0 && size < 1e-4) {
+        let text = format!("{number:.3e}");
+        let (mantissa, exponent) = text.split_once('e').unwrap_or((&text, "0"));
+        let mantissa = mantissa.trim_end_matches('0').trim_end_matches('.');
+        format!("{mantissa}e{exponent}")
+    } else if number.fract() == 0.0 {
         format!("{number:.0}")
     } else {
         format!("{number}")
@@ -449,12 +471,91 @@ R1  raining AND NOT VERY hot  ⇒  raincoat
         let mut reply = reply();
         let crate::Answer::Score(rain) = reply.answers.get_mut("rain").unwrap() else { unreachable!() };
         rain.probabilities = [(1, 1.0)].into();
+        rain.score = 1.0;
         let text = rules().graph_text(Some(&reply)).unwrap();
         assert!(text.contains("rain: Scarce missing · [Regular 1.00]"), "{text}");
         let svg = rules().graph_svg(Some(&reply)).unwrap();
         assert!(svg.contains(">missing<"));
         // A Score's expected level is its own marker, not a reading of the levels.
         assert!(svg.contains(">expected 1.40<"), "the temp marker is missing");
+    }
+
+    /// Rules over a questions list and a reply, for the drawing tests below.
+    fn drawn(questions: &[(&str, Question)], text: &str, reply: serde_json::Value) -> (Rules, DecisionResponse) {
+        let rules = Rules::parse(text, questions.iter().map(|(id, question)| (*id, question))).unwrap();
+        let reply =
+            serde_json::from_value(json!({"model": "m", "answers": reply, "usage": {"input_tokens": 1, "output_tokens": 1}})).unwrap();
+        (rules, reply)
+    }
+
+    #[test]
+    fn a_drawing_needs_no_more_than_evaluating_does() {
+        // `unused` names level 1, which the reply leaves out; no rule reads it.
+        let (rules, reply) = drawn(
+            &[("q", Question::score("?", ["Low", "High"]))],
+            "[terms]\nused = \"q.Low\"\nunused = \"q.High\"\n[[rule]]\nif = \"used\"\nthen = \"act\"",
+            json!({"q": {"type": "score", "score": 0.0, "confidence": 1.0, "probabilities": {"0": 1.0}}}),
+        );
+        assert!(rules.evaluate(&reply).is_ok());
+        assert!(rules.graph_text(Some(&reply)).is_ok());
+        assert!(rules.graph_svg(Some(&reply)).is_ok());
+    }
+
+    #[test]
+    fn a_choice_with_many_options_is_listed_not_drawn_as_empty_bars() {
+        let options: Vec<(String, &str)> = (0..23).map(|at| (format!("o{at}"), "")).collect();
+        let mut probabilities = serde_json::Map::new();
+        for (at, (option, _)) in options.iter().enumerate() {
+            probabilities.insert(
+                option.clone(),
+                json!(if at == 7 {
+                    0.9
+                } else if at == 3 {
+                    0.1
+                } else {
+                    0.0
+                }),
+            );
+        }
+        let (rules, reply) = drawn(
+            &[("c", Question::choice("?", options.iter().map(|(option, description)| (option.clone(), *description))))],
+            "[terms]\nseven = \"c.o7\"\n[[rule]]\nif = \"seven\"\nthen = \"act\"",
+            json!({"c": {"type": "choice", "choice": "o7", "confidence": 0.8, "probabilities": probabilities}}),
+        );
+        let svg = rules.graph_svg(Some(&reply)).unwrap();
+        // The option the rule reads, then the most probable other, then the rest together.
+        assert!(svg.contains(">o7<") && svg.contains(">0.90<") && svg.contains(">o3<"), "{svg}");
+        assert!(svg.contains("+ 19 more options, 0.00 together"), "{svg}");
+        assert!(!svg.contains("width=\"0.0\" height=\"66.0\""), "an empty bar was drawn");
+    }
+
+    #[test]
+    fn a_huge_range_draws_without_overflowing() {
+        // The range's end printed in full was 101 digits, longer than the plot.
+        let (rules, _) = drawn(
+            &[("q", Question::noul("?"))],
+            "[terms]\nq = \"q\"\n[output.y]\nrange = [0, 1e100]\nall = [0, 0, 1e100, 1e100]\n[[rule]]\nif = \"q\"\nthen = \"y IS all\"",
+            json!({}),
+        );
+        let text = rules.graph_text(None).unwrap();
+        assert!(text.contains("1e100"), "{text}");
+        assert!(rules.graph_svg(None).is_ok());
+    }
+
+    #[test]
+    fn points_show_in_the_drawings() {
+        // Points at 0.0001 and 5 on a range of 1000: neither on a sample, so both drawings were empty.
+        let (rules, reply) = drawn(
+            &[("a", Question::noul("?")), ("b", Question::noul("?"))],
+            "[terms]\na = \"a\"\nb = \"b\"\n[output.y]\nrange = [0, 1000]\nlow = [0.0001, 0.0001, 0.0001]\nhigh = [5, 5, 5]\n\
+             [[rule]]\nif = \"a\"\nthen = \"y IS low\"\n[[rule]]\nif = \"b\"\nthen = \"y IS high\"",
+            json!({"a": {"type": "noul", "noul": 0.5}, "b": {"type": "noul", "noul": 0.5}}),
+        );
+        let text = rules.graph_text(Some(&reply)).unwrap();
+        let plot: String = text.lines().filter(|line| line.contains('┤') || line.contains('│')).collect();
+        assert!(plot.contains('█') || plot.contains('▄'), "{text}");
+        let svg = rules.graph_svg(Some(&reply)).unwrap();
+        assert_eq!(svg.matches("<circle").count(), 2, "a stem per point");
     }
 
     #[test]

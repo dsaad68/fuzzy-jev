@@ -211,11 +211,13 @@ if = "regular"
 then = "irrigation IS medium"
 ```
 
-Overlap neighbouring sets, as the levels of a Score overlap, so that an answer between two levels
-gives a value between their sets. The value says where the support is, not how much: a set clipped
-at 0.01 alone gives the same value as one at 1, so check the sets' scores before acting on it. And
-two supported sets far apart give a value between them that neither supports; if that compromise
-is wrong, make the rules choose. Keep hard limits in code.
+Whether neighbouring sets overlap is your policy's choice: overlapping ones let support for two
+sets give a value between them. (A Score's levels don't overlap: they exclude each other, even when
+several have some probability.) The value says where the support is, not how much: a set clipped
+at 0.01 alone gives nearly the same value as one at 1 (exactly the same for a symmetric set), so
+check the sets' scores before acting on it. And two supported sets far apart give a value between
+them that neither supports; if that compromise is wrong, make the rules choose. Keep hard limits in
+code.
 
 **Avoid it** when one answer decides alone (read it directly), or when you'd be inventing rules
 nobody holds: then a weighted sum is at least honest about being a guess.
