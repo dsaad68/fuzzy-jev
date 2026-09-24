@@ -268,6 +268,55 @@
   .tabs .spacer { flex: 1; }
   .tabs a.button { margin: 4px 0; }
   pre { margin: 0; padding: 12px 14px; background: var(--code); overflow: auto; font-size: 14.5px; line-height: 1.45; white-space: pre; max-height: 60vh; border-radius: 0 0 10px 10px; }
+  /* The ⓘ button, and the rules guide it opens. */
+  .info-button {
+    width: 22px; height: 22px; padding: 0; border-radius: 50%; justify-content: center; flex-shrink: 0;
+    font: italic 700 13px/1 Georgia, "Times New Roman", serif; color: var(--accent); border: 1.5px solid var(--accent); background: none;
+  }
+  .info-button:hover { background: var(--accent); color: var(--accent-ink); }
+  dialog#guide {
+    width: min(1040px, calc(100vw - 32px)); height: min(86vh, 900px); padding: 0; border: 1px solid var(--line-strong); border-radius: 12px;
+    background: var(--panel); color: var(--ink); box-shadow: 0 24px 64px rgba(0, 0, 0, .35); overflow: hidden;
+  }
+  dialog#guide[open] { display: flex; flex-direction: column; }
+  dialog#guide::backdrop { background: rgba(1, 4, 9, .55); backdrop-filter: blur(2px); }
+  .guide-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .guide-head h2 { margin: 0; font-size: 17px; }
+  .guide-head .sub { color: var(--muted); font-size: 13.5px; }
+  .guide-head .spacer { flex: 1; }
+  .guide-main { display: grid; grid-template-columns: 250px 1fr; min-height: 0; flex: 1; }
+  .guide-nav { border-right: 1px solid var(--line); padding: 10px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+  .guide-nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+  .guide-nav a:hover { color: var(--ink); background: var(--track); }
+  .guide-nav a.current { color: var(--ink); background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+  .guide-body { overflow-y: auto; padding: 4px 24px 40px; }
+  .guide-body section { padding-top: 16px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+  .guide-body section:last-child { border-bottom: 0; }
+  .guide-body h3 { font-size: 16.5px; margin: 0 0 10px; }
+  .guide-body h4 { font-size: 14.5px; margin: 14px 0 6px; color: var(--muted); }
+  .guide-body p, .guide-body li { font-size: 14px; line-height: 1.6; }
+  .guide-body ol, .guide-body ul { padding-left: 22px; margin: 8px 0; }
+  .guide-body code { background: var(--track); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .guide-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13.5px; }
+  .guide-body th, .guide-body td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  .guide-body th { background: var(--raised); font-weight: 650; }
+  .guide-body .note { background: var(--raised); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 0 6px 6px 0; }
+  .guide-body .snippet-box { position: relative; margin: 10px 0; }
+  .guide-body pre.snippet { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6; max-height: none; white-space: pre; overflow-x: auto; }
+  .guide-body .snippet-box pre.snippet { padding-right: 76px; }
+  .guide-body .snippet-box .copy { position: absolute; top: 8px; right: 8px; font-size: 12.5px; padding: 3px 9px; opacity: 0; transition: opacity .15s; }
+  .guide-body .snippet-box:hover .copy, .guide-body .snippet-box .copy:focus-visible { opacity: 1; }
+  @media (hover: none) { .guide-body .snippet-box .copy { opacity: 1; } }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 12px; }
+  .flow span { border: 1px solid var(--line-strong); border-radius: 6px; padding: 5px 9px; font-size: 13px; background: var(--raised); display: inline-flex; flex-direction: column; align-items: center; }
+  .flow span small { color: var(--muted); font-size: 11.5px; }
+  .flow i { color: var(--muted); font-style: normal; }
+  @media (max-width: 760px) {
+    .guide-main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .guide-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    .guide-nav a { white-space: nowrap; }
+    .guide-body { padding: 4px 16px 32px; }
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -321,6 +370,7 @@
       <span class="summary" id="rulesSummary"></span>
       <span class="spacer"></span>
       <span class="sub when-open">TOML, optional</span>
+      <button type="button" class="info-button" id="rulesHelp" title="How to write rules" aria-label="How to write rules" aria-haspopup="dialog">i</button>
     </div>
     <div class="body" id="rulesBody">
       <div class="code" data-lang="toml"><pre aria-hidden="true"></pre><textarea id="rules" aria-label="Rules as TOML" spellcheck="false" wrap="off" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea></div>
@@ -384,6 +434,260 @@
     </details>
   </div>
 </main>
+
+<dialog id="guide" aria-labelledby="guideTitle">
+  <div class="guide-head">
+    <h2 id="guideTitle">Writing rules</h2>
+    <span class="sub">a rules file is TOML: a policy written over Jev's answers</span>
+    <span class="spacer"></span>
+    <button type="button" class="icon ghost" id="guideClose" aria-label="Close">✕</button>
+  </div>
+  <div class="guide-main">
+    <nav class="guide-nav" aria-label="Sections">
+      <a href="#g-flow">How it fits together</a>
+      <a href="#g-glance">The file at a glance</a>
+      <a href="#g-terms">[terms]</a>
+      <a href="#g-rules">[[rule]]: if, then, weight</a>
+      <a href="#g-ops">AND, OR, NOT</a>
+      <a href="#g-hedges">Hedges</a>
+      <a href="#g-logic">[logic]: the AND and OR functions</a>
+      <a href="#g-items">Items and the threshold</a>
+      <a href="#g-outputs">Outputs: a crisp amount</a>
+      <a href="#g-example">A complete example</a>
+      <a href="#g-errors">Mistakes and tips</a>
+    </nav>
+    <div class="guide-body" id="guideBody">
+
+      <section id="g-flow">
+        <h3>How it fits together</h3>
+        <div class="flow">
+          <span>state</span><i>→</i><span>Jev</span><i>→</i><span>answers<small>probabilities</small></span><i>→</i><span>[terms]<small>degrees 0–1</small></span><i>→</i><span>[[rule]] if<small>rule scores</small></span><i>→</i><span>then<small>items · outputs</small></span>
+        </div>
+        <ol>
+          <li><b>Jev reads the state</b> and answers the questions with probabilities.</li>
+          <li><b><code>[terms]</code></b> gives a short name to each answer the rules need. A term reads one probability and uses it as a <b>degree</b> from 0 to 1.</li>
+          <li><b>Each <code>[[rule]]</code></b> combines degrees in its <code>if</code> with <code>AND</code>, <code>OR</code>, <code>NOT</code> and hedges into a <b>rule score</b>: how strongly the policy supports its <code>then</code>.</li>
+          <li><b>Each <code>then</code></b> is an <b>item</b>, a yes when its score reaches the threshold, or a set of an <b>output</b>, which becomes a crisp number such as “2.17 hours”.</li>
+        </ol>
+        <p class="note">The file is checked against the questions <b>before</b> Jev is called, and the diagram redraws as you type, so a mistake costs nothing. A score is <b>support</b>, not a probability: don’t pass it on as “80% likely”.</p>
+      </section>
+
+      <section id="g-glance">
+        <h3>The file at a glance</h3>
+        <table>
+          <tr><th>Table</th><th>Needed</th><th>Keys</th><th>Default</th></tr>
+          <tr><td><code>[logic]</code></td><td>no</td><td><code>and</code> = <code>"min"</code>, <code>"product"</code> or <code>"lukasiewicz"</code>; <code>or</code> = <code>"max"</code>, <code>"probsum"</code> or <code>"bounded"</code></td><td><code>min</code>, <code>max</code></td></tr>
+          <tr><td><code>[decide]</code></td><td>no</td><td><code>threshold</code>: 0 to 1</td><td><code>0.5</code></td></tr>
+          <tr><td><code>[terms]</code></td><td>yes</td><td><code>name = "target"</code>, one per answer the rules read</td><td></td></tr>
+          <tr><td><code>[output.NAME]</code></td><td>no</td><td><code>range = [low, high]</code>, then a set per key: <code>[a, b, c]</code> or <code>[a, b, c, d]</code></td><td></td></tr>
+          <tr><td><code>[[rule]]</code></td><td>at least one</td><td><code>if</code>, <code>then</code>, <code>weight</code> (0 to 1)</td><td><code>weight = 1.0</code></td></tr>
+        </table>
+        <p>Any other key is an error, so a typo such as <code>treshold</code> is caught rather than ignored.</p>
+      </section>
+
+      <section id="g-terms">
+        <h3><code>[terms]</code>: naming the answers</h3>
+        <p>A term is a <b>lowercase name</b> (<code>a–z</code>, <code>0–9</code>, <code>_</code>) that points at one answer. Terms are lowercase and operators uppercase, so one can’t be taken for the other.</p>
+        <table>
+          <tr><th>Question type</th><th>Target</th><th>The term’s degree</th><th>Example</th></tr>
+          <tr><td>yes/no (Noul)</td><td><code>id</code></td><td>the probability of yes</td><td><code>raining = "raining"</code></td></tr>
+          <tr><td>Score</td><td><code>id.Level</code></td><td>that level’s probability</td><td><code>hot = "temp.Hot"</code></td></tr>
+          <tr><td>Choice</td><td><code>id.option</code></td><td>that option’s probability</td><td><code>billing = "team.billing"</code></td></tr>
+        </table>
+        <pre class="snippet" data-lang="toml">[terms]
+cold      = "temp.Cold"          # a Score's level, written exactly as in the questions
+this_week = "urgency.This week"  # spaces and case must match
+raining   = "raining"            # a yes/no question: its id alone
+billing   = "team.billing"       # a Choice's option</pre>
+        <ul>
+          <li><b>Exact text:</b> <code>temp.hot</code> doesn’t match the level <code>Hot</code>; the error lists the ones that exist.</li>
+          <li>A Score or Choice needs a level or option (<code>temp</code> alone is an error); a yes/no question takes none (<code>raining.yes</code> is an error).</li>
+          <li>Unused terms are allowed while you edit, but they are still checked.</li>
+        </ul>
+      </section>
+
+      <section id="g-rules">
+        <h3><code>[[rule]]</code>: if, then, weight</h3>
+        <p>Each <code>[[rule]]</code> is one piece of know-how. Its <code>if</code> is a condition over terms, its <code>then</code> what it supports.</p>
+        <pre class="snippet" data-lang="toml">[[rule]]
+if     = "raining AND NOT hot"   # a condition over the terms
+then   = "raincoat"              # an item …
+
+[[rule]]
+if     = "cold OR (raining AND humid)"
+then   = "warm layers"
+weight = 0.8                     # trusted a little less: its score is the if × 0.8
+
+[[rule]]
+if     = "today OR blocked"
+then   = "reply_within IS soon"  # … or OUTPUT IS SET, a set of an [output]</pre>
+        <ul>
+          <li><b>A rule’s score</b> is what its <code>if</code> comes to, times its <code>weight</code> (default 1).</li>
+          <li><b>Several rules with the same <code>then</code></b> are joined by the file’s OR: with <code>max</code>, the strongest one decides.</li>
+          <li>A <code>then</code> of three words with <code>IS</code> in the middle is always an output (<code>OUTPUT IS SET</code>); any other text is an item.</li>
+        </ul>
+        <p class="note">Worked through: Jev gives <code>raining</code> 0.98 and <code>hot</code> 0.00, so <code>raining AND NOT hot</code> = min(0.98, 1 − 0.00) = <b>0.98</b>, at or over the threshold of 0.5: a raincoat is a yes.</p>
+      </section>
+
+      <section id="g-ops">
+        <h3>AND, OR, NOT</h3>
+        <table>
+          <tr><th>Operator</th><th>Means</th><th>Degree</th><th>a = 0.8, b = 0.6</th></tr>
+          <tr><td><code>a AND b</code></td><td>both</td><td>the file’s <code>and</code> function (default <code>min(a, b)</code>)</td><td>0.6</td></tr>
+          <tr><td><code>a OR b</code></td><td>either</td><td>the file’s <code>or</code> function (default <code>max(a, b)</code>)</td><td>0.8</td></tr>
+          <tr><td><code>NOT a</code></td><td>not</td><td><code>1 − a</code></td><td>0.2</td></tr>
+          <tr><td><code>( … )</code></td><td>grouping</td><td>the inside’s degree</td><td></td></tr>
+        </table>
+        <h4>Precedence, tightest first</h4>
+        <ol>
+          <li><b>Hedges and <code>NOT</code></b> apply to the next term or group: <code>NOT VERY hot</code> is <code>NOT (VERY hot)</code>.</li>
+          <li><b><code>AND</code></b></li>
+          <li><b><code>OR</code></b>: <code>cold OR raining AND humid</code> is <code>cold OR (raining AND humid)</code>.</li>
+        </ol>
+        <p>Use parentheses whenever you mean something else: <code>(cold OR raining) AND humid</code>.</p>
+        <ul>
+          <li>Operators are <b>uppercase only</b>: a lowercase <code>and</code> is an error that points you to <code>AND</code>.</li>
+          <li>An <code>if</code> may be up to 256 words and brackets; beyond that, split it into rules with the same <code>then</code>.</li>
+        </ul>
+      </section>
+
+      <section id="g-hedges">
+        <h3>Hedges</h3>
+        <p>A hedge reshapes a term’s degree, or a group’s in parentheses. It moves where the threshold falls, and that is all it does.</p>
+        <table>
+          <tr><th>Hedge</th><th>Degree</th><th>a = 0.7</th><th>a = 0.3</th><th>Passes 0.5 when</th></tr>
+          <tr><td><code>VERY a</code></td><td>a²</td><td>0.49</td><td>0.09</td><td>a ≥ 0.71</td></tr>
+          <tr><td><code>EXTREMELY a</code></td><td>a³</td><td>0.34</td><td>0.03</td><td>a ≥ 0.79</td></tr>
+          <tr><td><code>SOMEWHAT a</code></td><td>√a</td><td>0.84</td><td>0.55</td><td>a ≥ 0.25</td></tr>
+          <tr><td><code>INDEED a</code></td><td>2a² when a ≤ 0.5, else 1 − 2(1 − a)²</td><td>0.82</td><td>0.18</td><td>a &gt; 0.5 (pushes away from 0.5)</td></tr>
+        </table>
+        <p class="note"><code>VERY angry</code> asks for more <i>certainty</i> that the level is Angry; it can’t tell angry from furious. If intensity matters, give the question a level for it.</p>
+      </section>
+
+      <section id="g-logic">
+        <h3><code>[logic]</code>: the AND and OR functions</h3>
+        <p>One AND and one OR for the whole file. The same OR joins conditions inside a rule, joins rules with the same <code>then</code>, and merges an output’s sets.</p>
+        <pre class="snippet" data-lang="toml">[logic]
+and = "min"    # or "product", "lukasiewicz"
+or  = "max"    # or "probsum", "bounded"</pre>
+        <table>
+          <tr><th><code>and</code></th><th>Formula</th><th>0.8 AND 0.6</th><th>What it does</th></tr>
+          <tr><td><code>min</code> (default)</td><td>min(a, b)</td><td>0.60</td><td>The weakest condition decides.</td></tr>
+          <tr><td><code>product</code></td><td>a × b</td><td>0.48</td><td>Every weak condition lowers the result.</td></tr>
+          <tr><td><code>lukasiewicz</code></td><td>max(0, a + b − 1)</td><td>0.40</td><td>Strict: high only when both are.</td></tr>
+        </table>
+        <table>
+          <tr><th><code>or</code></th><th>Formula</th><th>0.8 OR 0.6</th><th>What it does</th></tr>
+          <tr><td><code>max</code> (default)</td><td>max(a, b)</td><td>0.80</td><td>The strongest reason decides; a second one adds nothing.</td></tr>
+          <tr><td><code>probsum</code></td><td>a + b − ab</td><td>0.92</td><td>Reasons reinforce each other; a reason written twice counts twice.</td></tr>
+          <tr><td><code>bounded</code></td><td>min(1, a + b)</td><td>1.00</td><td>Reasons add up, capped at 1: for levels of one question, their probabilities’ sum.</td></tr>
+        </table>
+        <p>The usual pairs are <code>min</code> + <code>max</code>, <code>product</code> + <code>probsum</code>, and <code>lukasiewicz</code> + <code>bounded</code>. Leave it at <code>min</code> and <code>max</code> unless you want reasons to add up.</p>
+      </section>
+
+      <section id="g-items">
+        <h3>Items and the threshold</h3>
+        <p>A <code>then</code> that isn’t <code>OUTPUT IS SET</code> names an <b>item</b>, any text: <code>raincoat</code>, <code>page on-call</code>. An item is a <b>yes</b> when its score is at or over the threshold.</p>
+        <pre class="snippet" data-lang="toml">[decide]
+threshold = 0.6    # an item is a yes at or over this; default 0.5</pre>
+        <ul>
+          <li>Nothing is exclusive unless a rule makes it so: with <code>raining</code> at 0.5, both <code>raining</code> and <code>NOT raining</code> score 0.5 and both are a yes at 0.5.</li>
+          <li>One threshold serves every item. For a costly action, use a weight or a separate rules file.</li>
+        </ul>
+      </section>
+
+      <section id="g-outputs">
+        <h3>Outputs: a crisp amount</h3>
+        <p>When the answer is an <b>amount</b> (“how many hours until we reply?”), conclude in an output. Each set is a shape on the output’s axis; rules conclude <code>OUTPUT IS SET</code>.</p>
+        <pre class="snippet" data-lang="toml">[output.reply_within]        # the name: lowercase. The unit (hours) goes in a comment.
+range    = [0, 72]           # the axis: low, high
+soon     = [0, 0, 2, 6]      # a trapezoid a, b, c, d (here a left shoulder)
+same_day = [4, 12, 24]       # a triangle: a, peak, c
+later    = [20, 48, 72, 72]  # a right shoulder, holding to the end
+
+[[rule]]
+if   = "today OR blocked"
+then = "reply_within IS soon"</pre>
+        <table>
+          <tr><th>Written</th><th>Shape</th><th>Belongs fully</th></tr>
+          <tr><td><code>[a, peak, c]</code></td><td>triangle</td><td>at <code>peak</code></td></tr>
+          <tr><td><code>[a, b, c, d]</code></td><td>trapezoid</td><td>from <code>b</code> to <code>c</code></td></tr>
+          <tr><td><code>[a, a, c, d]</code> / <code>[a, b, d, d]</code></td><td>left / right shoulder</td><td>from the start / to the end</td></tr>
+          <tr><td><code>[p, p, p]</code></td><td>a single point</td><td>only at <code>p</code></td></tr>
+        </table>
+        <h4>How the value is worked out</h4>
+        <ol>
+          <li><b>Score each set:</b> the OR of the scores of the rules that conclude it.</li>
+          <li><b>Clip each set</b> flat at its score.</li>
+          <li><b>Merge</b> the clipped shapes with the file’s OR, point by point.</li>
+          <li><b>Take the centroid</b>, the balance point of the merged shape: that is the value. With no set above 0 there is no value (<code>-</code>).</li>
+        </ol>
+        <p class="note">Points must be in order and inside <code>range</code>; overlap neighbouring sets so an answer between two levels lands between them. Read the value with its sets’ scores: it says <i>where</i> the support lies, not how much.</p>
+      </section>
+
+      <section id="g-example">
+        <h3>A complete example</h3>
+        <p>For questions <code>temp</code> (Score: Cold, Mild, Hot), <code>humidity</code> (Score: Dry, Normal, Humid) and <code>raining</code> (yes/no):</p>
+        <pre class="snippet" data-lang="toml">[logic]
+and = "min"
+or  = "max"
+
+[decide]
+threshold = 0.5
+
+[terms]
+cold    = "temp.Cold"
+mild    = "temp.Mild"
+hot     = "temp.Hot"
+humid   = "humidity.Humid"
+raining = "raining"
+
+[[rule]]
+if   = "cold"
+then = "coat"
+
+[[rule]]
+if   = "mild AND NOT raining"
+then = "light jacket"
+
+[[rule]]
+if   = "raining AND NOT hot"
+then = "raincoat"
+
+[[rule]]
+if   = "VERY hot AND humid"
+then = "t-shirt"
+
+[[rule]]
+if     = "humid OR hot"
+then   = "breathable fabric"
+weight = 0.9</pre>
+        <p>Load the <b>wear</b>, <b>irrigation</b> or <b>triage</b> example from the header to see more, including an output and a Choice.</p>
+      </section>
+
+      <section id="g-errors">
+        <h3>Mistakes and tips</h3>
+        <table>
+          <tr><th>Mistake</th><th>What you’ll see</th></tr>
+          <tr><td>a level that doesn’t exist</td><td><code>[terms] hot: `temp` has no level `hot`; its levels are …</code></td></tr>
+          <tr><td>a term not in <code>[terms]</code></td><td><code>rule 1 (`wet`): `wet` isn't in [terms], which names …</code></td></tr>
+          <tr><td>a lowercase operator</td><td><code>`and` isn't in [terms]; the operator is written AND</code></td></tr>
+          <tr><td>a missing operator</td><td><code>`hot` where AND or OR should be</code></td></tr>
+          <tr><td>an unknown output</td><td><code>… there is no [output.wter]; did you mean `water IS some`?</code></td></tr>
+          <tr><td>a weight or threshold outside 0–1</td><td><code>the weight is 2; it goes from 0 to 1</code></td></tr>
+        </table>
+        <h4>Designing rules</h4>
+        <ul>
+          <li>Ask graded things as <b>Scores</b> with 3–5 named levels; keep yes/no for things that are simply true or false.</li>
+          <li><b>One rule per piece of know-how</b>, in the owner’s words: “a raincoat when it rains, unless it’s hot” is <code>raining AND NOT hot</code>.</li>
+          <li><b>Check coverage:</b> walk the combinations (cold / mild / hot × raining or not) and make sure some rule speaks for each.</li>
+          <li><b>Look for conflicts</b> between rules that say opposite things about one situation, and decide which wins.</li>
+          <li><b>Tune on real states:</b> fix a rule, a weight or the threshold, never the answers; then check on cases you didn’t tune on.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</dialog>
 
 <script>
 "use strict";
@@ -811,6 +1115,43 @@ function undoReset() {
 }
 $("reset").addEventListener("click", reset);
 $("undoReset").addEventListener("click", undoReset);
+
+// ---------- the rules guide ----------
+// Its examples are highlighted as the editor is, each with a button to copy it.
+for (const pre of document.querySelectorAll("#guide pre.snippet")) {
+  const text = pre.textContent;
+  pre.innerHTML = highlightToml(text);
+  const copy = el("button", { type: "button", class: "copy" }, "Copy");
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(text); copy.textContent = "Copied"; } catch { copy.textContent = "Select and copy"; }
+    setTimeout(() => (copy.textContent = "Copy"), 1500);
+  });
+  const box = el("div", { class: "snippet-box" });
+  pre.replaceWith(box);
+  box.append(pre, copy);
+}
+function openGuide() { $("guide").showModal(); $("guideBody").focus({ preventScroll: true }); }
+$("rulesHelp").addEventListener("click", openGuide);
+$("guideClose").addEventListener("click", () => $("guide").close());
+// A click on the backdrop closes it. The dialog's content fills its box, so a click that lands on
+// the dialog itself is on the backdrop; one from the keyboard, which has no position, is not.
+$("guide").addEventListener("click", (event) => { if (event.target === $("guide")) $("guide").close(); });
+// The contents link to sections within the guide, and mark the one being read.
+for (const link of document.querySelectorAll(".guide-nav a")) {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    // scrollIntoView doesn't reach into a modal dialog in Chrome, so the body is scrolled itself.
+    const body = $("guideBody"), target = document.querySelector(link.getAttribute("href"));
+    body.scrollTo({ top: target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 });
+  });
+}
+$("guideBody").setAttribute("tabindex", "-1");
+$("guideBody").addEventListener("scroll", () => {
+  const top = $("guideBody").getBoundingClientRect().top;
+  let current = null;
+  for (const section of $("guideBody").querySelectorAll("section")) if (section.getBoundingClientRect().top - top < 80) current = section.id;
+  for (const link of document.querySelectorAll(".guide-nav a")) link.classList.toggle("current", link.getAttribute("href") === "#" + current);
+});
 
 // ---------- start ----------
 async function start() {
