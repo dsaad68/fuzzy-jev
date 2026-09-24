@@ -128,6 +128,10 @@
   .field-head:first-child { margin-top: 0; }
   .field-head label { font-weight: 650; font-size: 15px; }
   .field-head small { color: var(--muted); font-size: 14px; }
+  .field-head .right { display: inline-flex; gap: 10px; align-items: baseline; }
+  button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
+  button.link:hover { background: none; text-decoration: underline; }
+  .state-row { display: flex; justify-content: space-between; align-items: center; }
   .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14.5px; cursor: pointer; }
   #state { min-height: 84px; }
   #questions, #rules { min-height: 240px; }
@@ -233,10 +237,10 @@
     <div class="body">
       <div class="field-head"><label for="state">State</label><small>what Jev judges</small></div>
       <div class="code" data-lang="state"><pre aria-hidden="true"></pre><textarea id="state" spellcheck="false" wrap="off" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea></div>
-      <label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label>
+      <div class="state-row"><label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label><button class="link" id="formatState" title="Pretty-print the state's JSON" hidden>Format</button></div>
       <div class="field-error" id="stateError" hidden></div>
 
-      <div class="field-head"><label for="questions">Questions</label><small>JSON: ids to questions</small></div>
+      <div class="field-head"><label for="questions">Questions</label><span class="right"><small>JSON: ids to questions</small><button class="link" id="formatQuestions" title="Pretty-print the questions (⇧⌥F)">Format</button></span></div>
       <div class="code" data-lang="json"><pre aria-hidden="true"></pre><textarea id="questions" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
       <div class="field-error" id="questionsError" hidden></div>
 
@@ -369,6 +373,56 @@ function syncScroll(textarea) {
   pre.scrollLeft = textarea.scrollLeft;
 }
 function highlightAll() { for (const name of inputs) highlightField($(name)); }
+
+// JSON pretty-printed with two spaces, its keys in their order, and a short list of plain values,
+// such as a question's levels, kept on one line; null when it isn't JSON.
+function pretty(text) {
+  let value;
+  try { value = JSON.parse(text); } catch { return null; }
+  const write = (value, indent) => {
+    const inner = indent + "  ";
+    if (Array.isArray(value)) {
+      if (!value.length) return "[]";
+      const flat = value.every((item) => item === null || typeof item !== "object") && `[${value.map((item) => JSON.stringify(item)).join(", ")}]`;
+      if (flat && flat.length + indent.length <= 72) return flat;
+      return `[\n${value.map((item) => inner + write(item, inner)).join(",\n")}\n${indent}]`;
+    }
+    if (value && typeof value === "object") {
+      const entries = Object.entries(value);
+      if (!entries.length) return "{}";
+      return `{\n${entries.map(([key, item]) => `${inner}${JSON.stringify(key)}: ${write(item, inner)}`).join(",\n")}\n${indent}}`;
+    }
+    return JSON.stringify(value);
+  };
+  return write(value, "");
+}
+// Formats a field as typing would, so undo takes it back; says why when it can't.
+function format(name) {
+  const textarea = $(name);
+  const formatted = pretty(textarea.value);
+  if (formatted == null) {
+    try { JSON.parse(textarea.value); } catch (error) { fieldErrors(`${name === "state" ? "--state-json" : "questions"}: isn't JSON: ${error.message}`); }
+    return;
+  }
+  if (formatted === textarea.value) return;
+  textarea.focus();
+  textarea.select();
+  if (!document.execCommand("insertText", false, formatted)) {
+    textarea.value = formatted;
+    textarea.dispatchEvent(new Event("input"));
+  }
+  textarea.setSelectionRange(0, 0);
+  textarea.scrollTop = textarea.scrollLeft = 0;
+}
+$("formatQuestions").addEventListener("click", () => format("questions"));
+$("formatState").addEventListener("click", () => format("state"));
+$("stateJson").addEventListener("change", () => { $("formatState").hidden = !$("stateJson").checked; });
+$("questions").addEventListener("keydown", (event) => {
+  if (event.code === "KeyF" && event.shiftKey && event.altKey) { event.preventDefault(); format("questions"); }
+});
+$("state").addEventListener("keydown", (event) => {
+  if (event.code === "KeyF" && event.shiftKey && event.altKey && $("stateJson").checked) { event.preventDefault(); format("state"); }
+});
 for (const name of inputs) {
   $(name).addEventListener("input", () => highlightField($(name)));
   $(name).addEventListener("scroll", () => syncScroll($(name)));
@@ -396,6 +450,10 @@ async function start() {
   for (const name of inputs) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
   $("model").value = given.model;
   $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
+  $("formatState").hidden = !$("stateJson").checked;
+  // Questions, and a JSON state, start pretty-printed, whoever wrote them.
+  $("questions").value = pretty($("questions").value) ?? $("questions").value;
+  if ($("stateJson").checked) $("state").value = pretty($("state").value) ?? $("state").value;
   $("noKey").hidden = given.canAsk;
   highlightAll();
   for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
@@ -409,9 +467,10 @@ function load(name) {
   const example = examples.find((one) => one.name === name);
   if (!example) return;
   $("state").value = example.state;
-  $("questions").value = example.questions;
+  $("questions").value = pretty(example.questions) ?? example.questions;
   $("rules").value = example.rules;
   $("stateJson").checked = false;
+  $("formatState").hidden = true;
   for (const name of inputs) remember(name, $(name).value);
   remember("stateJson", false);
   highlightAll();
@@ -661,7 +720,7 @@ function rawTexts() {
   const graph = runDraws() ? result.graph : drawn && drawn.graph;
   if (graph) parts.graph = graph;
   if (result && result.answers) parts.answers = result.answers;
-  if (result && result.reply) parts.json = JSON.stringify({ request: result.request, reply: result.reply, outcome: result.decision }, null, 2) + "\n";
+  if (result && result.reply) parts.json = pretty(JSON.stringify({ request: result.request, reply: result.reply, outcome: result.decision })) + "\n";
   return parts;
 }
 
