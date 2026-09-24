@@ -55,6 +55,7 @@ extra question costs a few tokens and no extra round trip.
 - [Fuzzy rules](#fuzzy-rules)
   - [Outputs: a crisp amount](#outputs-a-crisp-amount)
 - [Drawing the rules](#drawing-the-rules)
+- [Exploring in the browser](#exploring-in-the-browser)
 - [The Agent Skill](#the-agent-skill)
 - [As a library](#as-a-library)
 - [From Python](#from-python)
@@ -408,6 +409,24 @@ An output is drawn as a plot of its merged shape, with `↑` at its centre:
        0                             ↑ 51.02                    100
            short                  medium                  long
 ```
+
+## Exploring in the browser
+
+`jev --explore` opens a page in the browser for trying things out. It has fields for the state,
+the questions (JSON, as a `-q` file) and the rules (TOML, as an `-r` file, optional). **Run** asks
+Jev, and the page shows the rules' outcome as text, their drawing as SVG, the `--graph` tree, the
+answers, and the request and reply as JSON, each with a button to save it. **Draw rules only**
+draws the structure without making a call. The examples in [`examples/rules`](examples/rules) are
+one click away.
+
+```sh
+jev --explore
+jev --explore -q examples/rules/weather.json -r examples/rules/wear.toml   # start from these files
+```
+
+The page is served on 127.0.0.1 only, on any free port (`--port` picks one), and `--no-open`
+prints the address without opening a browser. The key stays in the `jev` process, read from
+`OPENROUTER_API_KEY` as always, and other sites open in the same browser can't send it requests.
 
 ## The Agent Skill
 

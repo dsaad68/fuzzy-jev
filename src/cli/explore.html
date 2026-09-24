@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuzzy Jev Explore</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1f2328; --muted: #656d76; --line: #d0d7de;
+    --accent: #2f7d4a; --accent-ink: #ffffff; --error: #b42318; --error-bg: #fef3f2; --code: #f6f8fa;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --panel: #161b22; --ink: #e6edf3; --muted: #8d96a0; --line: #30363d;
+      --accent: #3fa35f; --accent-ink: #0d1117; --error: #ff7b72; --error-bg: #2d1414; --code: #0d1117;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  header .spacer { flex: 1; }
+  main { display: grid; grid-template-columns: minmax(320px, 5fr) 7fr; gap: 16px; padding: 16px 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+  label { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; margin: 12px 0 6px; }
+  label:first-child { margin-top: 0; }
+  label small { color: var(--muted); font-weight: 400; }
+  textarea, input[type=text], select {
+    width: 100%; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink);
+    background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical;
+  }
+  select, input[type=text] { font-family: inherit; font-size: 13px; }
+  header select, header input[type=text] { width: auto; resize: none; }
+  header .row { flex-wrap: nowrap; }
+  @media (max-width: 600px) { header .row { flex-wrap: wrap; } header input[type=text] { width: 100% !important; } }
+  textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #state { min-height: 80px; }
+  #questions { min-height: 220px; }
+  #rules { min-height: 220px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .check { font-weight: 400; display: inline-flex; gap: 6px; align-items: center; margin: 6px 0 0; color: var(--muted); }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button, a.button {
+    font: inherit; font-weight: 600; border-radius: 6px; padding: 7px 14px; cursor: pointer; text-decoration: none;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: .55; cursor: progress; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: -4px -4px 12px; flex-wrap: wrap; }
+  .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 12px; }
+  .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tabs button:disabled { opacity: .35; cursor: default; }
+  pre { margin: 0; padding: 12px; background: var(--code); border: 1px solid var(--line); border-radius: 6px; overflow: auto;
+        font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; max-height: 70vh; }
+  .svg { background: #ffffff; border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 75vh; padding: 8px; }
+  .svg img { display: block; max-width: none; }
+  .svg.fit img { max-width: 100%; height: auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .bar .hint { color: var(--muted); }
+  .error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  .empty { color: var(--muted); padding: 40px 12px; text-align: center; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Fuzzy Jev <span>Explore</span></h1>
+  <div class="spacer"></div>
+  <div class="row">
+    <select id="example" aria-label="Load an example"><option value="">Load an example…</option></select>
+    <input type="text" id="model" aria-label="Model" style="width: 220px" spellcheck="false">
+  </div>
+</header>
+<main>
+  <section>
+    <label for="state">State <small>what Jev judges</small></label>
+    <textarea id="state" spellcheck="false" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea>
+    <label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label>
+
+    <label for="questions">Questions <small>JSON: ids to questions</small></label>
+    <textarea id="questions" spellcheck="false" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea>
+
+    <label for="rules">Rules <small>TOML, optional</small></label>
+    <textarea id="rules" spellcheck="false" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea>
+
+    <div class="actions">
+      <button class="primary" id="run" title="Ctrl/⌘ + Enter">Run</button>
+      <button id="draw" title="Draw the rules' structure, without asking Jev">Draw rules only</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="outcome">Outcome</button>
+      <button role="tab" data-tab="svg">SVG</button>
+      <button role="tab" data-tab="graph">Graph</button>
+      <button role="tab" data-tab="answers">Answers</button>
+      <button role="tab" data-tab="json">JSON</button>
+    </div>
+    <div id="error" class="error" hidden></div>
+    <div id="empty" class="empty">Write a state and questions, then Run.<br>With rules, the outcome and their drawing show here too.</div>
+
+    <div data-pane="outcome" hidden>
+      <div class="bar"><span class="hint">What the rules make of the answers</span><a class="button" data-save="outcome" download="outcome.txt">Save .txt</a></div>
+      <pre id="outcome"></pre>
+    </div>
+    <div data-pane="svg" hidden>
+      <div class="bar">
+        <label class="check"><input type="checkbox" id="fit" checked> fit to width</label>
+        <a class="button" data-save="svg" download="rules.svg">Save .svg</a>
+      </div>
+      <div class="svg fit" id="svgBox"><img id="svg" alt="The rules, drawn"></div>
+    </div>
+    <div data-pane="graph" hidden>
+      <div class="bar"><span class="hint">The rules as a tree, as <code>--graph</code> prints them</span><a class="button" data-save="graph" download="rules.txt">Save .txt</a></div>
+      <pre id="graph"></pre>
+    </div>
+    <div data-pane="answers" hidden>
+      <div class="bar"><span class="hint">Jev's answers, as <code>jev</code> prints them</span><a class="button" data-save="answers" download="answers.txt">Save .txt</a></div>
+      <pre id="answers"></pre>
+    </div>
+    <div data-pane="json" hidden>
+      <div class="bar"><span class="hint">The request sent and the reply</span><a class="button" data-save="json" download="jev.json">Save .json</a></div>
+      <pre id="json"></pre>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const fields = ["state", "questions", "rules"];
+let examples = [];
+let result = {};
+let tab = "outcome";
+const urls = {};
+
+// Fields are kept across reloads in this browser; what the command line gave comes first.
+function remembered(name) { try { return localStorage.getItem("jev." + name); } catch { return null; } }
+function remember(name, value) { try { localStorage.setItem("jev." + name, value); } catch {} }
+
+async function start() {
+  const given = await (await fetch("/start")).json();
+  examples = given.examples || [];
+  for (const example of examples) $("example").add(new Option(example.name, example.name));
+  // A state, questions or rules on the command line start the page from them alone, so what was
+  // left from last time can't mix in; the model is always the command line's.
+  const fromCommand = given.state != null || given.questions != null || given.rules != null;
+  for (const name of ["state", "questions", "rules"]) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
+  $("model").value = given.model;
+  $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
+  if (!$("questions").value && examples.length) load(examples[0].name);
+  for (const name of fields) $(name).addEventListener("input", () => remember(name, $(name).value));
+  $("stateJson").addEventListener("change", () => remember("stateJson", $("stateJson").checked));
+}
+
+function load(name) {
+  const example = examples.find((one) => one.name === name);
+  if (!example) return;
+  $("state").value = example.state;
+  $("questions").value = example.questions;
+  $("rules").value = example.rules;
+  $("stateJson").checked = false;
+  for (const name of fields) remember(name, $(name).value);
+  remember("stateJson", false);
+}
+
+function show(which) {
+  tab = which;
+  for (const button of document.querySelectorAll(".tabs button")) {
+    button.setAttribute("aria-selected", button.dataset.tab === which);
+    button.disabled = !(button.dataset.tab in available());
+  }
+  const any = Object.keys(available()).length > 0;
+  $("empty").hidden = any || !$("error").hidden;
+  for (const pane of document.querySelectorAll("[data-pane]")) pane.hidden = pane.dataset.pane !== which || !(which in available());
+}
+
+// Each tab's text, for the parts this result has.
+function available() {
+  const parts = {};
+  if (result.outcome) parts.outcome = result.outcome;
+  if (result.svg) parts.svg = result.svg;
+  if (result.graph) parts.graph = result.graph;
+  if (result.answers) parts.answers = result.answers;
+  if (result.reply) parts.json = JSON.stringify({ request: result.request, reply: result.reply }, null, 2) + "\n";
+  return parts;
+}
+
+function render() {
+  const parts = available();
+  for (const [name, text] of Object.entries(parts)) {
+    if (urls[name]) URL.revokeObjectURL(urls[name]);
+    const type = name === "svg" ? "image/svg+xml" : name === "json" ? "application/json" : "text/plain";
+    urls[name] = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
+    document.querySelector(`[data-save="${name}"]`).href = urls[name];
+    if (name === "svg") $("svg").src = urls[name];
+    else $(name).textContent = text;
+  }
+  const order = ["outcome", "svg", "graph", "answers", "json"];
+  show(tab in parts ? tab : order.find((name) => name in parts) || "outcome");
+}
+
+async function run(draw) {
+  const buttons = [$("run"), $("draw")];
+  buttons.forEach((button) => (button.disabled = true));
+  const clicked = draw ? $("draw") : $("run");
+  const label = clicked.textContent;
+  clicked.textContent = draw ? "Drawing…" : "Asking Jev…";
+  $("error").hidden = true;
+  try {
+    const response = await fetch("/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Jev": "1" },
+      body: JSON.stringify({
+        state: $("state").value, stateJson: $("stateJson").checked, questions: $("questions").value,
+        rules: $("rules").value, model: $("model").value, draw,
+      }),
+    });
+    const body = await response.json().catch(() => ({ error: `the server answered ${response.status}` }));
+    if (body.error) throw new Error(body.error);
+    result = body;
+    if (draw) tab = "svg";
+  } catch (error) {
+    result = {};
+    $("error").textContent = error.message === "Failed to fetch" ? "jev isn't running any more: start `jev --explore` again." : error.message;
+    $("error").hidden = false;
+  } finally {
+    clicked.textContent = label;
+    buttons.forEach((button) => (button.disabled = false));
+    render();
+  }
+}
+
+$("run").addEventListener("click", () => run(false));
+$("draw").addEventListener("click", () => run(true));
+$("example").addEventListener("change", (event) => { load(event.target.value); event.target.value = ""; });
+$("fit").addEventListener("change", () => $("svgBox").classList.toggle("fit", $("fit").checked));
+for (const button of document.querySelectorAll(".tabs button")) button.addEventListener("click", () => show(button.dataset.tab));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); run(false); }
+});
+start().then(() => show(tab));
+</script>
+</body>
+</html>
