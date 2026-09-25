@@ -2,6 +2,7 @@
 //! the questions (from flags and a file), send it, and print the reply, or what a rules file makes
 //! of it.
 
+mod explore;
 mod skill;
 
 use std::io::{IsTerminal, Read};
@@ -35,6 +36,10 @@ Examples:
   jev -q weather.json -r wear.toml --graph
                              draw the rules: a tree per rule in the terminal, and the rule base
                              as an SVG image; without a state, the structure alone and no call
+
+  jev --explore              a page in the browser to write a state, questions and rules, run
+                             them, and see the answers, the outcome and the drawing (text and
+                             SVG). -q, -r and a state fill it in to start with
 
   jev add skill              teach an agent in this project to use jev: writes the bundled
                              Agent Skill to .agents/skills/jev, or .claude/skills/jev with --claude.
@@ -133,6 +138,19 @@ pub struct Args {
     /// Print the request as JSON instead of sending it
     #[arg(long)]
     dry_run: bool,
+
+    /// Open a page in the browser to write a state, questions and rules, run them, and see the
+    /// answers, the outcome and the drawing; a state, -q and -r fill it in to start with
+    #[arg(long, conflicts_with_all = ["noul", "choice", "score", "format", "svg", "width", "dry_run"])]
+    explore: bool,
+
+    /// The port --explore listens on, on 127.0.0.1; any free one by default
+    #[arg(long, default_value_t = 0)]
+    port: u16,
+
+    /// Don't open a browser for --explore; only print the page's address
+    #[arg(long)]
+    no_open: bool,
 }
 
 impl Args {
@@ -166,6 +184,12 @@ impl Invocation {
 
     fn from_matches(matches: &ArgMatches) -> anyhow::Result<Invocation> {
         let args = Args::from_arg_matches(matches)?;
+        // Not clap's `requires`: a flag like --explore is always there to it, as false.
+        for flag in ["port", "no_open"] {
+            if !args.explore && matches.value_source(flag) == Some(clap::parser::ValueSource::CommandLine) {
+                bail!("--{} is for --explore", flag.replace('_', "-"));
+            }
+        }
         let mut asked = Vec::new();
         for (kind, specs) in [(Kind::Noul, &args.noul), (Kind::Choice, &args.choice), (Kind::Score, &args.score)] {
             let indices = matches.indices_of(kind.flag()).into_iter().flatten();
@@ -180,6 +204,9 @@ impl Invocation {
 /// Asks, and prints the answers.
 pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     let args = &invocation.args;
+    if args.explore {
+        return explore::serve(args).await;
+    }
     // A drawing without a state is the rules' structure, which needs no call. Standard input is read
     // here to tell: a script that pipes nothing in is asking for the structure, not an empty state.
     let draws = args.graph || args.svg.is_some();
@@ -307,10 +334,15 @@ fn state(args: &Args, piped: Option<String>) -> anyhow::Result<Value> {
         (None, None) if !std::io::stdin().is_terminal() => read(Path::new("-"))?,
         (None, None) => bail!("no state: give it as an argument, with --state-file, or on standard input"),
     };
+    parse_state(text, args.state_json)
+}
+
+/// The state's text as it is sent: as JSON with `json` (`--state-json`), or as text.
+fn parse_state(text: String, json: bool) -> anyhow::Result<Value> {
     if text.trim().is_empty() {
         bail!("the state is empty");
     }
-    if args.state_json {
+    if json {
         return serde_json::from_str(&text).context("--state-json: the state isn't JSON");
     }
     Ok(Value::String(text.trim_end_matches(['\n', '\r']).to_owned()))
@@ -368,6 +400,18 @@ mod tests {
         assert!(Args::command().try_get_matches_from(["jev", "state", "--noul", "n=?", "--svg", "x.svg"]).is_err());
         assert!(Args::command().try_get_matches_from(["jev", "state", "-r", "r.toml", "--graph", "--json"]).is_err());
         assert!(Args::command().try_get_matches_from(["jev", "state", "-r", "r.toml", "--svg", "x.svg", "--json"]).is_ok());
+    }
+
+    #[test]
+    fn serves_only_with_explore() {
+        let parsed = |argv: &[&str]| {
+            let matches = Args::command().try_get_matches_from(std::iter::once("jev").chain(argv.iter().copied())).unwrap();
+            Invocation::from_matches(&matches).map(|invocation| invocation.args.port)
+        };
+        assert_eq!(parsed(&["--explore", "--port", "7000", "--no-open"]).unwrap(), 7000);
+        assert!(parsed(&["state", "--port", "7000"]).is_err());
+        assert!(parsed(&["state", "--no-open"]).is_err());
+        assert!(Args::command().try_get_matches_from(["jev", "--explore", "--noul", "n=?"]).is_err());
     }
 
     #[test]

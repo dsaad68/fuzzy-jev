@@ -1,0 +1,1673 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuzzy Jev Explore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --raised: #f8f9fb; --ink: #1f2328; --muted: #656d76; --faint: #8c959f;
+    --line: #d8dee4; --line-strong: #c4ccd4; --accent: #2f7d4a; --accent-ink: #ffffff;
+    --bar: #b8c4d0; --track: #eef1f4; --mark: #c2410c; --error: #b42318; --error-bg: #fef3f2; --warn: #9a6700; --warn-bg: #fff8e1;
+    --code: #f6f8fa; --shadow: 0 1px 2px rgba(31, 35, 40, .06), 0 1px 1px rgba(31, 35, 40, .04);
+    --font: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --hl-key: #0550ae; --hl-string: #0a3069; --hl-number: #953800; --hl-literal: #cf222e; --hl-punct: #6e7781;
+    --hl-comment: #6e7781; --hl-table: #8250df; --hl-op: #cf222e;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --panel: #161b22; --raised: #1c2129; --ink: #e6edf3; --muted: #9198a1; --faint: #6e7681;
+      --line: #2a3038; --line-strong: #3d444d; --accent: #3fa35f; --accent-ink: #0d1117;
+      --bar: #4a5a6b; --track: #21262d; --mark: #f0883e; --error: #ff7b72; --error-bg: #2d1416; --warn: #d29922; --warn-bg: #2b2111;
+      --code: #0d1117; --shadow: none;
+      --hl-key: #79c0ff; --hl-string: #a5d6ff; --hl-number: #ffa657; --hl-literal: #ff7b72; --hl-punct: #8b949e;
+      --hl-comment: #8b949e; --hl-table: #d2a8ff; --hl-op: #ff7b72;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); font-variant-ligatures: contextual; }
+  code, pre, textarea, .mono, button, input, select { font-family: var(--font); }
+
+  /* Header */
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; white-space: nowrap; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  header .spacer { flex: 1; }
+  header .controls { display: flex; gap: 8px; align-items: center; }
+  #model { width: 240px; }
+
+  /* The examples menu: the page's own, so it takes the page's font and theme. */
+  .menu { position: relative; }
+  .menu .caret { color: var(--muted); font-size: 12.5px; transition: transform .15s; }
+  .menu button[aria-expanded=true] .caret { transform: rotate(180deg); }
+  .menu-list {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; margin: 0; padding: 6px; list-style: none; min-width: 320px;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18), 0 2px 6px rgba(0, 0, 0, .08);
+  }
+  .menu-list:focus { outline: none; }
+  .menu-list li { padding: 8px 10px; border-radius: 6px; cursor: pointer; display: grid; gap: 2px; }
+  .menu-list li .title { font-weight: 600; }
+  .menu-list li .about { color: var(--muted); font-size: 13px; }
+  .menu-list li[aria-selected=true] { background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+
+  /* Controls */
+  textarea, input[type=text], select {
+    font-size: 14.5px; line-height: 1.5; color: var(--ink); background: var(--code); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 9px;
+  }
+  select, input[type=text] { font-size: 14.5px; background: var(--panel); }
+  textarea { width: 100%; resize: vertical; tab-size: 2; }
+
+  /* A code field: the text is typed in a transparent textarea over a highlighted copy of it. */
+  .code { position: relative; background: var(--code); border: 1px solid var(--line); border-radius: 6px; }
+  .code:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .code.invalid { border-color: var(--error); }
+  .code textarea, .code pre {
+    margin: 0; padding: 8px 10px; border: 0; border-radius: 6px; font: 14.5px/1.6 var(--font); font-variant-ligatures: contextual;
+    white-space: pre; tab-size: 2; letter-spacing: 0; overflow: auto;
+  }
+  .code pre { position: absolute; inset: 0; pointer-events: none; overflow: hidden; color: var(--ink); background: none; max-height: none; }
+  .code textarea { position: relative; display: block; background: transparent; color: transparent; caret-color: var(--ink); }
+  .code textarea::selection { background: rgba(84, 174, 255, .35); color: transparent; }
+  .code textarea::placeholder { color: var(--faint); }
+  .code textarea:focus { outline: none; }
+  .hl-key { color: var(--hl-key); }
+  .hl-string { color: var(--hl-string); }
+  .hl-number { color: var(--hl-number); }
+  .hl-literal { color: var(--hl-literal); }
+  .hl-punct { color: var(--hl-punct); }
+  .hl-comment { color: var(--hl-comment); font-style: italic; }
+  .hl-table { color: var(--hl-table); font-weight: 600; }
+  .hl-op { color: var(--hl-op); font-weight: 600; }
+  textarea:focus, input:focus, select:focus, button:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button, a.button {
+    font: inherit; font-size: 15px; font-weight: 600; border-radius: 6px; padding: 6px 12px; cursor: pointer; text-decoration: none;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  button:hover, a.button:hover { background: var(--raised); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  button:disabled { opacity: .55; cursor: progress; }
+  button.icon { padding: 5px 9px; min-width: 30px; justify-content: center; }
+  kbd { font: 12.5px var(--font); padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); }
+  .spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
+  .busy .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Layout */
+  main { display: grid; grid-template-columns: minmax(380px, 4fr) 8fr; gap: 16px; padding: 16px 20px 32px; align-items: start; }
+  body.expanded main { grid-template-columns: 1fr; }
+  body.expanded .editor { display: none; }
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; padding: 12px 16px 24px; }
+    header { flex-wrap: wrap; padding: 10px 16px; }
+    header .controls { flex: 1 1 100%; }
+    #model { flex: 1; width: auto; }
+    .editor { position: static; }
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); min-width: 0; }
+  .card > .head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .card > .head h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  .card > .head .sub { color: var(--muted); font-size: 14px; }
+  .card > .head .spacer { flex: 1; }
+  .card > .body { padding: 14px; }
+  .results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .results.loading > .card { opacity: .55; transition: opacity .2s; }
+
+  /* Editor */
+  /* The inputs: a card each for the state, the questions and the rules, each folding to a line. */
+  .editor { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .panel > .head { padding: 8px 12px 8px 6px; gap: 8px; flex-wrap: nowrap; cursor: pointer; }
+  .panel > .body { display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+  .panel.collapsed > .head { border-bottom: 0; }
+  .panel.collapsed > .body, .panel.collapsed .when-open { display: none; }
+  .panel:not(.collapsed) .summary { display: none; }
+  .panel .toggle { border: 0; background: none; padding: 2px 6px; gap: 8px; border-radius: 6px; flex-shrink: 0; }
+  .panel .toggle:hover { background: var(--track); }
+  .panel .toggle h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  .panel .chev { color: var(--muted); font-size: 13px; transition: transform .15s; display: inline-block; }
+  .panel.collapsed .chev { transform: rotate(-90deg); }
+  .panel .summary { color: var(--muted); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .panel .right { display: inline-flex; gap: 10px; align-items: center; flex-shrink: 0; }
+  .run-bar { position: sticky; bottom: 12px; z-index: 4; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; }
+  .run-bar .hint { color: var(--muted); font-size: 14px; }
+
+  /* A wide window: the page fills it, and the inputs and the results each scroll on their own,
+     with Run kept at the foot of the inputs. Stacked in a narrow one, the page scrolls as a whole. */
+  @media (min-width: 961px) {
+    body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    header { position: static; flex-shrink: 0; }
+    main { flex: 1; min-height: 0; align-items: stretch; padding-bottom: 0; }
+    .editor, .results { overflow-y: auto; min-height: 0; padding: 2px 8px 16px 2px; margin: -2px -8px 0 -2px; overscroll-behavior: contain; }
+    .editor > *, .results > * { flex-shrink: 0; }
+    .editor { padding-bottom: 0; }
+    /* Pinned to the column's foot, with the page's background under it so nothing shows below. */
+    .run-bar { bottom: 0; margin-bottom: 14px; box-shadow: 0 14px 0 var(--bg), var(--shadow); }
+  }
+  button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
+  button.link:hover { background: none; text-decoration: underline; }
+  /* The questions' Form / JSON switch, and a question's type. */
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+  .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 13px; font-weight: 600; background: var(--panel); color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line-strong); }
+  .seg button[aria-selected=true], .seg button[aria-checked=true] { background: var(--accent); color: var(--accent-ink); }
+  .seg.small button { padding: 3px 8px; font-size: 12.5px; }
+
+  /* The questions as a form. */
+  .qform { display: flex; flex-direction: column; gap: 10px; padding: 2px; }
+  .qcards { display: flex; flex-direction: column; gap: 10px; }
+  .qcard { border: 1px solid var(--line); border-radius: 8px; background: var(--raised); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .qcard .row { display: flex; gap: 8px; align-items: center; }
+  .qcard input[type=text], .qcard textarea {
+    width: 100%; min-width: 0; background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+    font: 14px/1.45 var(--font); color: var(--ink);
+  }
+  .qcard textarea { resize: none; overflow: hidden; }
+  .qcard input.qid { flex: 1; font-weight: 600; }
+  .qcard input.invalid { border-color: var(--error); }
+  .qcard .sub { color: var(--muted); font-size: 13px; margin-bottom: -2px; }
+  .qcard .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .qcard .options { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; gap: 6px; align-items: center; }
+  .qcard .levels { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; }
+  .qcard .levels .num { color: var(--faint); font-size: 13px; text-align: right; }
+  .qcard .link { align-self: flex-start; }
+  button.ghost { border-color: transparent; background: none; color: var(--muted); padding: 3px 7px; min-width: 0; }
+  button.ghost:hover { color: var(--ink); background: var(--track); }
+  button.ghost:disabled { opacity: .3; cursor: default; }
+  .qform > .add { align-self: flex-start; }
+  .qform .notice { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 8px; padding: 10px 12px; }
+  .qform .empty-form { color: var(--muted); padding: 6px 2px; }
+  .state-row { display: flex; justify-content: space-between; align-items: center; }
+  .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14.5px; cursor: pointer; }
+  #state { min-height: 84px; }
+  #questions, #rules { min-height: 240px; }
+  .field-error { color: var(--error); font-size: 14px; white-space: pre-wrap; font-family: var(--font); margin-top: 2px; }
+
+  /* Banners */
+  .banner { border-radius: 8px; padding: 10px 14px; font-size: 15px; display: flex; gap: 10px; align-items: center; }
+  .banner.error { color: var(--error); background: var(--error-bg); border: 1px solid var(--error); white-space: pre-wrap; font-family: var(--font); font-size: 14.5px; }
+  .banner.warn { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn); }
+  .banner.info { color: var(--ink); background: var(--raised); border: 1px solid var(--line-strong); }
+  .banner .spacer { flex: 1; }
+
+  /* Decision */
+  .decision { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--raised); cursor: pointer; transition: border-color .15s, box-shadow .15s, opacity .15s; }
+  .item:hover, .item.hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .decision.focusing .item:not(.hit) { opacity: .45; }
+  .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .item .name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .score { font: 600 15px var(--font); }
+  .badge { font-size: 12.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; }
+  .badge.yes { background: var(--accent); color: var(--accent-ink); }
+  .badge.no { background: var(--track); color: var(--muted); }
+  .meter { position: relative; height: 8px; background: var(--track); border-radius: 4px; margin-top: 8px; }
+  .meter > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--bar); }
+  .meter.yes > i { background: var(--accent); }
+  .meter > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .6; border-radius: 1px; }
+  .item .why { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .output { grid-column: 1 / -1; }
+  .output .sets { display: grid; grid-template-columns: max-content 1fr max-content; gap: 4px 10px; align-items: center; margin-top: 8px; font-size: 14.5px; }
+  .output .sets .meter { margin: 0; }
+
+  /* Answers */
+  .answers { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 24px; }
+  .answer h3 { font-size: 14.5px; margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
+  .answer h3 .kind { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .answer h3 .pick { margin-left: auto; font-weight: 600; }
+  .bars { display: grid; grid-template-columns: minmax(40px, max-content) 1fr 34px; gap: 3px 8px; align-items: center; font-size: 14px; }
+  .bars .label { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+  .bars .label.top { color: var(--ink); font-weight: 600; }
+  .bars .meter { margin: 0; height: 6px; }
+  .bars .num { text-align: right; font: 13px var(--font); color: var(--muted); }
+  .usage { color: var(--muted); font-size: 14px; }
+  .answer .why { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .answer.missing h3 .pick { color: var(--warn); }
+
+  /* Diagram */
+  .toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .toolbar .zoom { font: 14px var(--font); color: var(--muted); min-width: 60px; text-align: center; }
+  .toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; }
+  .viewport { overflow: auto; max-height: 72vh; padding: 8px; border-radius: 0 0 10px 10px; cursor: grab; }
+  body.expanded .viewport { max-height: calc(100vh - 150px); }
+  .viewport.dragging { cursor: grabbing; user-select: none; }
+  .viewport svg { display: block; height: auto; margin: 0 auto; }
+  .placeholder { color: var(--muted); text-align: center; padding: 48px 16px; cursor: default; }
+  .placeholder strong { color: var(--ink); display: block; margin-bottom: 4px; }
+  /* jev draws in a fixed, light palette; here each of its colours takes the page's own. */
+  #diagram svg > rect:first-of-type { fill: var(--panel); }
+  #diagram [fill="#1f2328"] { fill: var(--ink); }
+  #diagram [stroke="#1f2328"] { stroke: var(--ink); }
+  #diagram [fill="#9aa0a6"] { fill: var(--faint); }
+  #diagram [stroke="#9aa0a6"] { stroke: var(--faint); }
+  #diagram [fill="#d0d4d9"] { fill: var(--line-strong); }
+  #diagram [stroke="#d0d4d9"] { stroke: var(--line-strong); }
+  #diagram [fill="#b8c4d0"] { fill: var(--bar); }
+  #diagram [fill="#f6f8fa"] { fill: var(--raised); }
+  #diagram [fill="#2f7d4a"] { fill: var(--accent); }
+  #diagram [stroke="#2f7d4a"] { stroke: var(--accent); }
+  #diagram [fill="#c2410c"] { fill: var(--mark); }
+  #diagram [stroke="#c2410c"] { stroke: var(--mark); }
+  #diagram g.rule { transition: opacity .15s; }
+  #diagram.focusing g.rule:not(.hit) { opacity: .18; }
+
+  /* Raw output */
+  details.card > summary { list-style: none; cursor: pointer; padding: 10px 14px; font-weight: 650; font-size: 15px; display: flex; gap: 8px; align-items: center; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+  details.card[open] > summary::before { transform: rotate(90deg); }
+  details.card[open] > summary { border-bottom: 1px solid var(--line); }
+  .tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); padding: 0 10px; }
+  .tabs [role=tab] { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 10px; }
+  .tabs [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tabs .spacer { flex: 1; }
+  .tabs a.button { margin: 4px 0; }
+  pre { margin: 0; padding: 12px 14px; background: var(--code); overflow: auto; font-size: 14.5px; line-height: 1.45; white-space: pre; max-height: 60vh; border-radius: 0 0 10px 10px; }
+  /* The ⓘ button, and the rules guide it opens. */
+  .info-button {
+    width: 22px; height: 22px; padding: 0; border-radius: 50%; justify-content: center; flex-shrink: 0;
+    font: italic 700 13px/1 Georgia, "Times New Roman", serif; color: var(--accent); border: 1.5px solid var(--accent); background: none;
+  }
+  .info-button:hover { background: var(--accent); color: var(--accent-ink); }
+  dialog#guide {
+    width: min(1040px, calc(100vw - 32px)); height: min(86vh, 900px); padding: 0; border: 1px solid var(--line-strong); border-radius: 12px;
+    background: var(--panel); color: var(--ink); box-shadow: 0 24px 64px rgba(0, 0, 0, .35); overflow: hidden;
+  }
+  dialog#guide[open] { display: flex; flex-direction: column; }
+  dialog#guide::backdrop { background: rgba(1, 4, 9, .55); backdrop-filter: blur(2px); }
+  .guide-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .guide-head h2 { margin: 0; font-size: 17px; }
+  .guide-head .sub { color: var(--muted); font-size: 13.5px; }
+  .guide-head .spacer { flex: 1; }
+  .guide-main { display: grid; grid-template-columns: 250px 1fr; min-height: 0; flex: 1; }
+  .guide-nav { border-right: 1px solid var(--line); padding: 10px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+  .guide-nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+  .guide-nav a:hover { color: var(--ink); background: var(--track); }
+  .guide-nav a.current { color: var(--ink); background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+  .guide-body { overflow-y: auto; padding: 4px 24px 40px; }
+  .guide-body section { padding-top: 16px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+  .guide-body section:last-child { border-bottom: 0; }
+  .guide-body h3 { font-size: 16.5px; margin: 0 0 10px; }
+  .guide-body h4 { font-size: 14.5px; margin: 14px 0 6px; color: var(--muted); }
+  .guide-body p, .guide-body li { font-size: 14px; line-height: 1.6; }
+  .guide-body ol, .guide-body ul { padding-left: 22px; margin: 8px 0; }
+  .guide-body code { background: var(--track); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .guide-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13.5px; }
+  .guide-body th, .guide-body td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  .guide-body th { background: var(--raised); font-weight: 650; }
+  .guide-body .note { background: var(--raised); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 0 6px 6px 0; }
+  .guide-body .snippet-box { position: relative; margin: 10px 0; }
+  .guide-body pre.snippet { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6; max-height: none; white-space: pre; overflow-x: auto; }
+  .guide-body .snippet-box pre.snippet { padding-right: 76px; }
+  .guide-body .snippet-box .copy { position: absolute; top: 8px; right: 8px; font-size: 12.5px; padding: 3px 9px; opacity: 0; transition: opacity .15s; }
+  .guide-body .snippet-box:hover .copy, .guide-body .snippet-box .copy:focus-visible { opacity: 1; }
+  @media (hover: none) { .guide-body .snippet-box .copy { opacity: 1; } }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 12px; }
+  .flow span { border: 1px solid var(--line-strong); border-radius: 6px; padding: 5px 9px; font-size: 13px; background: var(--raised); display: inline-flex; flex-direction: column; align-items: center; }
+  .flow span small { color: var(--muted); font-size: 11.5px; }
+  .flow i { color: var(--muted); font-style: normal; }
+  @media (max-width: 760px) {
+    .guide-main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .guide-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    .guide-nav a { white-space: nowrap; }
+    .guide-body { padding: 4px 16px 32px; }
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Fuzzy Jev <span>Explore</span></h1>
+  <div class="spacer"></div>
+  <div class="controls">
+    <div class="menu" id="exampleMenu">
+      <button id="example" aria-haspopup="listbox" aria-expanded="false" aria-controls="exampleList">Load an example <span class="caret" aria-hidden="true">▾</span></button>
+      <ul class="menu-list" id="exampleList" role="listbox" aria-label="Examples" tabindex="-1" hidden></ul>
+    </div>
+    <button id="reset" title="Clear the state, the questions, the rules and the results">Reset</button>
+    <input type="text" id="model" aria-label="Model" spellcheck="false" title="The model to ask">
+  </div>
+</header>
+
+<main>
+  <div class="editor" aria-label="Inputs">
+  <section class="card panel" id="statePanel" data-panel="state">
+    <div class="head">
+      <button type="button" class="toggle" aria-expanded="true" aria-controls="stateBody"><span class="chev" aria-hidden="true">▾</span><h2>State</h2></button>
+      <span class="summary" id="stateSummary"></span>
+      <span class="spacer"></span>
+      <span class="sub when-open">what Jev judges</span>
+    </div>
+    <div class="body" id="stateBody">
+      <div class="code" data-lang="state"><pre aria-hidden="true"></pre><textarea id="state" aria-label="State" spellcheck="false" wrap="off" placeholder="16°C, the air feels sticky, and a light drizzle has started."></textarea></div>
+      <div class="state-row"><label class="check"><input type="checkbox" id="stateJson"> the state is JSON</label><button class="link" id="formatState" title="Pretty-print the state's JSON" hidden>Format</button></div>
+      <div class="field-error" id="stateError" hidden></div>
+    </div>
+  </section>
+
+  <section class="card panel" id="questionsPanel" data-panel="questions">
+    <div class="head">
+      <button type="button" class="toggle" aria-expanded="true" aria-controls="questionsBody"><span class="chev" aria-hidden="true">▾</span><h2>Questions</h2></button>
+      <span class="summary" id="questionsSummary"></span>
+      <span class="spacer"></span>
+      <span class="right when-open"><button class="link" id="formatQuestions" title="Pretty-print the questions (⇧⌥F)">Format</button><span class="seg" id="questionsMode" role="tablist" aria-label="Write the questions as"><button type="button" role="tab" data-mode="form" title="A field for each part">Form</button><button type="button" role="tab" data-mode="json" title="JSON: ids to questions">JSON</button></span></span>
+    </div>
+    <div class="body" id="questionsBody">
+      <div class="qform" id="questionsForm" hidden></div>
+      <div class="code" data-lang="json" id="questionsCode"><pre aria-hidden="true"></pre><textarea id="questions" aria-label="Questions as JSON" spellcheck="false" wrap="off" placeholder='{"raining": {"type": "noul", "instructions": "Is it raining?"}}'></textarea></div>
+      <div class="field-error" id="questionsError" hidden></div>
+    </div>
+  </section>
+
+  <section class="card panel" id="rulesPanel" data-panel="rules">
+    <div class="head">
+      <button type="button" class="toggle" aria-expanded="true" aria-controls="rulesBody"><span class="chev" aria-hidden="true">▾</span><h2>Rules</h2></button>
+      <span class="summary" id="rulesSummary"></span>
+      <span class="spacer"></span>
+      <span class="sub when-open">TOML, optional</span>
+      <button type="button" class="info-button" id="rulesHelp" title="How to write rules" aria-label="How to write rules" aria-haspopup="dialog">i</button>
+    </div>
+    <div class="body" id="rulesBody">
+      <div class="code" data-lang="toml"><pre aria-hidden="true"></pre><textarea id="rules" aria-label="Rules as TOML" spellcheck="false" wrap="off" placeholder='[terms]&#10;raining = "raining"&#10;&#10;[[rule]]&#10;if   = "raining"&#10;then = "umbrella"'></textarea></div>
+      <div class="field-error" id="rulesError" hidden></div>
+    </div>
+  </section>
+
+  <div class="card run-bar">
+    <button class="primary" id="run"><span class="spinner"></span><span class="label">Run</span></button>
+    <span class="hint"><kbd>⌘</kbd> <kbd>↵</kbd> to run · the diagram redraws as you type</span>
+  </div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="banner warn" id="noKey" hidden>OPENROUTER_API_KEY isn't set where jev --explore started, so Run can't ask Jev. The diagram still draws.</div>
+    <div class="banner warn" id="stale" hidden><span>The inputs changed since this run: the results are for the earlier inputs.</span><span class="spacer"></span><button id="rerun">Run again</button></div>
+    <div class="banner error" id="error" hidden></div>
+    <div class="banner info" id="resetDone" role="status" hidden><span>Cleared the state, the questions, the rules and the results.</span><span class="spacer"></span><button id="undoReset">Undo</button></div>
+
+    <section class="card" id="decisionCard" hidden>
+      <div class="head"><h2>Decision</h2><span class="sub" id="threshold"></span><span class="spacer"></span><span class="sub">hover a card to see its rules in the diagram</span></div>
+      <div class="body"><div class="decision" id="decision"></div></div>
+    </section>
+
+    <section class="card" id="diagramCard">
+      <div class="head">
+        <h2>Rules diagram</h2><span class="sub" id="diagramNote"></span>
+        <span class="spacer"></span>
+        <div class="toolbar">
+          <button class="icon" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+          <span class="zoom" id="zoomLevel">–</span>
+          <button class="icon" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+          <button id="fit" title="Fit to width">Fit</button>
+          <span class="sep"></span>
+          <button id="expand" title="Give the diagram the whole width (Esc to go back)">Expand</button>
+          <a class="button" id="saveSvg" download="rules.svg" hidden>Save .svg</a>
+        </div>
+      </div>
+      <div class="viewport" id="viewport">
+        <div id="diagram"></div>
+        <div class="placeholder" id="diagramEmpty"><strong>No diagram yet</strong>Write rules on the left, or load an example, and they're drawn here as you type.</div>
+      </div>
+    </section>
+
+    <section class="card" id="answersCard" hidden>
+      <div class="head"><h2>Jev's answers</h2><span class="spacer"></span><span class="usage" id="usage"></span></div>
+      <div class="body"><div class="answers" id="answers"></div></div>
+    </section>
+
+    <details class="card" id="rawCard" hidden>
+      <summary>Text and JSON output</summary>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="outcome">Outcome</button>
+        <button role="tab" data-tab="graph">Graph</button>
+        <button role="tab" data-tab="answers">Answers</button>
+        <button role="tab" data-tab="json" title="What jev --json prints">JSON</button>
+        <button role="tab" data-tab="request" title="What jev --dry-run prints: the request sent">Request</button>
+        <span class="spacer"></span>
+        <a class="button" id="saveText">Save</a>
+      </div>
+      <pre id="raw"></pre>
+    </details>
+  </div>
+</main>
+
+<dialog id="guide" aria-labelledby="guideTitle">
+  <div class="guide-head">
+    <h2 id="guideTitle">Writing rules</h2>
+    <span class="sub">a rules file is TOML: a policy written over Jev's answers</span>
+    <span class="spacer"></span>
+    <button type="button" class="icon ghost" id="guideClose" aria-label="Close">✕</button>
+  </div>
+  <div class="guide-main">
+    <nav class="guide-nav" aria-label="Sections">
+      <a href="#g-flow">How it fits together</a>
+      <a href="#g-glance">The file at a glance</a>
+      <a href="#g-terms">[terms]</a>
+      <a href="#g-rules">[[rule]]: if, then, weight</a>
+      <a href="#g-ops">AND, OR, NOT</a>
+      <a href="#g-hedges">Hedges</a>
+      <a href="#g-logic">[logic]: the AND and OR functions</a>
+      <a href="#g-items">Items and the threshold</a>
+      <a href="#g-outputs">Outputs: a crisp amount</a>
+      <a href="#g-example">A complete example</a>
+      <a href="#g-errors">Mistakes and tips</a>
+    </nav>
+    <div class="guide-body" id="guideBody">
+
+      <section id="g-flow">
+        <h3>How it fits together</h3>
+        <div class="flow">
+          <span>state</span><i>→</i><span>Jev</span><i>→</i><span>answers<small>probabilities</small></span><i>→</i><span>[terms]<small>degrees 0–1</small></span><i>→</i><span>[[rule]] if<small>rule scores</small></span><i>→</i><span>then<small>items · outputs</small></span>
+        </div>
+        <ol>
+          <li><b>Jev reads the state</b> and answers the questions with probabilities.</li>
+          <li><b><code>[terms]</code></b> gives a short name to each answer the rules need. A term reads one probability and uses it as a <b>degree</b> from 0 to 1.</li>
+          <li><b>Each <code>[[rule]]</code></b> combines degrees in its <code>if</code> with <code>AND</code>, <code>OR</code>, <code>NOT</code> and hedges into a <b>rule score</b>: how strongly the policy supports its <code>then</code>.</li>
+          <li><b>Each <code>then</code></b> is an <b>item</b>, a yes when its score reaches the threshold, or a set of an <b>output</b>, which becomes a crisp number such as “2.17 hours”.</li>
+        </ol>
+        <p class="note">The file is checked against the questions <b>before</b> Jev is called, and the diagram redraws as you type, so a mistake costs nothing. A score is <b>support</b>, not a probability: don’t pass it on as “80% likely”.</p>
+      </section>
+
+      <section id="g-glance">
+        <h3>The file at a glance</h3>
+        <table>
+          <tr><th>Table</th><th>Needed</th><th>Keys</th><th>Default</th></tr>
+          <tr><td><code>[logic]</code></td><td>no</td><td><code>and</code> = <code>"min"</code>, <code>"product"</code> or <code>"lukasiewicz"</code>; <code>or</code> = <code>"max"</code>, <code>"probsum"</code> or <code>"bounded"</code></td><td><code>min</code>, <code>max</code></td></tr>
+          <tr><td><code>[decide]</code></td><td>no</td><td><code>threshold</code>: 0 to 1</td><td><code>0.5</code></td></tr>
+          <tr><td><code>[terms]</code></td><td>yes</td><td><code>name = "target"</code>, one per answer the rules read</td><td></td></tr>
+          <tr><td><code>[output.NAME]</code></td><td>no</td><td><code>range = [low, high]</code>, then a set per key: <code>[a, b, c]</code> or <code>[a, b, c, d]</code></td><td></td></tr>
+          <tr><td><code>[[rule]]</code></td><td>at least one</td><td><code>if</code>, <code>then</code>, <code>weight</code> (0 to 1)</td><td><code>weight = 1.0</code></td></tr>
+        </table>
+        <p>Any other key is an error, so a typo such as <code>treshold</code> is caught rather than ignored.</p>
+      </section>
+
+      <section id="g-terms">
+        <h3><code>[terms]</code>: naming the answers</h3>
+        <p>A term is a <b>lowercase name</b> (<code>a–z</code>, <code>0–9</code>, <code>_</code>) that points at one answer. Terms are lowercase and operators uppercase, so one can’t be taken for the other.</p>
+        <table>
+          <tr><th>Question type</th><th>Target</th><th>The term’s degree</th><th>Example</th></tr>
+          <tr><td>yes/no (Noul)</td><td><code>id</code></td><td>the probability of yes</td><td><code>raining = "raining"</code></td></tr>
+          <tr><td>Score</td><td><code>id.Level</code></td><td>that level’s probability</td><td><code>hot = "temp.Hot"</code></td></tr>
+          <tr><td>Choice</td><td><code>id.option</code></td><td>that option’s probability</td><td><code>billing = "team.billing"</code></td></tr>
+        </table>
+        <pre class="snippet" data-lang="toml">[terms]
+cold      = "temp.Cold"          # a Score's level, written exactly as in the questions
+this_week = "urgency.This week"  # spaces and case must match
+raining   = "raining"            # a yes/no question: its id alone
+billing   = "team.billing"       # a Choice's option</pre>
+        <ul>
+          <li><b>Exact text:</b> <code>temp.hot</code> doesn’t match the level <code>Hot</code>; the error lists the ones that exist.</li>
+          <li>A Score or Choice needs a level or option (<code>temp</code> alone is an error); a yes/no question takes none (<code>raining.yes</code> is an error).</li>
+          <li>Unused terms are allowed while you edit, but they are still checked.</li>
+        </ul>
+      </section>
+
+      <section id="g-rules">
+        <h3><code>[[rule]]</code>: if, then, weight</h3>
+        <p>Each <code>[[rule]]</code> is one piece of know-how. Its <code>if</code> is a condition over terms, its <code>then</code> what it supports.</p>
+        <pre class="snippet" data-lang="toml">[[rule]]
+if     = "raining AND NOT hot"   # a condition over the terms
+then   = "raincoat"              # an item …
+
+[[rule]]
+if     = "cold OR (raining AND humid)"
+then   = "warm layers"
+weight = 0.8                     # trusted a little less: its score is the if × 0.8
+
+[[rule]]
+if     = "today OR blocked"
+then   = "reply_within IS soon"  # … or OUTPUT IS SET, a set of an [output]</pre>
+        <ul>
+          <li><b>A rule’s score</b> is what its <code>if</code> comes to, times its <code>weight</code> (default 1).</li>
+          <li><b>Several rules with the same <code>then</code></b> are joined by the file’s OR: with <code>max</code>, the strongest one decides.</li>
+          <li>A <code>then</code> of three words with <code>IS</code> in the middle is always an output (<code>OUTPUT IS SET</code>); any other text is an item.</li>
+        </ul>
+        <p class="note">Worked through: Jev gives <code>raining</code> 0.98 and <code>hot</code> 0.00, so <code>raining AND NOT hot</code> = min(0.98, 1 − 0.00) = <b>0.98</b>, at or over the threshold of 0.5: a raincoat is a yes.</p>
+      </section>
+
+      <section id="g-ops">
+        <h3>AND, OR, NOT</h3>
+        <table>
+          <tr><th>Operator</th><th>Means</th><th>Degree</th><th>a = 0.8, b = 0.6</th></tr>
+          <tr><td><code>a AND b</code></td><td>both</td><td>the file’s <code>and</code> function (default <code>min(a, b)</code>)</td><td>0.6</td></tr>
+          <tr><td><code>a OR b</code></td><td>either</td><td>the file’s <code>or</code> function (default <code>max(a, b)</code>)</td><td>0.8</td></tr>
+          <tr><td><code>NOT a</code></td><td>not</td><td><code>1 − a</code></td><td>0.2</td></tr>
+          <tr><td><code>( … )</code></td><td>grouping</td><td>the inside’s degree</td><td></td></tr>
+        </table>
+        <h4>Precedence, tightest first</h4>
+        <ol>
+          <li><b>Hedges and <code>NOT</code></b> apply to the next term or group: <code>NOT VERY hot</code> is <code>NOT (VERY hot)</code>.</li>
+          <li><b><code>AND</code></b></li>
+          <li><b><code>OR</code></b>: <code>cold OR raining AND humid</code> is <code>cold OR (raining AND humid)</code>.</li>
+        </ol>
+        <p>Use parentheses whenever you mean something else: <code>(cold OR raining) AND humid</code>.</p>
+        <ul>
+          <li>Operators are <b>uppercase only</b>: a lowercase <code>and</code> is an error that points you to <code>AND</code>.</li>
+          <li>An <code>if</code> may be up to 256 words and brackets; beyond that, split it into rules with the same <code>then</code>.</li>
+        </ul>
+      </section>
+
+      <section id="g-hedges">
+        <h3>Hedges</h3>
+        <p>A hedge reshapes a term’s degree, or a group’s in parentheses. It moves where the threshold falls, and that is all it does.</p>
+        <table>
+          <tr><th>Hedge</th><th>Degree</th><th>a = 0.7</th><th>a = 0.3</th><th>Passes 0.5 when</th></tr>
+          <tr><td><code>VERY a</code></td><td>a²</td><td>0.49</td><td>0.09</td><td>a ≥ 0.71</td></tr>
+          <tr><td><code>EXTREMELY a</code></td><td>a³</td><td>0.34</td><td>0.03</td><td>a ≥ 0.79</td></tr>
+          <tr><td><code>SOMEWHAT a</code></td><td>√a</td><td>0.84</td><td>0.55</td><td>a ≥ 0.25</td></tr>
+          <tr><td><code>INDEED a</code></td><td>2a² when a ≤ 0.5, else 1 − 2(1 − a)²</td><td>0.82</td><td>0.18</td><td>a ≥ 0.5 (pushes away from 0.5, and leaves 0.5 where it is)</td></tr>
+        </table>
+        <p class="note"><code>VERY angry</code> asks for more <i>certainty</i> that the level is Angry; it can’t tell angry from furious. If intensity matters, give the question a level for it.</p>
+      </section>
+
+      <section id="g-logic">
+        <h3><code>[logic]</code>: the AND and OR functions</h3>
+        <p>One AND and one OR for the whole file. The same OR joins conditions inside a rule, joins rules with the same <code>then</code>, and merges an output’s sets.</p>
+        <pre class="snippet" data-lang="toml">[logic]
+and = "min"    # or "product", "lukasiewicz"
+or  = "max"    # or "probsum", "bounded"</pre>
+        <table>
+          <tr><th><code>and</code></th><th>Formula</th><th>0.8 AND 0.6</th><th>What it does</th></tr>
+          <tr><td><code>min</code> (default)</td><td>min(a, b)</td><td>0.60</td><td>The weakest condition decides.</td></tr>
+          <tr><td><code>product</code></td><td>a × b</td><td>0.48</td><td>Every weak condition lowers the result.</td></tr>
+          <tr><td><code>lukasiewicz</code></td><td>max(0, a + b − 1)</td><td>0.40</td><td>Strict: high only when both are.</td></tr>
+        </table>
+        <table>
+          <tr><th><code>or</code></th><th>Formula</th><th>0.8 OR 0.6</th><th>What it does</th></tr>
+          <tr><td><code>max</code> (default)</td><td>max(a, b)</td><td>0.80</td><td>The strongest reason decides; a second one adds nothing.</td></tr>
+          <tr><td><code>probsum</code></td><td>a + b − ab</td><td>0.92</td><td>Reasons reinforce each other; a reason written twice counts twice.</td></tr>
+          <tr><td><code>bounded</code></td><td>min(1, a + b)</td><td>1.00</td><td>Reasons add up, capped at 1: for levels of one question, their probabilities’ sum.</td></tr>
+        </table>
+        <p>The usual pairs are <code>min</code> + <code>max</code>, <code>product</code> + <code>probsum</code>, and <code>lukasiewicz</code> + <code>bounded</code>. Leave it at <code>min</code> and <code>max</code> unless you want reasons to add up.</p>
+      </section>
+
+      <section id="g-items">
+        <h3>Items and the threshold</h3>
+        <p>A <code>then</code> that isn’t <code>OUTPUT IS SET</code> names an <b>item</b>, any text: <code>raincoat</code>, <code>page on-call</code>. An item is a <b>yes</b> when its score is at or over the threshold.</p>
+        <pre class="snippet" data-lang="toml">[decide]
+threshold = 0.6    # an item is a yes at or over this; default 0.5</pre>
+        <ul>
+          <li>Nothing is exclusive unless a rule makes it so: with <code>raining</code> at 0.5, both <code>raining</code> and <code>NOT raining</code> score 0.5 and both are a yes at 0.5.</li>
+          <li>One threshold serves every item. For a costly action, use a weight or a separate rules file.</li>
+        </ul>
+      </section>
+
+      <section id="g-outputs">
+        <h3>Outputs: a crisp amount</h3>
+        <p>When the answer is an <b>amount</b> (“how many hours until we reply?”), conclude in an output. Each set is a shape on the output’s axis; rules conclude <code>OUTPUT IS SET</code>.</p>
+        <pre class="snippet" data-lang="toml">[output.reply_within]        # the name: lowercase. The unit (hours) goes in a comment.
+range    = [0, 72]           # the axis: low, high
+soon     = [0, 0, 2, 6]      # a trapezoid a, b, c, d (here a left shoulder)
+same_day = [4, 12, 24]       # a triangle: a, peak, c
+later    = [20, 48, 72, 72]  # a right shoulder, holding to the end
+
+[[rule]]
+if   = "today OR blocked"
+then = "reply_within IS soon"</pre>
+        <table>
+          <tr><th>Written</th><th>Shape</th><th>Belongs fully</th></tr>
+          <tr><td><code>[a, peak, c]</code></td><td>triangle</td><td>at <code>peak</code></td></tr>
+          <tr><td><code>[a, b, c, d]</code></td><td>trapezoid</td><td>from <code>b</code> to <code>c</code></td></tr>
+          <tr><td><code>[a, a, c, d]</code> / <code>[a, b, d, d]</code></td><td>left / right shoulder</td><td>from the start / to the end</td></tr>
+          <tr><td><code>[p, p, p]</code></td><td>a single point</td><td>only at <code>p</code></td></tr>
+        </table>
+        <h4>How the value is worked out</h4>
+        <ol>
+          <li><b>Score each set:</b> the OR of the scores of the rules that conclude it.</li>
+          <li><b>Clip each set</b> flat at its score.</li>
+          <li><b>Merge</b> the clipped shapes with the file’s OR, point by point.</li>
+          <li><b>Take the centroid</b>, the balance point of the merged shape: that is the value. With no set above 0 there is no value (<code>-</code>).</li>
+        </ol>
+        <p class="note">Points must be in order and inside <code>range</code>; overlap neighbouring sets so an answer between two levels lands between them. Read the value with its sets’ scores: it says <i>where</i> the support lies, not how much.</p>
+      </section>
+
+      <section id="g-example">
+        <h3>A complete example</h3>
+        <p>For questions <code>temp</code> (Score: Cold, Mild, Hot), <code>humidity</code> (Score: Dry, Normal, Humid) and <code>raining</code> (yes/no):</p>
+        <pre class="snippet" data-lang="toml">[logic]
+and = "min"
+or  = "max"
+
+[decide]
+threshold = 0.5
+
+[terms]
+cold    = "temp.Cold"
+mild    = "temp.Mild"
+hot     = "temp.Hot"
+humid   = "humidity.Humid"
+raining = "raining"
+
+[[rule]]
+if   = "cold"
+then = "coat"
+
+[[rule]]
+if   = "mild AND NOT raining"
+then = "light jacket"
+
+[[rule]]
+if   = "raining AND NOT hot"
+then = "raincoat"
+
+[[rule]]
+if   = "VERY hot AND humid"
+then = "t-shirt"
+
+[[rule]]
+if     = "humid OR hot"
+then   = "breathable fabric"
+weight = 0.9</pre>
+        <p>Load the <b>wear</b>, <b>irrigation</b> or <b>triage</b> example from the header to see more, including an output and a Choice.</p>
+      </section>
+
+      <section id="g-errors">
+        <h3>Mistakes and tips</h3>
+        <table>
+          <tr><th>Mistake</th><th>What you’ll see</th></tr>
+          <tr><td>a level that doesn’t exist</td><td><code>[terms] hot: `temp` has no level `hot`; its levels are …</code></td></tr>
+          <tr><td>a term not in <code>[terms]</code></td><td><code>rule 1 (`wet`): `wet` isn't in [terms], which names …</code></td></tr>
+          <tr><td>a lowercase operator</td><td><code>`and` isn't in [terms]; the operator is written AND</code></td></tr>
+          <tr><td>a missing operator</td><td><code>`hot` where AND or OR should be</code></td></tr>
+          <tr><td>an unknown output</td><td><code>… there is no [output.wter]; did you mean `water IS some`?</code></td></tr>
+          <tr><td>a weight or threshold outside 0–1</td><td><code>the weight is 2; it goes from 0 to 1</code></td></tr>
+        </table>
+        <h4>Designing rules</h4>
+        <ul>
+          <li>Ask graded things as <b>Scores</b> with 3–5 named levels; keep yes/no for things that are simply true or false.</li>
+          <li><b>One rule per piece of know-how</b>, in the owner’s words: “a raincoat when it rains, unless it’s hot” is <code>raining AND NOT hot</code>.</li>
+          <li><b>Check coverage:</b> walk the combinations (cold / mild / hot × raining or not) and make sure some rule speaks for each.</li>
+          <li><b>Look for conflicts</b> between rules that say opposite things about one situation, and decide which wins.</li>
+          <li><b>Tune on real states:</b> fix a rule, a weight or the threshold, never the answers; then check on cases you didn’t tune on.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const inputs = ["state", "questions", "rules"];
+const saveNames = { outcome: "outcome.txt", graph: "rules.txt", answers: "answers.txt", json: "jev.json", request: "request.json" };
+let examples = [];
+let result = null;     // the last run: request, reply, answers, outcome, decision, graph, svg
+let ranWith = null;    // the inputs that run was for
+let drawn = null;      // the latest structure-only drawing, { svg, graph }, or null
+let rawTab = "outcome";
+let zoom = "fit";
+const blobs = {};
+
+// ---------- storage: the fields are kept across reloads in this browser ----------
+function remembered(name) { try { return localStorage.getItem("jev." + name); } catch { return null; } }
+function remember(name, value) { try { localStorage.setItem("jev." + name, value); } catch {} }
+
+function current() {
+  return { state: $("state").value, stateJson: $("stateJson").checked, questions: $("questions").value, rules: $("rules").value, model: $("model").value };
+}
+
+// ---------- highlighting ----------
+const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const span = (kind, text) => `<span class="hl-${kind}">${escapeHtml(text)}</span>`;
+
+// Runs `pattern`'s named groups over `text`: the group that matches is the kind of token, and
+// what matches none is left plain.
+function tokenize(text, pattern, paint) {
+  let out = "", at = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match[0] === "") continue;
+    out += escapeHtml(text.slice(at, match.index));
+    const [kind, token] = Object.entries(match.groups).find(([, value]) => value !== undefined);
+    out += paint(kind, token);
+    at = match.index + match[0].length;
+  }
+  return out + escapeHtml(text.slice(at));
+}
+
+const JSON_TOKENS = /(?<key>"(?:\\.|[^"\\\n])*"(?=\s*:))|(?<string>"(?:\\.|[^"\\\n])*"?)|(?<number>-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(?<literal>\b(?:true|false|null)\b)|(?<punct>[{}\[\],:])/g;
+function highlightJson(text) { return tokenize(text, JSON_TOKENS, span); }
+
+// A rule's `if` is a string, so its operators and hedges are picked out inside strings.
+const OPERATORS = /\b(AND|OR|NOT|VERY|SOMEWHAT|EXTREMELY|INDEED|IS)\b/g;
+const TOML_TOKENS = /(?<comment>#[^\n]*)|(?<string>"""[\s\S]*?(?:"""|$(?![\s\S]))|'''[\s\S]*?(?:'''|$(?![\s\S]))|"(?:\\.|[^"\\\n])*"?|'[^'\n]*'?)|(?<table>^[ \t]*\[\[?[^\]\n]*\]\]?)|(?<key>^[ \t]*(?:[A-Za-z0-9_.-]+|"[^"\n]*")(?=[ \t]*=))|(?<literal>\b(?:true|false)\b)|(?<number>[+-]?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(?<punct>[=,{}\[\]])/gm;
+function highlightToml(text) {
+  return tokenize(text, TOML_TOKENS, (kind, token) => {
+    if (kind !== "string") return span(kind, token);
+    const inner = escapeHtml(token).replace(OPERATORS, '</span><span class="hl-op">$1</span><span class="hl-string">');
+    return `<span class="hl-string">${inner}</span>`;
+  });
+}
+
+function highlightField(textarea) {
+  const box = textarea.parentElement;
+  const lang = box.dataset.lang === "state" ? ($("stateJson").checked ? "json" : "text") : box.dataset.lang;
+  const text = textarea.value;
+  const html = lang === "json" ? highlightJson(text) : lang === "toml" ? highlightToml(text) : escapeHtml(text);
+  // A last empty line still takes a line's height in the textarea.
+  box.querySelector("pre").innerHTML = html + "\n";
+  syncScroll(textarea);
+}
+function syncScroll(textarea) {
+  const pre = textarea.parentElement.querySelector("pre");
+  pre.scrollTop = textarea.scrollTop;
+  pre.scrollLeft = textarea.scrollLeft;
+}
+function highlightAll() { for (const name of inputs) highlightField($(name)); }
+
+// An object's entries as a list, so one key can be written twice: `layout` writes them all, for
+// the server to refuse, where a plain object would keep only the last.
+class Entries { constructor(list) { this.list = list; } }
+
+// The first key written twice in one object of `text`, at any depth; null when there is none, or
+// when it isn't JSON. JSON.parse keeps only the last of two, so this is looked for before it.
+function repeatedKey(text) {
+  const open = []; // a Set of keys for each object open, null for each array
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at];
+    if (char === "{") open.push(new Set());
+    else if (char === "[") open.push(null);
+    else if (char === "}" || char === "]") open.pop();
+    else if (char === '"') {
+      let end = at + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+      const quoted = text.slice(at, end + 1);
+      at = end;
+      const keys = open[open.length - 1];
+      if (!keys) continue;
+      let next = end + 1;
+      while (/\s/.test(text[next] || "")) next++;
+      if (text[next] !== ":") continue;
+      let key;
+      try { key = JSON.parse(quoted); } catch { return null; }
+      if (keys.has(key)) return key;
+      keys.add(key);
+    }
+  }
+  return null;
+}
+
+// JSON pretty-printed with two spaces, its keys in their order, and a short list of plain values,
+// such as a question's levels, kept on one line; null when it isn't JSON, or when a key is written
+// twice, which parsing it would lose.
+function layout(value, indent = "") {
+  const write = (value, indent) => {
+    const inner = indent + "  ";
+    if (value instanceof Entries) {
+      if (!value.list.length) return "{}";
+      return `{\n${value.list.map(([key, item]) => `${inner}${JSON.stringify(key)}: ${write(item, inner)}`).join(",\n")}\n${indent}}`;
+    }
+    if (Array.isArray(value)) {
+      if (!value.length) return "[]";
+      const flat = value.every((item) => item === null || typeof item !== "object") && `[${value.map((item) => JSON.stringify(item)).join(", ")}]`;
+      if (flat && flat.length + indent.length <= 72) return flat;
+      return `[\n${value.map((item) => inner + write(item, inner)).join(",\n")}\n${indent}]`;
+    }
+    if (value && typeof value === "object") {
+      const entries = Object.entries(value);
+      if (!entries.length) return "{}";
+      return `{\n${entries.map(([key, item]) => `${inner}${JSON.stringify(key)}: ${write(item, inner)}`).join(",\n")}\n${indent}}`;
+    }
+    return JSON.stringify(value);
+  };
+  return write(value, indent);
+}
+function pretty(text) {
+  let value;
+  try { value = JSON.parse(text); } catch { return null; }
+  if (repeatedKey(text) != null) return null;
+  return layout(value);
+}
+// Formats a field as typing would, so undo takes it back; says why when it can't.
+function format(name) {
+  const textarea = $(name);
+  const formatted = pretty(textarea.value);
+  if (formatted == null) {
+    const field = name === "state" ? "--state-json" : "questions";
+    try { JSON.parse(textarea.value); } catch (error) { fieldErrors(`${field}: isn't JSON: ${error.message}`); return; }
+    fieldErrors(`${field}: \`${repeatedKey(textarea.value)}\` is written twice in one object; formatting would keep only one`);
+    return;
+  }
+  if (formatted === textarea.value) return;
+  textarea.focus();
+  textarea.select();
+  if (!document.execCommand("insertText", false, formatted)) {
+    textarea.value = formatted;
+    textarea.dispatchEvent(new Event("input"));
+  }
+  textarea.setSelectionRange(0, 0);
+  textarea.scrollTop = textarea.scrollLeft = 0;
+}
+$("formatQuestions").addEventListener("click", () => format("questions"));
+$("formatState").addEventListener("click", () => format("state"));
+$("stateJson").addEventListener("change", () => { $("formatState").hidden = !$("stateJson").checked; });
+$("questions").addEventListener("keydown", (event) => {
+  if (event.code === "KeyF" && event.shiftKey && event.altKey) { event.preventDefault(); format("questions"); }
+});
+$("state").addEventListener("keydown", (event) => {
+  if (event.code === "KeyF" && event.shiftKey && event.altKey && $("stateJson").checked) { event.preventDefault(); format("state"); }
+});
+for (const name of inputs) {
+  $(name).addEventListener("input", () => highlightField($(name)));
+  $(name).addEventListener("scroll", () => syncScroll($(name)));
+}
+$("stateJson").addEventListener("change", () => highlightField($("state")));
+// Tab indents, as in an editor, rather than leaving the field.
+for (const name of ["questions", "rules"]) {
+  $(name).addEventListener("keydown", (event) => {
+    if (event.key !== "Tab" || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+    event.preventDefault();
+    document.execCommand("insertText", false, "  ");
+  });
+}
+
+// ---------- the questions as a form ----------
+// The JSON is what is sent; the form is another way to write it. Each edit in the form writes the
+// JSON again, and the form is read from the JSON when it is shown or the JSON is replaced.
+let questionsMode = remembered("questionsMode") === "json" ? "json" : "form";
+let model = [];        // [{ id, type, instructions, options: [{name, about}], levels: [..], yes, no }]
+let formBlocked = null; // why the JSON can't be shown as a form, or null
+
+// The JSON as the form's model, or a string saying why it can't be one.
+function modelOf(text) {
+  if (!text.trim()) return [];
+  let value;
+  try { value = JSON.parse(text); } catch (error) { return `it isn't JSON (${error.message})`; }
+  const twice = repeatedKey(text);
+  if (twice != null) return `\`${twice}\` is written twice in one object, and the form would keep only one`;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "it isn't an object of ids to questions";
+  const questions = [];
+  for (const [id, question] of Object.entries(value)) {
+    const where = `question \`${id}\``;
+    if (!question || typeof question !== "object" || Array.isArray(question)) return `${where} isn't an object`;
+    const extra = Object.keys(question).find((key) => !["type", "instructions", "criteria"].includes(key));
+    if (extra) return `${where} has \`${extra}\`, which the form has no field for`;
+    if (!["noul", "choice", "score"].includes(question.type)) return `${where} has no type the form knows`;
+    if (question.instructions != null && typeof question.instructions !== "string") return `the instructions of ${where} aren't text`;
+    const entry = { id, type: question.type, instructions: question.instructions ?? "", options: [], levels: [], yes: "", no: "" };
+    const criteria = question.criteria;
+    if (question.type === "noul" && criteria != null) {
+      if (typeof criteria !== "object" || Object.keys(criteria).some((key) => key !== "true" && key !== "false")
+        || [criteria.true, criteria.false].some((text) => text != null && typeof text !== "string")) return `the criteria of ${where} aren't text for true and false`;
+      entry.yes = criteria.true ?? "";
+      entry.no = criteria.false ?? "";
+    } else if (question.type === "choice") {
+      if (!criteria || typeof criteria !== "object" || Array.isArray(criteria)) return `the options of ${where} aren't an object of names to descriptions`;
+      for (const [name, about] of Object.entries(criteria)) {
+        if (about != null && typeof about !== "string") return `option \`${name}\` of ${where} has a description that isn't text`;
+        entry.options.push({ name, about: about ?? "" });
+      }
+    } else if (question.type === "score") {
+      if (!Array.isArray(criteria) || criteria.some((level) => typeof level !== "string")) return `the levels of ${where} aren't a list of text`;
+      entry.levels = [...criteria];
+    }
+    questions.push(entry);
+  }
+  return questions;
+}
+
+// The model as JSON, laid out as `pretty` does. Two questions with one id, or two options with one
+// name, both stay, for the server to refuse, rather than one quietly replacing the other.
+function jsonOf(questions) {
+  return layout(new Entries(questions.map((question) => {
+    const out = { type: question.type, instructions: question.instructions };
+    if (question.type === "noul" && (question.yes || question.no)) out.criteria = { true: question.yes, false: question.no };
+    if (question.type === "choice") out.criteria = new Entries(question.options.map((option) => [option.name, option.about || null]));
+    if (question.type === "score") out.criteria = question.levels;
+    return [question.id, out];
+  })));
+}
+
+// Writes the form's model into the JSON field, as if it were typed there.
+function writeQuestions() {
+  $("questions").value = jsonOf(model);
+  highlightField($("questions"));
+  remember("questions", $("questions").value);
+  edited("questions");
+  markIds();
+}
+
+// Reads the form again from the JSON, and draws it.
+function readQuestions() {
+  const read = modelOf($("questions").value);
+  formBlocked = typeof read === "string" ? read : null;
+  if (!formBlocked) model = read;
+  if (questionsMode === "form") renderForm();
+}
+
+function setMode(mode) {
+  if (mode === "form") {
+    const read = modelOf($("questions").value);
+    if (typeof read === "string") { formBlocked = read; }
+    else { formBlocked = null; model = read; }
+  }
+  questionsMode = mode;
+  remember("questionsMode", mode);
+  for (const tab of document.querySelectorAll("#questionsMode [role=tab]")) tab.setAttribute("aria-selected", tab.dataset.mode === mode);
+  $("questionsForm").hidden = mode !== "form";
+  $("questionsCode").hidden = mode !== "json";
+  $("formatQuestions").hidden = mode !== "json";
+  if (mode === "form") renderForm();
+  else highlightField($("questions"));
+}
+
+// Ids that are empty or given twice are marked, since the JSON can't tell them apart.
+function markIds() {
+  const inputs = [...$("questionsForm").querySelectorAll("input.qid")];
+  inputs.forEach((input, at) => {
+    const id = model[at] ? model[at].id : "";
+    const twice = model.some((other, index) => index !== at && other.id === id);
+    input.classList.toggle("invalid", !id.trim() || twice);
+    input.title = !id.trim() ? "Give the question an id" : twice ? `Another question is also \`${id}\`` : "";
+  });
+  // A Choice's option names, the same way: two with one name would be one key.
+  [...$("questionsForm").querySelectorAll(".qcard")].forEach((card, at) => {
+    const question = model[at];
+    if (!question || question.type !== "choice") return;
+    [...card.querySelectorAll("input.oname")].forEach((input, index) => {
+      const name = question.options[index] ? question.options[index].name : "";
+      const twice = question.options.some((other, other_at) => other_at !== index && other.name === name);
+      input.classList.toggle("invalid", !name.trim() || twice);
+      input.title = !name.trim() ? "Give the option a name" : twice ? `Another option is also \`${name}\`` : "";
+    });
+  });
+}
+
+function textField(value, placeholder, onInput, attributes = {}) {
+  const input = el("input", { type: "text", spellcheck: "false", placeholder, ...attributes });
+  input.value = value;
+  input.addEventListener("input", () => { onInput(input.value); writeQuestions(); });
+  return input;
+}
+function grow(textarea) {
+  if (!textarea.offsetParent) return; // folded away: measured when it shows
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight + 2}px`;
+}
+function iconButton(label, title, onClick) {
+  const button = el("button", { type: "button", class: "icon ghost", title, "aria-label": title }, label);
+  button.addEventListener("click", onClick);
+  return button;
+}
+// A structural change: write the JSON, draw the form again, and put the cursor where it belongs.
+function changed(focusSelector) {
+  writeQuestions();
+  renderForm();
+  // The last match: what was just added.
+  const target = focusSelector && [...$("questionsForm").querySelectorAll(focusSelector)].pop();
+  if (target) target.focus();
+}
+
+function renderForm() {
+  const form = $("questionsForm");
+  if (formBlocked) {
+    const button = el("button", { type: "button" }, "Edit as JSON");
+    button.addEventListener("click", () => setMode("json"));
+    form.replaceChildren(el("div", { class: "notice" }, el("span", {}, `The form can't show these questions: ${formBlocked}.`), button));
+    return;
+  }
+  const cards = model.map((question, at) => {
+    const card = el("div", { class: "qcard" });
+    const types = el("div", { class: "seg small", role: "radiogroup", "aria-label": "Type" });
+    for (const [type, label, title] of [["noul", "yes/no", "Noul: is it true?"], ["choice", "choice", "Choice: one of several options"], ["score", "score", "Score: a level from lowest to highest"]]) {
+      const button = el("button", { type: "button", role: "radio", "aria-checked": question.type === type, title }, label);
+      button.addEventListener("click", () => {
+        if (question.type === type) return;
+        // Options and levels are both lists of names, so they carry over.
+        if (type === "score" && question.options.length) question.levels = question.options.map((option) => option.name);
+        if (type === "choice" && question.levels.length) question.options = question.levels.map((name) => ({ name, about: "" }));
+        if (type === "choice" && question.options.length < 2) while (question.options.length < 2) question.options.push({ name: "", about: "" });
+        if (type === "score" && question.levels.length < 2) while (question.levels.length < 2) question.levels.push("");
+        question.type = type;
+        changed();
+      });
+      types.append(button);
+    }
+    const remove = iconButton("✕", "Remove this question", () => { model.splice(at, 1); changed(); });
+    card.append(el("div", { class: "row" }, textField(question.id, "id, such as is_urgent", (value) => (question.id = value), { class: "qid", "aria-label": "Question id" }), types, remove));
+
+    const instructions = el("textarea", { rows: "2", spellcheck: "true", placeholder: "Instructions: what to judge about the state", "aria-label": "Instructions" });
+    instructions.value = question.instructions;
+    instructions.addEventListener("input", () => { question.instructions = instructions.value; grow(instructions); writeQuestions(); });
+    card.append(instructions);
+    requestAnimationFrame(() => grow(instructions));
+
+    if (question.type === "noul") {
+      card.append(el("div", { class: "sub" }, "What yes and no mean (optional)"),
+        el("div", { class: "pair" },
+          textField(question.yes, "yes means…", (value) => (question.yes = value), { "aria-label": "What yes means" }),
+          textField(question.no, "no means…", (value) => (question.no = value), { "aria-label": "What no means" })));
+    } else if (question.type === "choice") {
+      const list = el("div", { class: "options" });
+      question.options.forEach((option, index) => {
+        list.append(
+          textField(option.name, "option", (value) => (option.name = value), { class: "oname", "aria-label": `Option ${index + 1}` }),
+          textField(option.about, "description (optional)", (value) => (option.about = value), { "aria-label": `Option ${index + 1}'s description` }),
+          iconButton("✕", "Remove this option", () => { question.options.splice(index, 1); changed(); }));
+      });
+      const add = el("button", { type: "button", class: "link" }, "+ option");
+      add.addEventListener("click", () => { question.options.push({ name: "", about: "" }); changed(`.qcard:nth-child(${at + 1}) .oname`); });
+      card.append(el("div", { class: "sub" }, "Options: two or more"), list, add);
+    } else {
+      const list = el("div", { class: "levels" });
+      question.levels.forEach((level, index) => {
+        const move = (by) => () => { const [moved] = question.levels.splice(index, 1); question.levels.splice(index + by, 0, moved); changed(); };
+        const up = iconButton("↑", "Move this level down the scale", move(-1));
+        const down = iconButton("↓", "Move this level up the scale", move(1));
+        up.disabled = index === 0;
+        down.disabled = index === question.levels.length - 1;
+        list.append(el("span", { class: "num" }, String(index)),
+          textField(level, index === 0 ? "lowest level" : index === question.levels.length - 1 ? "highest level" : "level", (value) => (question.levels[index] = value), { class: "lname", "aria-label": `Level ${index}` }),
+          up, down, iconButton("✕", "Remove this level", () => { question.levels.splice(index, 1); changed(); }));
+      });
+      const add = el("button", { type: "button", class: "link" }, "+ level");
+      add.disabled = question.levels.length >= 10;
+      add.addEventListener("click", () => { question.levels.push(""); changed(`.qcard:nth-child(${at + 1}) .lname`); });
+      card.append(el("div", { class: "sub" }, "Levels, lowest first: two to ten"), list, add);
+    }
+    return card;
+  });
+  const add = el("button", { type: "button", class: "add" }, "+ Add question");
+  add.addEventListener("click", () => {
+    let n = model.length + 1;
+    while (model.some((question) => question.id === `question_${n}`)) n++;
+    model.push({ id: `question_${n}`, type: "noul", instructions: "", options: [], levels: [], yes: "", no: "" });
+    changed(".qcard .qid");
+    document.activeElement.select();
+  });
+  const list = el("div", { class: "qcards" }, ...cards);
+  if (!cards.length) list.append(el("div", { class: "empty-form" }, "No questions yet."));
+  form.replaceChildren(list, add);
+  markIds();
+}
+
+for (const tab of document.querySelectorAll("#questionsMode [role=tab]")) tab.addEventListener("click", () => setMode(tab.dataset.mode));
+// Typing in the JSON keeps the form's model up to date, for when it is shown again.
+$("questions").addEventListener("input", () => { if (questionsMode === "json") { const read = modelOf($("questions").value); formBlocked = typeof read === "string" ? read : null; if (!formBlocked) model = read; } });
+
+// ---------- the input cards: each folds to a one-line summary ----------
+const panels = ["state", "questions", "rules"];
+function setCollapsed(name, collapsed) {
+  const panel = $(name + "Panel");
+  panel.classList.toggle("collapsed", collapsed);
+  panel.querySelector(".toggle").setAttribute("aria-expanded", String(!collapsed));
+  remember("collapsed." + name, collapsed);
+  // What was laid out while folded away is measured again now it shows.
+  if (!collapsed) {
+    requestAnimationFrame(() => {
+      for (const textarea of panel.querySelectorAll(".qcard textarea")) grow(textarea);
+      if (name !== "questions" || questionsMode === "json") syncScroll($(name));
+    });
+  }
+}
+function summarize() {
+  const state = $("state").value.trim();
+  const firstLine = state.split("\n")[0];
+  $("stateSummary").textContent = state ? ($("stateJson").checked ? "JSON · " : "") + firstLine + (state.includes("\n") ? " …" : "") : "empty";
+  const read = modelOf($("questions").value);
+  $("questionsSummary").textContent = typeof read === "string" ? "not valid yet"
+    : read.length ? `${read.length} question${read.length === 1 ? "" : "s"}: ${read.map((question) => question.id).join(", ")}` : "none";
+  const rules = $("rules").value;
+  const count = (pattern) => (rules.match(pattern) || []).length;
+  const ruleCount = count(/^[ \t]*\[\[rule\]\]/gm), outputs = count(/^[ \t]*\[output\./gm);
+  $("rulesSummary").textContent = !rules.trim() ? "none" : `${ruleCount} rule${ruleCount === 1 ? "" : "s"}` + (outputs ? `, ${outputs} output${outputs === 1 ? "" : "s"}` : "");
+}
+for (const name of panels) {
+  const panel = $(name + "Panel");
+  // The whole header folds the card, except the controls in it.
+  panel.querySelector(".head").addEventListener("click", (event) => {
+    if (event.target.closest("button:not(.toggle), input, a, .seg")) return;
+    setCollapsed(name, !panel.classList.contains("collapsed"));
+  });
+  setCollapsed(name, remembered("collapsed." + name) === "true");
+}
+
+// ---------- reset ----------
+// Clears the fields and the results, and puts the model back; Undo, for a while, puts it all back.
+let defaultModel = "";
+let beforeReset = null, resetTimer;
+function fill(fields) {
+  for (const name of inputs) { $(name).value = fields[name]; remember(name, fields[name]); }
+  $("stateJson").checked = fields.stateJson;
+  remember("stateJson", fields.stateJson);
+  $("formatState").hidden = !fields.stateJson;
+  $("model").value = fields.model;
+  highlightAll();
+  readQuestions();
+  summarize();
+}
+function reset() {
+  dropRun();
+  beforeReset = { fields: current(), result, ranWith };
+  fill({ state: "", questions: "", rules: "", stateJson: false, model: defaultModel });
+  result = ranWith = null;
+  $("stale").hidden = $("error").hidden = true;
+  fieldErrors(null);
+  for (const name of panels) setCollapsed(name, false);
+  zoom = "fit";
+  redraw();
+  $("resetDone").hidden = false;
+  clearTimeout(resetTimer);
+  resetTimer = setTimeout(() => { $("resetDone").hidden = true; beforeReset = null; }, 12000);
+}
+function undoReset() {
+  if (!beforeReset) return;
+  const { fields, result: kept, ranWith: keptFor } = beforeReset;
+  beforeReset = null;
+  clearTimeout(resetTimer);
+  $("resetDone").hidden = true;
+  fill(fields);
+  result = kept;
+  ranWith = keptFor;
+  $("stale").hidden = !result || same(ranWith, current());
+  redraw();
+}
+$("reset").addEventListener("click", reset);
+$("undoReset").addEventListener("click", undoReset);
+
+// ---------- the rules guide ----------
+// Its examples are highlighted as the editor is, each with a button to copy it.
+for (const pre of document.querySelectorAll("#guide pre.snippet")) {
+  const text = pre.textContent;
+  pre.innerHTML = highlightToml(text);
+  const copy = el("button", { type: "button", class: "copy" }, "Copy");
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(text); copy.textContent = "Copied"; } catch { copy.textContent = "Select and copy"; }
+    setTimeout(() => (copy.textContent = "Copy"), 1500);
+  });
+  const box = el("div", { class: "snippet-box" });
+  pre.replaceWith(box);
+  box.append(pre, copy);
+}
+function openGuide() { $("guide").showModal(); $("guideBody").focus({ preventScroll: true }); }
+$("rulesHelp").addEventListener("click", openGuide);
+$("guideClose").addEventListener("click", () => $("guide").close());
+// A click on the backdrop closes it. The dialog's content fills its box, so a click that lands on
+// the dialog itself is on the backdrop; one from the keyboard, which has no position, is not.
+$("guide").addEventListener("click", (event) => { if (event.target === $("guide")) $("guide").close(); });
+// The contents link to sections within the guide, and mark the one being read.
+for (const link of document.querySelectorAll(".guide-nav a")) {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    // scrollIntoView doesn't reach into a modal dialog in Chrome, so the body is scrolled itself.
+    const body = $("guideBody"), target = document.querySelector(link.getAttribute("href"));
+    body.scrollTo({ top: target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 });
+  });
+}
+$("guideBody").setAttribute("tabindex", "-1");
+$("guideBody").addEventListener("scroll", () => {
+  const top = $("guideBody").getBoundingClientRect().top;
+  let current = null;
+  for (const section of $("guideBody").querySelectorAll("section")) if (section.getBoundingClientRect().top - top < 80) current = section.id;
+  for (const link of document.querySelectorAll(".guide-nav a")) link.classList.toggle("current", link.getAttribute("href") === "#" + current);
+});
+
+// ---------- start ----------
+// This run's token, from the address jev printed: what /start and /run need in X-Jev.
+const token = decodeURIComponent(location.hash.slice(1));
+// Pasting the whole address into a tab that is open already changes only the #, which loads nothing.
+window.addEventListener("hashchange", () => location.reload());
+async function start() {
+  const response = await fetch("/start", { headers: { "X-Jev": token } });
+  if (!response.ok) {
+    $("error").textContent = "This page needs this run's token: open the address jev --explore printed, the whole of it, with the part after #.";
+    $("error").hidden = false;
+    $("run").disabled = true;
+    return;
+  }
+  const given = await response.json();
+  examples = given.examples || [];
+  $("exampleList").replaceChildren(...examples.map((example, at) =>
+    el("li", { role: "option", id: `example-${at}`, "data-name": example.name, "aria-selected": "false" },
+      el("span", { class: "title" }, example.name), el("span", { class: "about" }, example.about))));
+  // A state, questions or rules on the command line start the page from them alone, so what was
+  // left from last time can't mix in; the model is always the command line's.
+  const fromCommand = given.state != null || given.questions != null || given.rules != null;
+  for (const name of inputs) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
+  defaultModel = given.model;
+  $("model").value = given.model;
+  $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
+  $("formatState").hidden = !$("stateJson").checked;
+  // Questions, and a JSON state, start pretty-printed, whoever wrote them.
+  $("questions").value = pretty($("questions").value) ?? $("questions").value;
+  if ($("stateJson").checked) $("state").value = pretty($("state").value) ?? $("state").value;
+  $("noKey").hidden = given.canAsk;
+  highlightAll();
+  setMode(questionsMode);
+  summarize();
+  for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
+  $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
+  $("model").addEventListener("input", () => edited("model"));
+  const firstVisit = !fromCommand && remembered("questions") === null;
+  if (firstVisit && examples.length) load(examples[0].name);
+  else redraw();
+}
+
+function load(name) {
+  const example = examples.find((one) => one.name === name);
+  if (!example) return;
+  dropRun();
+  $("state").value = example.state;
+  $("questions").value = pretty(example.questions) ?? example.questions;
+  $("rules").value = example.rules;
+  $("stateJson").checked = false;
+  $("formatState").hidden = true;
+  for (const name of inputs) remember(name, $(name).value);
+  remember("stateJson", false);
+  highlightAll();
+  readQuestions();
+  summarize();
+  result = ranWith = null;
+  $("stale").hidden = $("error").hidden = true;
+  zoom = "fit";
+  redraw();
+}
+
+// ---------- editing: the results go stale, and the structure is drawn again ----------
+let redrawTimer;
+function edited(name) {
+  summarize();
+  if (beforeReset) { beforeReset = null; clearTimeout(resetTimer); $("resetDone").hidden = true; }
+  $("stale").hidden = !result || same(ranWith, current());
+  if (name === "questions" || name === "rules") {
+    clearTimeout(redrawTimer);
+    redrawTimer = setTimeout(redraw, 350);
+  }
+}
+function same(a, b) { return !!a && JSON.stringify(a) === JSON.stringify(b); }
+
+async function post(body) {
+  const response = await fetch("/run", { method: "POST", headers: { "Content-Type": "application/json", "X-Jev": token }, body: JSON.stringify(body) });
+  const answer = await response.json().catch(() => ({ error: `the server answered ${response.status}` }));
+  if (answer.error) throw new Error(answer.error);
+  return answer;
+}
+
+// The rules' structure costs no call, so it is drawn whenever the questions or the rules change.
+let drawSeq = 0;
+async function redraw() {
+  const seq = ++drawSeq;
+  const fields = current();
+  if (!fields.rules.trim()) { drawn = null; fieldErrors(null); render(); return; }
+  try {
+    const answer = await post({ ...fields, draw: true });
+    if (seq !== drawSeq) return;
+    drawn = answer;
+    fieldErrors(null);
+  } catch (error) {
+    if (seq !== drawSeq) return;
+    drawn = null;
+    fieldErrors(null);
+    fieldErrors(error.message === "Failed to fetch" ? null : error.message);
+  }
+  render();
+}
+
+// An error that names the field it's about goes under that field. Says whether it found one.
+function fieldErrors(message) {
+  for (const name of inputs) { $(name + "Error").hidden = true; $(name).parentElement.classList.remove("invalid"); }
+  if (!message) return false;
+  const fieldOf = { "questions:": "questions", "no questions": "questions", "rules:": "rules", "the state": "state", "--state-json": "state" };
+  const prefix = Object.keys(fieldOf).find((start) => message.startsWith(start));
+  if (!prefix) return false;
+  const name = fieldOf[prefix];
+  $(name + "Error").textContent = message.replace(/^(questions|rules): /, "").replace(/^--state-json: /, "");
+  $(name + "Error").hidden = false;
+  setCollapsed(name, false);
+  $(name).parentElement.classList.add("invalid");
+  return true;
+}
+
+// ---------- run ----------
+// Each run has a number; Reset or loading an example moves it on, so a reply that arrives after
+// the inputs were replaced is dropped instead of bringing the old results back.
+let runSeq = 0;
+function running(on) {
+  const button = $("run");
+  button.disabled = $("rerun").disabled = on;
+  button.classList.toggle("busy", on);
+  button.querySelector(".label").textContent = on ? "Asking Jev…" : "Run";
+  $("results").classList.toggle("loading", on);
+}
+function dropRun() {
+  runSeq++;
+  running(false);
+}
+async function run() {
+  const seq = ++runSeq;
+  const fields = current();
+  running(true);
+  $("error").hidden = true;
+  let answer = null, failure = null;
+  try { answer = await post({ ...fields, draw: false }); } catch (error) { failure = error; }
+  if (seq !== runSeq) return;
+  running(false);
+  if (answer) {
+    result = answer;
+    ranWith = fields;
+    fieldErrors(null);
+  } else {
+    const message = failure.message === "Failed to fetch" ? "jev isn't running any more: start jev --explore again." : failure.message;
+    if (!fieldErrors(message)) { $("error").textContent = message; $("error").hidden = false; }
+  }
+  $("stale").hidden = !result || same(ranWith, current());
+  render();
+}
+
+// ---------- render ----------
+// The run's drawing, with its numbers, holds until the questions or the rules change.
+function runDraws() {
+  return !!(result && result.svg && ranWith && ranWith.rules === $("rules").value && ranWith.questions === $("questions").value);
+}
+
+function render() {
+  const svg = runDraws() ? result.svg : drawn && drawn.svg;
+  $("diagramNote").textContent = runDraws() ? "with Jev's answers" : svg ? "structure only · Run to fill in the numbers" : "";
+  showDiagram(svg);
+  renderDecision();
+  renderAnswers();
+  renderRaw();
+}
+
+function saveable(name, text, type) {
+  if (blobs[name]) URL.revokeObjectURL(blobs[name]);
+  blobs[name] = URL.createObjectURL(new Blob([text], { type: type + ";charset=utf-8" }));
+  return blobs[name];
+}
+
+let shownSvg = null;
+function showDiagram(text) {
+  $("diagramEmpty").hidden = !!text;
+  $("saveSvg").hidden = !text;
+  if (text === shownSvg) return;
+  shownSvg = text;
+  $("diagram").replaceChildren(...(text ? [drawing(text)] : []));
+  if (!text) { applyZoom(); return; }
+  $("saveSvg").href = saveable("svg", text, "image/svg+xml");
+  for (const group of $("diagram").querySelectorAll("g.rule")) {
+    group.addEventListener("mouseenter", () => focus(group.dataset.kind, group.dataset.then, Number(group.dataset.rule)));
+    group.addEventListener("mouseleave", () => focus(null));
+  }
+  applyZoom();
+}
+
+// The drawing as an element of this page, not an image. jev writes it and escapes every name in
+// it, but it is parsed as SVG, not HTML, and anything that could run is dropped all the same.
+function drawing(text) {
+  const svg = new DOMParser().parseFromString(text, "image/svg+xml").documentElement;
+  if (svg.nodeName !== "svg") {
+    const failed = document.createElement("p");
+    failed.textContent = "The drawing isn't SVG this page can show; Save .svg still has it.";
+    return failed;
+  }
+  for (const element of [svg, ...svg.querySelectorAll("*")]) {
+    if (element.localName === "script" || element.localName === "foreignObject") { element.remove(); continue; }
+    for (const attribute of [...element.attributes]) {
+      if (attribute.name.startsWith("on") || /^\s*javascript:/i.test(attribute.value)) element.removeAttribute(attribute.name);
+    }
+  }
+  return document.importNode(svg, true);
+}
+
+// Hovering a conclusion lights up the rules behind it; hovering a rule, its conclusion. A
+// conclusion is its kind and its name, since an item and an output may share a name.
+function focus(kind, then, rule) {
+  const diagram = $("diagram"), decision = $("decision");
+  const on = then != null;
+  const concludes = (element) => element.dataset.kind === kind && element.dataset.then === then;
+  diagram.classList.toggle("focusing", on);
+  decision.classList.toggle("focusing", on && [...decision.querySelectorAll("[data-then]")].some(concludes));
+  for (const group of diagram.querySelectorAll("g.rule")) {
+    group.classList.toggle("hit", on && (rule ? Number(group.dataset.rule) === rule : concludes(group)));
+  }
+  for (const card of decision.querySelectorAll("[data-then]")) card.classList.toggle("hit", on && concludes(card));
+}
+
+function scrollToRules(kind, then) {
+  const group = [...$("diagram").querySelectorAll("g.rule")].find((one) => one.dataset.kind === kind && one.dataset.then === then);
+  if (!group) return;
+  const viewport = $("viewport");
+  viewport.scrollBy({ top: group.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12, behavior: "smooth" });
+  $("diagramCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+const fixed = (number) => Number(number).toFixed(2);
+function el(tag, attributes = {}, ...children) {
+  const element = document.createElement(tag);
+  for (const [name, value] of Object.entries(attributes)) {
+    if (name === "class") element.className = value;
+    else if (name === "style") element.style.cssText = value;
+    else element.setAttribute(name, value);
+  }
+  element.append(...children.filter((child) => child != null));
+  return element;
+}
+function meter(value, { yes = false, mark = null } = {}) {
+  const box = el("div", { class: "meter" + (yes ? " yes" : "") }, el("i", { style: `width:${Math.max(0, Math.min(1, value)) * 100}%` }));
+  if (mark != null) box.append(el("b", { style: `left:calc(${mark * 100}% - 1px)`, title: `threshold ${fixed(mark)}` }));
+  return box;
+}
+
+function renderDecision() {
+  const decision = result && result.decision;
+  $("decisionCard").hidden = !decision;
+  if (!decision) return;
+  $("threshold").textContent = decision.items.length ? `yes at ${fixed(decision.threshold)} or over` : "";
+  const cards = [];
+  for (const item of decision.items) {
+    const fired = item.rules.filter((rule) => rule.score > 0).length;
+    cards.push(el("div", { class: "item", "data-kind": "item", "data-then": item.item, tabindex: "0" },
+      el("div", { class: "top" }, el("span", { class: "name", title: item.item }, item.item), el("span", { class: "badge " + (item.yes ? "yes" : "no") }, item.yes ? "yes" : "no")),
+      meter(item.score, { yes: item.yes, mark: decision.threshold }),
+      el("div", { class: "why" }, el("span", { class: "score" }, fixed(item.score)), ` · ${item.rules.length} rule${item.rules.length === 1 ? "" : "s"}, ${fired} fired`)));
+  }
+  for (const output of decision.outputs || []) {
+    const sets = el("div", { class: "sets" });
+    for (const set of output.sets) sets.append(el("span", {}, set.set), meter(set.score), el("span", { class: "mono" }, fixed(set.score)));
+    cards.push(el("div", { class: "item output", "data-kind": "output", "data-then": output.output, tabindex: "0" },
+      el("div", { class: "top" }, el("span", { class: "name" }, output.output), el("span", { class: "score" }, output.value == null ? "no rule fired" : fixed(output.value))),
+      sets));
+  }
+  for (const card of cards) {
+    card.addEventListener("mouseenter", () => focus(card.dataset.kind, card.dataset.then));
+    card.addEventListener("mouseleave", () => focus(null));
+    card.addEventListener("focus", () => focus(card.dataset.kind, card.dataset.then));
+    card.addEventListener("blur", () => focus(null));
+    card.addEventListener("click", () => scrollToRules(card.dataset.kind, card.dataset.then));
+  }
+  $("decision").replaceChildren(...cards);
+}
+
+function renderAnswers() {
+  $("answersCard").hidden = !result;
+  if (!result) return;
+  const answers = result.reply.answers;
+  // Every question asked, in the order asked, answered or not: a reply that leaves one out says so
+  // here, as the command's `no answer` does.
+  const order = result.ids || Object.keys(answers);
+  const blocks = [];
+  for (const id of order) {
+    const answer = answers[id];
+    if (!answer) {
+      blocks.push(el("div", { class: "answer missing" }, el("h3", {}, el("span", {}, id), el("span", { class: "pick" }, "no answer")),
+        el("p", { class: "why" }, "The reply has no answer for this question.")));
+      continue;
+    }
+    const bars = el("div", { class: "bars" });
+    const row = (label, p, top) => bars.append(el("span", { class: "label" + (top ? " top" : ""), title: label }, label), meter(p, { yes: top }), el("span", { class: "num" }, fixed(p)));
+    let pick = "";
+    if (answer.type === "noul") {
+      pick = answer.noul >= 0.5 ? "yes" : "no";
+      row("yes", answer.noul, answer.noul >= 0.5);
+      row("no", 1 - answer.noul, answer.noul < 0.5);
+    } else if (answer.type === "choice") {
+      pick = answer.choice;
+      for (const [option, p] of Object.entries(answer.probabilities).sort((a, b) => b[1] - a[1])) row(option, p, option === answer.choice);
+    } else if (answer.type === "score") {
+      const levels = Object.keys(answer.probabilities).map(Number).sort((a, b) => a - b);
+      const name = (level) => { const legend = answer.legend && answer.legend[level]; return typeof legend === "string" ? legend : `level ${level}`; };
+      const top = levels.reduce((best, level) => (answer.probabilities[level] > answer.probabilities[best] ? level : best), levels[0]);
+      pick = `expected ${fixed(answer.score)}`;
+      for (const level of levels) row(name(level), answer.probabilities[level], level === top);
+    } else {
+      // A type this version doesn't know: the reply keeps it, and the JSON shows it.
+      pick = "not drawn";
+      blocks.push(el("div", { class: "answer" }, el("h3", {}, el("span", {}, id), el("span", { class: "kind" }, String(answer.type)), el("span", { class: "pick" }, pick)),
+        el("p", { class: "why" }, `An answer of type \`${answer.type}\`, which this page doesn't draw: see it under Text and JSON output, JSON.`)));
+      continue;
+    }
+    blocks.push(el("div", { class: "answer" }, el("h3", {}, el("span", {}, id), el("span", { class: "kind" }, answer.type), el("span", { class: "pick" }, pick)), bars));
+  }
+  $("answers").replaceChildren(...blocks);
+  const usage = result.reply.usage || {};
+  const cost = usage.cost != null ? ` · $${usage.cost.toFixed(6)}` : "";
+  $("usage").textContent = `${result.reply.model} · ${usage.input_tokens} in, ${usage.output_tokens} out${cost}`;
+}
+
+function rawTexts() {
+  const parts = {};
+  if (result && result.outcome) parts.outcome = result.outcome;
+  const graph = runDraws() ? result.graph : drawn && drawn.graph;
+  if (graph) parts.graph = graph;
+  if (result && result.answers) parts.answers = result.answers;
+  // What the command prints for --json and --dry-run, as it prints them, so a saved file is its own.
+  if (result && result.json) parts.json = result.json;
+  if (result && result.dryRun) parts.request = result.dryRun;
+  return parts;
+}
+
+function renderRaw() {
+  const parts = rawTexts();
+  $("rawCard").hidden = Object.keys(parts).length === 0;
+  if (!(rawTab in parts)) rawTab = ["outcome", "graph", "answers", "json", "request"].find((name) => name in parts) || "outcome";
+  for (const tab of document.querySelectorAll(".tabs [role=tab]")) {
+    tab.setAttribute("aria-selected", tab.dataset.tab === rawTab);
+    tab.hidden = !(tab.dataset.tab in parts);
+  }
+  const text = parts[rawTab] || "";
+  const json = rawTab === "json" || rawTab === "request";
+  if (json) $("raw").innerHTML = highlightJson(text);
+  else $("raw").textContent = text;
+  $("saveText").href = saveable("raw", text, json ? "application/json" : "text/plain");
+  $("saveText").download = saveNames[rawTab];
+  $("saveText").textContent = "Save " + saveNames[rawTab].replace(/^.*\./, ".");
+}
+
+// ---------- zoom, pan, expand ----------
+function natural(svg) { return svg.viewBox.baseVal.width || svg.width.baseVal.value; }
+function applyZoom() {
+  const svg = $("diagram").querySelector("svg");
+  if (!svg) { $("zoomLevel").textContent = "–"; return; }
+  const scale = zoom === "fit" ? Math.min(1, ($("viewport").clientWidth - 16) / natural(svg)) : zoom;
+  svg.style.width = `${natural(svg) * scale}px`;
+  $("zoomLevel").textContent = (zoom === "fit" ? "fit " : "") + `${Math.round(scale * 100)}%`;
+}
+function zoomBy(factor) {
+  const svg = $("diagram").querySelector("svg");
+  if (!svg) return;
+  const now = parseFloat(svg.style.width) / natural(svg);
+  zoom = Math.max(0.25, Math.min(4, now * factor));
+  applyZoom();
+}
+$("zoomIn").addEventListener("click", () => zoomBy(1.25));
+$("zoomOut").addEventListener("click", () => zoomBy(0.8));
+$("fit").addEventListener("click", () => { zoom = "fit"; applyZoom(); });
+$("viewport").addEventListener("wheel", (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  zoomBy(event.deltaY < 0 ? 1.1 : 0.9);
+}, { passive: false });
+new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("viewport"));
+
+// Drag to pan, once the drawing is bigger than its box.
+let drag = null;
+$("viewport").addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  const viewport = $("viewport");
+  drag = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop, moved: false };
+});
+window.addEventListener("pointermove", (event) => {
+  if (!drag) return;
+  const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  drag.moved = true;
+  $("viewport").classList.add("dragging");
+  $("viewport").scrollLeft = drag.left - dx;
+  $("viewport").scrollTop = drag.top - dy;
+});
+window.addEventListener("pointerup", () => { drag = null; $("viewport").classList.remove("dragging"); });
+
+function expand(on) {
+  document.body.classList.toggle("expanded", on);
+  $("expand").textContent = on ? "Show inputs" : "Expand";
+  applyZoom();
+}
+$("expand").addEventListener("click", () => expand(!document.body.classList.contains("expanded")));
+
+// ---------- wiring ----------
+$("run").addEventListener("click", run);
+$("rerun").addEventListener("click", run);
+// The examples menu: opens on a click or ↓, is walked with the arrows, picks with Enter or a
+// click, and closes on Esc, Tab or a click anywhere else.
+let menuAt = -1;
+function menuOpen() { return !$("exampleList").hidden; }
+function openMenu() {
+  $("exampleList").hidden = false;
+  $("example").setAttribute("aria-expanded", "true");
+  moveMenu(0);
+  $("exampleList").focus();
+}
+function closeMenu(refocus) {
+  if (!menuOpen()) return;
+  $("exampleList").hidden = true;
+  $("example").setAttribute("aria-expanded", "false");
+  if (refocus) $("example").focus();
+}
+function moveMenu(at) {
+  const options = [...$("exampleList").children];
+  if (!options.length) return;
+  menuAt = (at + options.length) % options.length;
+  options.forEach((option, index) => option.setAttribute("aria-selected", index === menuAt));
+  $("exampleList").setAttribute("aria-activedescendant", options[menuAt].id);
+}
+function pickMenu(at) {
+  const option = $("exampleList").children[at];
+  closeMenu(true);
+  if (option) load(option.dataset.name);
+}
+$("example").addEventListener("click", () => (menuOpen() ? closeMenu(true) : openMenu()));
+$("example").addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); openMenu(); }
+});
+$("exampleList").addEventListener("keydown", (event) => {
+  const keys = { ArrowDown: () => moveMenu(menuAt + 1), ArrowUp: () => moveMenu(menuAt - 1), Home: () => moveMenu(0), End: () => moveMenu(-1),
+    Enter: () => pickMenu(menuAt), " ": () => pickMenu(menuAt), Escape: () => closeMenu(true), Tab: () => closeMenu(false) };
+  if (!keys[event.key]) return;
+  if (event.key !== "Tab") event.preventDefault();
+  event.stopPropagation();
+  keys[event.key]();
+});
+$("exampleList").addEventListener("mousemove", (event) => {
+  const option = event.target.closest("li");
+  if (option) moveMenu([...$("exampleList").children].indexOf(option));
+});
+$("exampleList").addEventListener("click", (event) => {
+  const option = event.target.closest("li");
+  if (option) pickMenu([...$("exampleList").children].indexOf(option));
+});
+document.addEventListener("pointerdown", (event) => { if (!$("exampleMenu").contains(event.target)) closeMenu(false); });
+for (const tab of document.querySelectorAll(".tabs [role=tab]")) tab.addEventListener("click", () => { rawTab = tab.dataset.tab; renderRaw(); });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (!$("run").disabled) run(); }
+  if (event.key === "Escape" && document.body.classList.contains("expanded")) expand(false);
+});
+start();
+</script>
+</body>
+</html>

@@ -90,6 +90,15 @@ impl Rules {
         }
 
         for (at, row) in rows.iter().enumerate() {
+            // A group per rule, named by its number and what it concludes, so a page that shows the
+            // drawing can point at a rule. It draws nothing itself.
+            // An item and an output may share a name, so which one it is is said too.
+            let (kind, then) = match &row.then {
+                Then::Item(name) => ("item", name.as_str()),
+                Then::Output { output, .. } => ("output", self.outputs[*output].name.as_str()),
+            };
+            let _ =
+                writeln!(svg.body, "<g class=\"rule\" data-rule=\"{}\" data-kind=\"{kind}\" data-then=\"{}\">", row.number, escape(then));
             let top = TOP + at as f64 * ROW;
             let plot_top = top + CAPTION;
             svg.text(8.0, plot_top + PANEL_HEIGHT / 2.0 + 5.0, 15.0, "start", "bold", INK, &format!("R{}", row.number));
@@ -119,6 +128,7 @@ impl Rules {
                 svg.arrow(tree_x + TREE_WIDTH + 4.0, frame.x - 4.0, plot_top + PANEL_HEIGHT / 2.0);
                 self.conclusion(&mut svg, &frame, row);
             }
+            svg.body.push_str("</g>\n");
         }
 
         let bottom = self.finals(&mut svg, &rows, final_x, reply)?;

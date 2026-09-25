@@ -55,6 +55,7 @@ extra question costs a few tokens and no extra round trip.
 - [Fuzzy rules](#fuzzy-rules)
   - [Outputs: a crisp amount](#outputs-a-crisp-amount)
 - [Drawing the rules](#drawing-the-rules)
+- [Exploring in the browser](#exploring-in-the-browser)
 - [The Agent Skill](#the-agent-skill)
 - [As a library](#as-a-library)
 - [From Python](#from-python)
@@ -408,6 +409,50 @@ An output is drawn as a plot of its merged shape, with `↑` at its centre:
        0                             ↑ 51.02                    100
            short                  medium                  long
 ```
+
+## Exploring in the browser
+
+`jev --explore` opens a page in the browser for writing a state, questions and rules, and seeing
+what they come to. It is the command, in a page: the same questions, the same rules engine, and the
+same drawing.
+
+```sh
+jev --explore
+jev --explore -q examples/rules/weather.json -r examples/rules/wear.toml   # start from these files
+jev --explore 'Help! My payouts have been failing for 3 days.' -q examples/rules/triage.json -r examples/rules/triage.toml
+```
+
+On the left, a card each for the **state** (text, or JSON), the **questions** and the **rules**:
+
+- **Questions** as a form (a card per question: its id, yes/no, choice or score, the instructions,
+  and its options or levels) or as JSON, the same as a `-q` file. The two stay in step, and the
+  JSON is pretty-printed.
+- **Rules** in TOML, the same as an `-r` file. The ⓘ on the card opens a guide to writing them:
+  terms, `if` / `then` / `weight`, `AND` / `OR` / `NOT` and the hedges, the `[logic]` functions,
+  the threshold, and outputs.
+- JSON and TOML are highlighted as they are typed, and a mistake shows under the field it is in,
+  before anything is asked.
+- Each card folds to a line that says what is in it. **Load an example** fills all three from
+  [`examples/rules`](examples/rules), and **Reset** clears them, with an undo.
+
+On the right, what they come to:
+
+- **The rules diagram**, the `--svg` drawing, redrawn as the questions or the rules change, at no
+  cost. It zooms, fits, pans, and can take the whole width.
+- **Run** (<kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>↵</kbd>) asks Jev. Then the **decision**, a card per
+  item with its score against the threshold and each output's value, sits above the diagram:
+  hovering a card lights up the rules behind it, and hovering a rule its card. Jev's **answers**
+  follow as probability bars, with the model, tokens and cost.
+- The **text and JSON** the command prints: the outcome, the `--graph` tree, the answers, what
+  `--json` prints and the request `--dry-run` shows, each with a button to save it, as is the SVG.
+
+The page is served on 127.0.0.1 only, on any free port (`--port` picks one), and `--no-open`
+prints the address without opening a browser. The key stays in the `jev` process, read from
+`OPENROUTER_API_KEY` as always. The address carries a random token for this run after its `#`, and
+nothing that reads your inputs or spends the key answers without it, so neither another site open in
+the same browser nor another user of the machine can use it.
+Without a key, the page still checks and draws the rules. It loads Fira Code from Google Fonts,
+and falls back to the system's monospace font offline.
 
 ## The Agent Skill
 

@@ -49,7 +49,7 @@ unicode-width = { version = "0.2", optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 clap = { version = "4", features = ["derive"], optional = true }
-tokio = { version = "1", features = ["macros", "rt"], optional = true }
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "time", "sync"], optional = true }
 anyhow = { version = "1", optional = true }
 # How wide a --table may be. Only the terminal's size, where crossterm (which dx uses for its
 # editor) would bring an event loop and signal handling this command has no use for.
