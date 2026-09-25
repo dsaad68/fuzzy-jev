@@ -439,7 +439,7 @@ R1  raining AND NOT VERY hot  ⇒  raincoat
         // Every element that opens is closed, and each rule is a group a page can find.
         assert_eq!(svg.matches("<text").count(), svg.matches("</text>").count());
         assert_eq!(svg.matches("<g ").count(), svg.matches("</g>").count());
-        assert!(svg.contains("<g class=\"rule\" data-rule=\"1\"") && svg.contains("data-then=\"raincoat\""));
+        assert!(svg.contains("<g class=\"rule\" data-rule=\"1\"") && svg.contains("data-kind=\"item\" data-then=\"raincoat\""));
         // The structure alone draws no numbers and says why.
         let structure = rules().graph_svg(None).unwrap();
         assert!(structure.contains("Structure only") && !structure.contains("water ="));

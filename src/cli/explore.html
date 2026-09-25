@@ -228,6 +228,8 @@
   .bars .meter { margin: 0; height: 6px; }
   .bars .num { text-align: right; font: 13px var(--font); color: var(--muted); }
   .usage { color: var(--muted); font-size: 14px; }
+  .answer .why { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .answer.missing h3 .pick { color: var(--warn); }
 
   /* Diagram */
   .toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
@@ -426,7 +428,8 @@
         <button role="tab" data-tab="outcome">Outcome</button>
         <button role="tab" data-tab="graph">Graph</button>
         <button role="tab" data-tab="answers">Answers</button>
-        <button role="tab" data-tab="json">JSON</button>
+        <button role="tab" data-tab="json" title="What jev --json prints">JSON</button>
+        <button role="tab" data-tab="request" title="What jev --dry-run prints: the request sent">Request</button>
         <span class="spacer"></span>
         <a class="button" id="saveText">Save</a>
       </div>
@@ -559,7 +562,7 @@ then   = "reply_within IS soon"  # … or OUTPUT IS SET, a set of an [output]</p
           <tr><td><code>VERY a</code></td><td>a²</td><td>0.49</td><td>0.09</td><td>a ≥ 0.71</td></tr>
           <tr><td><code>EXTREMELY a</code></td><td>a³</td><td>0.34</td><td>0.03</td><td>a ≥ 0.79</td></tr>
           <tr><td><code>SOMEWHAT a</code></td><td>√a</td><td>0.84</td><td>0.55</td><td>a ≥ 0.25</td></tr>
-          <tr><td><code>INDEED a</code></td><td>2a² when a ≤ 0.5, else 1 − 2(1 − a)²</td><td>0.82</td><td>0.18</td><td>a &gt; 0.5 (pushes away from 0.5)</td></tr>
+          <tr><td><code>INDEED a</code></td><td>2a² when a ≤ 0.5, else 1 − 2(1 − a)²</td><td>0.82</td><td>0.18</td><td>a ≥ 0.5 (pushes away from 0.5)</td></tr>
         </table>
         <p class="note"><code>VERY angry</code> asks for more <i>certainty</i> that the level is Angry; it can’t tell angry from furious. If intensity matters, give the question a level for it.</p>
       </section>
@@ -693,7 +696,7 @@ weight = 0.9</pre>
 "use strict";
 const $ = (id) => document.getElementById(id);
 const inputs = ["state", "questions", "rules"];
-const saveNames = { outcome: "outcome.txt", graph: "rules.txt", answers: "answers.txt", json: "jev.json" };
+const saveNames = { outcome: "outcome.txt", graph: "rules.txt", answers: "answers.txt", json: "jev.json", request: "request.json" };
 let examples = [];
 let result = null;     // the last run: request, reply, answers, outcome, decision, graph, svg
 let ranWith = null;    // the inputs that run was for
@@ -758,11 +761,48 @@ function syncScroll(textarea) {
 }
 function highlightAll() { for (const name of inputs) highlightField($(name)); }
 
+// An object's entries as a list, so one key can be written twice: `layout` writes them all, for
+// the server to refuse, where a plain object would keep only the last.
+class Entries { constructor(list) { this.list = list; } }
+
+// The first key written twice in one object of `text`, at any depth; null when there is none, or
+// when it isn't JSON. JSON.parse keeps only the last of two, so this is looked for before it.
+function repeatedKey(text) {
+  const open = []; // a Set of keys for each object open, null for each array
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at];
+    if (char === "{") open.push(new Set());
+    else if (char === "[") open.push(null);
+    else if (char === "}" || char === "]") open.pop();
+    else if (char === '"') {
+      let end = at + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+      const quoted = text.slice(at, end + 1);
+      at = end;
+      const keys = open[open.length - 1];
+      if (!keys) continue;
+      let next = end + 1;
+      while (/\s/.test(text[next] || "")) next++;
+      if (text[next] !== ":") continue;
+      let key;
+      try { key = JSON.parse(quoted); } catch { return null; }
+      if (keys.has(key)) return key;
+      keys.add(key);
+    }
+  }
+  return null;
+}
+
 // JSON pretty-printed with two spaces, its keys in their order, and a short list of plain values,
-// such as a question's levels, kept on one line; null when it isn't JSON.
+// such as a question's levels, kept on one line; null when it isn't JSON, or when a key is written
+// twice, which parsing it would lose.
 function layout(value, indent = "") {
   const write = (value, indent) => {
     const inner = indent + "  ";
+    if (value instanceof Entries) {
+      if (!value.list.length) return "{}";
+      return `{\n${value.list.map(([key, item]) => `${inner}${JSON.stringify(key)}: ${write(item, inner)}`).join(",\n")}\n${indent}}`;
+    }
     if (Array.isArray(value)) {
       if (!value.length) return "[]";
       const flat = value.every((item) => item === null || typeof item !== "object") && `[${value.map((item) => JSON.stringify(item)).join(", ")}]`;
@@ -781,6 +821,7 @@ function layout(value, indent = "") {
 function pretty(text) {
   let value;
   try { value = JSON.parse(text); } catch { return null; }
+  if (repeatedKey(text) != null) return null;
   return layout(value);
 }
 // Formats a field as typing would, so undo takes it back; says why when it can't.
@@ -788,7 +829,9 @@ function format(name) {
   const textarea = $(name);
   const formatted = pretty(textarea.value);
   if (formatted == null) {
-    try { JSON.parse(textarea.value); } catch (error) { fieldErrors(`${name === "state" ? "--state-json" : "questions"}: isn't JSON: ${error.message}`); }
+    const field = name === "state" ? "--state-json" : "questions";
+    try { JSON.parse(textarea.value); } catch (error) { fieldErrors(`${field}: isn't JSON: ${error.message}`); return; }
+    fieldErrors(`${field}: \`${repeatedKey(textarea.value)}\` is written twice in one object; formatting would keep only one`);
     return;
   }
   if (formatted === textarea.value) return;
@@ -836,6 +879,8 @@ function modelOf(text) {
   if (!text.trim()) return [];
   let value;
   try { value = JSON.parse(text); } catch (error) { return `it isn't JSON (${error.message})`; }
+  const twice = repeatedKey(text);
+  if (twice != null) return `\`${twice}\` is written twice in one object, and the form would keep only one`;
   if (!value || typeof value !== "object" || Array.isArray(value)) return "it isn't an object of ids to questions";
   const questions = [];
   for (const [id, question] of Object.entries(value)) {
@@ -867,18 +912,16 @@ function modelOf(text) {
   return questions;
 }
 
-// The model as JSON, laid out as `pretty` does. Written out by hand so that two questions with one
-// id both stay, for the server to refuse, rather than one quietly replacing the other.
+// The model as JSON, laid out as `pretty` does. Two questions with one id, or two options with one
+// name, both stay, for the server to refuse, rather than one quietly replacing the other.
 function jsonOf(questions) {
-  if (!questions.length) return "{}";
-  const body = questions.map((question) => {
+  return layout(new Entries(questions.map((question) => {
     const out = { type: question.type, instructions: question.instructions };
     if (question.type === "noul" && (question.yes || question.no)) out.criteria = { true: question.yes, false: question.no };
-    if (question.type === "choice") out.criteria = Object.fromEntries(question.options.map((option) => [option.name, option.about || null]));
+    if (question.type === "choice") out.criteria = new Entries(question.options.map((option) => [option.name, option.about || null]));
     if (question.type === "score") out.criteria = question.levels;
-    return `  ${JSON.stringify(question.id)}: ${layout(out, "  ")}`;
-  });
-  return `{\n${body.join(",\n")}\n}`;
+    return [question.id, out];
+  })));
 }
 
 // Writes the form's model into the JSON field, as if it were typed there.
@@ -922,6 +965,17 @@ function markIds() {
     const twice = model.some((other, index) => index !== at && other.id === id);
     input.classList.toggle("invalid", !id.trim() || twice);
     input.title = !id.trim() ? "Give the question an id" : twice ? `Another question is also \`${id}\`` : "";
+  });
+  // A Choice's option names, the same way: two with one name would be one key.
+  [...$("questionsForm").querySelectorAll(".qcard")].forEach((card, at) => {
+    const question = model[at];
+    if (!question || question.type !== "choice") return;
+    [...card.querySelectorAll("input.oname")].forEach((input, index) => {
+      const name = question.options[index] ? question.options[index].name : "";
+      const twice = question.options.some((other, other_at) => other_at !== index && other.name === name);
+      input.classList.toggle("invalid", !name.trim() || twice);
+      input.title = !name.trim() ? "Give the option a name" : twice ? `Another option is also \`${name}\`` : "";
+    });
   });
 }
 
@@ -1089,6 +1143,7 @@ function fill(fields) {
   summarize();
 }
 function reset() {
+  dropRun();
   beforeReset = { fields: current(), result, ranWith };
   fill({ state: "", questions: "", rules: "", stateJson: false, model: defaultModel });
   result = ranWith = null;
@@ -1154,8 +1209,19 @@ $("guideBody").addEventListener("scroll", () => {
 });
 
 // ---------- start ----------
+// This run's token, from the address jev printed: what /start and /run need in X-Jev.
+const token = decodeURIComponent(location.hash.slice(1));
+// Pasting the whole address into a tab that is open already changes only the #, which loads nothing.
+window.addEventListener("hashchange", () => location.reload());
 async function start() {
-  const given = await (await fetch("/start")).json();
+  const response = await fetch("/start", { headers: { "X-Jev": token } });
+  if (!response.ok) {
+    $("error").textContent = "This page needs this run's token: open the address jev --explore printed, the whole of it, with the part after #.";
+    $("error").hidden = false;
+    $("run").disabled = true;
+    return;
+  }
+  const given = await response.json();
   examples = given.examples || [];
   $("exampleList").replaceChildren(...examples.map((example, at) =>
     el("li", { role: "option", id: `example-${at}`, "data-name": example.name, "aria-selected": "false" },
@@ -1186,6 +1252,7 @@ async function start() {
 function load(name) {
   const example = examples.find((one) => one.name === name);
   if (!example) return;
+  dropRun();
   $("state").value = example.state;
   $("questions").value = pretty(example.questions) ?? example.questions;
   $("rules").value = example.rules;
@@ -1216,7 +1283,7 @@ function edited(name) {
 function same(a, b) { return !!a && JSON.stringify(a) === JSON.stringify(b); }
 
 async function post(body) {
-  const response = await fetch("/run", { method: "POST", headers: { "Content-Type": "application/json", "X-Jev": "1" }, body: JSON.stringify(body) });
+  const response = await fetch("/run", { method: "POST", headers: { "Content-Type": "application/json", "X-Jev": token }, body: JSON.stringify(body) });
   const answer = await response.json().catch(() => ({ error: `the server answered ${response.status}` }));
   if (answer.error) throw new Error(answer.error);
   return answer;
@@ -1258,29 +1325,39 @@ function fieldErrors(message) {
 }
 
 // ---------- run ----------
-async function run() {
-  const fields = current();
+// Each run has a number; Reset or loading an example moves it on, so a reply that arrives after
+// the inputs were replaced is dropped instead of bringing the old results back.
+let runSeq = 0;
+function running(on) {
   const button = $("run");
-  button.disabled = $("rerun").disabled = true;
-  button.classList.add("busy");
-  button.querySelector(".label").textContent = "Asking Jev…";
-  $("results").classList.add("loading");
+  button.disabled = $("rerun").disabled = on;
+  button.classList.toggle("busy", on);
+  button.querySelector(".label").textContent = on ? "Asking Jev…" : "Run";
+  $("results").classList.toggle("loading", on);
+}
+function dropRun() {
+  runSeq++;
+  running(false);
+}
+async function run() {
+  const seq = ++runSeq;
+  const fields = current();
+  running(true);
   $("error").hidden = true;
-  try {
-    result = await post({ ...fields, draw: false });
+  let answer = null, failure = null;
+  try { answer = await post({ ...fields, draw: false }); } catch (error) { failure = error; }
+  if (seq !== runSeq) return;
+  running(false);
+  if (answer) {
+    result = answer;
     ranWith = fields;
     fieldErrors(null);
-  } catch (error) {
-    const message = error.message === "Failed to fetch" ? "jev isn't running any more: start jev --explore again." : error.message;
+  } else {
+    const message = failure.message === "Failed to fetch" ? "jev isn't running any more: start jev --explore again." : failure.message;
     if (!fieldErrors(message)) { $("error").textContent = message; $("error").hidden = false; }
-  } finally {
-    button.disabled = $("rerun").disabled = false;
-    button.classList.remove("busy");
-    button.querySelector(".label").textContent = "Run";
-    $("results").classList.remove("loading");
-    $("stale").hidden = !result || same(ranWith, current());
-    render();
   }
+  $("stale").hidden = !result || same(ranWith, current());
+  render();
 }
 
 // ---------- render ----------
@@ -1314,7 +1391,7 @@ function showDiagram(text) {
   if (!text) { applyZoom(); return; }
   $("saveSvg").href = saveable("svg", text, "image/svg+xml");
   for (const group of $("diagram").querySelectorAll("g.rule")) {
-    group.addEventListener("mouseenter", () => focus(group.dataset.then, Number(group.dataset.rule)));
+    group.addEventListener("mouseenter", () => focus(group.dataset.kind, group.dataset.then, Number(group.dataset.rule)));
     group.addEventListener("mouseleave", () => focus(null));
   }
   applyZoom();
@@ -1338,19 +1415,22 @@ function drawing(text) {
   return document.importNode(svg, true);
 }
 
-// Hovering a conclusion lights up the rules behind it; hovering a rule, its conclusion.
-function focus(then, rule) {
+// Hovering a conclusion lights up the rules behind it; hovering a rule, its conclusion. A
+// conclusion is its kind and its name, since an item and an output may share a name.
+function focus(kind, then, rule) {
   const diagram = $("diagram"), decision = $("decision");
-  diagram.classList.toggle("focusing", then != null);
-  decision.classList.toggle("focusing", then != null && !!decision.querySelector(`[data-then="${CSS.escape(then)}"]`));
+  const on = then != null;
+  const concludes = (element) => element.dataset.kind === kind && element.dataset.then === then;
+  diagram.classList.toggle("focusing", on);
+  decision.classList.toggle("focusing", on && [...decision.querySelectorAll("[data-then]")].some(concludes));
   for (const group of diagram.querySelectorAll("g.rule")) {
-    group.classList.toggle("hit", then != null && (rule ? Number(group.dataset.rule) === rule : group.dataset.then === then));
+    group.classList.toggle("hit", on && (rule ? Number(group.dataset.rule) === rule : concludes(group)));
   }
-  for (const card of decision.querySelectorAll("[data-then]")) card.classList.toggle("hit", card.dataset.then === then);
+  for (const card of decision.querySelectorAll("[data-then]")) card.classList.toggle("hit", on && concludes(card));
 }
 
-function scrollToRules(then) {
-  const group = [...$("diagram").querySelectorAll("g.rule")].find((one) => one.dataset.then === then);
+function scrollToRules(kind, then) {
+  const group = [...$("diagram").querySelectorAll("g.rule")].find((one) => one.dataset.kind === kind && one.dataset.then === then);
   if (!group) return;
   const viewport = $("viewport");
   viewport.scrollBy({ top: group.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12, behavior: "smooth" });
@@ -1382,7 +1462,7 @@ function renderDecision() {
   const cards = [];
   for (const item of decision.items) {
     const fired = item.rules.filter((rule) => rule.score > 0).length;
-    cards.push(el("div", { class: "item", "data-then": item.item, tabindex: "0" },
+    cards.push(el("div", { class: "item", "data-kind": "item", "data-then": item.item, tabindex: "0" },
       el("div", { class: "top" }, el("span", { class: "name", title: item.item }, item.item), el("span", { class: "badge " + (item.yes ? "yes" : "no") }, item.yes ? "yes" : "no")),
       meter(item.score, { yes: item.yes, mark: decision.threshold }),
       el("div", { class: "why" }, el("span", { class: "score" }, fixed(item.score)), ` · ${item.rules.length} rule${item.rules.length === 1 ? "" : "s"}, ${fired} fired`)));
@@ -1390,16 +1470,16 @@ function renderDecision() {
   for (const output of decision.outputs || []) {
     const sets = el("div", { class: "sets" });
     for (const set of output.sets) sets.append(el("span", {}, set.set), meter(set.score), el("span", { class: "mono" }, fixed(set.score)));
-    cards.push(el("div", { class: "item output", "data-then": output.output, tabindex: "0" },
+    cards.push(el("div", { class: "item output", "data-kind": "output", "data-then": output.output, tabindex: "0" },
       el("div", { class: "top" }, el("span", { class: "name" }, output.output), el("span", { class: "score" }, output.value == null ? "no rule fired" : fixed(output.value))),
       sets));
   }
   for (const card of cards) {
-    card.addEventListener("mouseenter", () => focus(card.dataset.then));
+    card.addEventListener("mouseenter", () => focus(card.dataset.kind, card.dataset.then));
     card.addEventListener("mouseleave", () => focus(null));
-    card.addEventListener("focus", () => focus(card.dataset.then));
+    card.addEventListener("focus", () => focus(card.dataset.kind, card.dataset.then));
     card.addEventListener("blur", () => focus(null));
-    card.addEventListener("click", () => scrollToRules(card.dataset.then));
+    card.addEventListener("click", () => scrollToRules(card.dataset.kind, card.dataset.then));
   }
   $("decision").replaceChildren(...cards);
 }
@@ -1408,12 +1488,17 @@ function renderAnswers() {
   $("answersCard").hidden = !result;
   if (!result) return;
   const answers = result.reply.answers;
-  // The questions in the order they were written, which the request's map has lost.
-  let order = Object.keys(answers);
-  try { order = Object.keys(JSON.parse(ranWith.questions)).filter((id) => id in answers); } catch {}
+  // Every question asked, in the order asked, answered or not: a reply that leaves one out says so
+  // here, as the command's `no answer` does.
+  const order = result.ids || Object.keys(answers);
   const blocks = [];
   for (const id of order) {
     const answer = answers[id];
+    if (!answer) {
+      blocks.push(el("div", { class: "answer missing" }, el("h3", {}, el("span", {}, id), el("span", { class: "pick" }, "no answer")),
+        el("p", { class: "why" }, "The reply has no answer for this question.")));
+      continue;
+    }
     const bars = el("div", { class: "bars" });
     const row = (label, p, top) => bars.append(el("span", { class: "label" + (top ? " top" : ""), title: label }, label), meter(p, { yes: top }), el("span", { class: "num" }, fixed(p)));
     let pick = "";
@@ -1430,6 +1515,12 @@ function renderAnswers() {
       const top = levels.reduce((best, level) => (answer.probabilities[level] > answer.probabilities[best] ? level : best), levels[0]);
       pick = `expected ${fixed(answer.score)}`;
       for (const level of levels) row(name(level), answer.probabilities[level], level === top);
+    } else {
+      // A type this version doesn't know: the reply keeps it, and the JSON shows it.
+      pick = "not drawn";
+      blocks.push(el("div", { class: "answer" }, el("h3", {}, el("span", {}, id), el("span", { class: "kind" }, String(answer.type)), el("span", { class: "pick" }, pick)),
+        el("p", { class: "why" }, `An answer of type \`${answer.type}\`, which this page doesn't draw: see it under Text and JSON output, JSON.`)));
+      continue;
     }
     blocks.push(el("div", { class: "answer" }, el("h3", {}, el("span", {}, id), el("span", { class: "kind" }, answer.type), el("span", { class: "pick" }, pick)), bars));
   }
@@ -1445,22 +1536,25 @@ function rawTexts() {
   const graph = runDraws() ? result.graph : drawn && drawn.graph;
   if (graph) parts.graph = graph;
   if (result && result.answers) parts.answers = result.answers;
-  if (result && result.reply) parts.json = pretty(JSON.stringify({ request: result.request, reply: result.reply, outcome: result.decision })) + "\n";
+  // What the command prints for --json and --dry-run, as it prints them, so a saved file is its own.
+  if (result && result.json) parts.json = result.json;
+  if (result && result.dryRun) parts.request = result.dryRun;
   return parts;
 }
 
 function renderRaw() {
   const parts = rawTexts();
   $("rawCard").hidden = Object.keys(parts).length === 0;
-  if (!(rawTab in parts)) rawTab = ["outcome", "graph", "answers", "json"].find((name) => name in parts) || "outcome";
+  if (!(rawTab in parts)) rawTab = ["outcome", "graph", "answers", "json", "request"].find((name) => name in parts) || "outcome";
   for (const tab of document.querySelectorAll(".tabs [role=tab]")) {
     tab.setAttribute("aria-selected", tab.dataset.tab === rawTab);
     tab.hidden = !(tab.dataset.tab in parts);
   }
   const text = parts[rawTab] || "";
-  if (rawTab === "json") $("raw").innerHTML = highlightJson(text);
+  const json = rawTab === "json" || rawTab === "request";
+  if (json) $("raw").innerHTML = highlightJson(text);
   else $("raw").textContent = text;
-  $("saveText").href = saveable("raw", text, rawTab === "json" ? "application/json" : "text/plain");
+  $("saveText").href = saveable("raw", text, json ? "application/json" : "text/plain");
   $("saveText").download = saveNames[rawTab];
   $("saveText").textContent = "Save " + saveNames[rawTab].replace(/^.*\./, ".");
 }

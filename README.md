@@ -443,12 +443,14 @@ On the right, what they come to:
   item with its score against the threshold and each output's value, sits above the diagram:
   hovering a card lights up the rules behind it, and hovering a rule its card. Jev's **answers**
   follow as probability bars, with the model, tokens and cost.
-- The **text and JSON** the command would print (the outcome, the `--graph` tree, the answers, and
-  the request and reply), each with a button to save it, as is the SVG.
+- The **text and JSON** the command prints: the outcome, the `--graph` tree, the answers, what
+  `--json` prints and the request `--dry-run` shows, each with a button to save it, as is the SVG.
 
 The page is served on 127.0.0.1 only, on any free port (`--port` picks one), and `--no-open`
 prints the address without opening a browser. The key stays in the `jev` process, read from
-`OPENROUTER_API_KEY` as always, and no other site open in the same browser can send it requests.
+`OPENROUTER_API_KEY` as always. The address carries a random token for this run after its `#`, and
+nothing that reads your inputs or spends the key answers without it, so neither another site open in
+the same browser nor another user of the machine can use it.
 Without a key, the page still checks and draws the rules. It loads Fira Code from Google Fonts,
 and falls back to the system's monospace font offline.
 

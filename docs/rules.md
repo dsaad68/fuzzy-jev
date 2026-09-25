@@ -204,7 +204,7 @@ and that is all it does.
 | `VERY a` | a² | 0.49 | 0.09 | a ≥ 0.71 |
 | `EXTREMELY a` | a³ | 0.34 | 0.03 | a ≥ 0.79 |
 | `SOMEWHAT a` | √a | 0.84 | 0.55 | a ≥ 0.25 |
-| `INDEED a` | 2a² when a ≤ 0.5, else 1 − 2(1 − a)² | 0.82 | 0.18 | a > 0.5 (it pushes away from 0.5) |
+| `INDEED a` | 2a² when a ≤ 0.5, else 1 − 2(1 − a)² | 0.82 | 0.18 | a ≥ 0.5 (it pushes away from 0.5) |
 
 The names come from fuzzy logic, where "very hot" squares a membership in "hot". Here the degree is
 a probability, so `VERY angry` squares the probability of the level Angry: it asks for more
