@@ -292,7 +292,7 @@ threshold 0.50
   nothing, and `--dry-run` catches it too. The error names what does exist:
   ``[terms] hot: `temp` has no level `hot`; its levels are `temp.Cold`, `temp.Mild`, `temp.Hot` ``.
   An answer or a probability missing from the reply is an error, never a silent zero, and so is a
-  number that isn't a probability or a distribution that doesn't add up to 1.
+  number that isn't a probability or a distribution that can't be one rounded to two places.
 - **`--table`** adds the rules behind each score, and **`--json`** prints
   `{"reply": …, "outcome": …}`, so a script keeps every answer.
 
@@ -301,7 +301,7 @@ threshold 0.50
 When the answer is an amount ("how long to water?") rather than a yes, a rule can conclude in an
 **output**: a crisp axis with named fuzzy sets. A set's rules are joined into its score, each set is
 clipped at its score, the clipped shapes are merged with the file's OR, and the value is the centre
-of the merged shape, worked out exactly. This is Mamdani inference with centroid defuzzification.
+of the merged shape, worked out analytically rather than sampled. This is Mamdani inference with centroid defuzzification.
 
 [`examples/rules/irrigation.toml`](examples/rules/irrigation.toml), with
 [`examples/rules/rain.json`](examples/rules/rain.json) asking how much it rained:

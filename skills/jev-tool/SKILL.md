@@ -2,7 +2,7 @@
 name: jev
 description: >-
   Ask Jev, a small model that writes no text, typed questions about a piece of text and get
-  calibrated probabilities back instead of prose — a Choice between named options, a Score on an
+  probabilities back instead of prose — a Choice between named options, a Score on an
   ordered scale, or a Noul, the probability that something is true. Use when classifying, routing,
   triaging, labelling, rating, scoring or flagging text, especially many items against one set of
   criteria; when a judgment needs a confidence number to act on rather than an opinion; or when
@@ -10,7 +10,7 @@ description: >-
   Jev only answers questions you define.
 license: MIT
 metadata:
-  source: crates/jev/skills/jev, rewritten for the jev tool rather than the jev command
+  source: https://github.com/dsaad68/fuzzy-jev (skills/jev, rewritten for the jev tool rather than the jev command)
 ---
 
 # Jev: typed questions, probabilities back

@@ -63,7 +63,7 @@ request body `decide` would send, without sending it.
 
 Errors are all `jev.JevError`: `StatusError` (with `.status`), `HttpError`, `DecodeError`,
 `InvalidQuestionError` (raised before any call), `MissingAnswerError`, `WrongTypeError`,
-`BadAnswerError` and `RulesError`.
+`BadAnswerError`, `NumericalError` and `RulesError`.
 
 ## Rules
 

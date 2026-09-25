@@ -43,7 +43,9 @@ use std::time::Duration;
 use serde::Serialize;
 
 pub use error::{Error, Result};
-pub use types::{Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer, NoulCriteria, Options, Question, ScoreAnswer, Usage};
+pub use types::{
+    Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer, NoulCriteria, Options, Question, ScoreAnswer, Usage, ROUNDING,
+};
 
 /// The model requests go to unless the client says otherwise.
 pub const DEFAULT_MODEL: &str = "typesafe/jev-1.13";
@@ -79,8 +81,11 @@ impl Client {
     }
 
     /// Gives up on a request that takes longer than `timeout` in all, instead of
-    /// [`DEFAULT_TIMEOUT`]. A request that timed out is not sent again: it may have been answered,
-    /// and billed, all the same.
+    /// [`DEFAULT_TIMEOUT`]. This crate never sends a request again by itself, after a timeout or any
+    /// other failure: one that timed out may have been answered, and billed, all the same. (The HTTP
+    /// client underneath, or one given to [`Client::with_http`], has retry rules of its own for
+    /// connection failures.) On wasm32 the host's timer takes at most about 24 days, and a longer
+    /// timeout is cut to that.
     pub fn with_timeout(mut self, timeout: Duration) -> Client {
         self.timeout = timeout;
         self
@@ -137,10 +142,12 @@ impl Client {
         })
     }
 
-    /// Sends `request` as it is, whatever model it names.
+    /// Sends `request` as it is, whatever model it names. The reply is checked against the request
+    /// ([`DecisionResponse::check_against`]): an answer missing, of another type, or that isn't
+    /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
         let body = serde_json::to_vec(request).map_err(|e| Error::Decode(e.to_string()))?;
-        let mut post = self.http.post(&self.url).header("content-type", "application/json").timeout(self.timeout).body(body);
+        let mut post = self.http.post(&self.url).header("content-type", "application/json").timeout(self.usable_timeout()).body(body);
         if !self.key.is_empty() {
             post = post.bearer_auth(&self.key);
         }
@@ -151,7 +158,19 @@ impl Client {
         if !status.is_success() {
             return Err(Error::Status { status: status.as_u16(), message: error_message(&body) });
         }
-        serde_json::from_slice(&body).map_err(|e| Error::Decode(e.to_string()))
+        let reply: DecisionResponse = serde_json::from_slice(&body).map_err(|e| Error::Decode(e.to_string()))?;
+        reply.check_against(&request.questions)?;
+        Ok(reply)
+    }
+
+    /// The timeout, cut to what the target's timer takes: reqwest on wasm32 hands JavaScript's
+    /// `setTimeout` a 32-bit count of milliseconds, and panics on a longer one.
+    fn usable_timeout(&self) -> Duration {
+        if cfg!(target_arch = "wasm32") {
+            self.timeout.min(Duration::from_millis(i32::MAX as u64))
+        } else {
+            self.timeout
+        }
     }
 }
 

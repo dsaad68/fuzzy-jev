@@ -173,15 +173,23 @@ team:    billing 0.13 · support 0.08 · [security 0.78] · other 0.01    securi
 blocked: no 0.09 · [yes 0.91]                                  blocked = "blocked"            → 0.91
 ```
 
-Every answer a term reads is checked before the rules run, and a problem is an error, never a
-guess:
+Every answer is checked, and a problem is an error, never a guess. `jev` checks the whole reply
+against the questions as soon as it arrives, whatever the output; the rules check again every
+answer their terms read, for a reply that came some other way:
 
-- An answer or a probability a term needs is missing: a zero would read as a confident "no" that
-  nothing said.
-- A number isn't a probability: outside 0 to 1, or not a number at all. It is not clamped.
-- A Choice's or Score's probabilities don't add up to 1, give or take the rounding of the two
-  decimal places they arrive with.
-- The reply names a level or option the question doesn't have.
+- An answer, or a probability a term needs, is missing: a zero would read as a confident "no" that
+  nothing said. So is an answer of another type than its question. A reply `jev` receives must
+  give every option and level its probability, since the endpoint sends the whole distribution.
+- A number isn't a probability: outside 0 to 1, or not a number at all. It is not clamped. The
+  same goes for a Choice's or a Score's `confidence`.
+- A Choice's or Score's probabilities aren't a distribution that rounds to them. They arrive
+  rounded to two places, so each could be up to 0.005 higher or lower; the check is whether some
+  distribution adding up to exactly 1 is that close to every one of them. `[0.33, 0.33, 0.33]`
+  passes; `[0.51, 0.51, 0, 0]` doesn't, since the two 0.51s were at least 0.505 each.
+- A Choice's `choice` isn't its most probable option (allowing a tie rounding made), or a Score's
+  `score` is an expected level its probabilities can't give.
+- The reply names a level or option the question doesn't have, or writes a level other than
+  plainly (`"00"` for `"0"`).
 
 ## `if`: the rule language
 
@@ -201,10 +209,10 @@ and that is all it does.
 
 | Hedge | Degree | `a = 0.7` | `a = 0.3` | Passes 0.5 when |
 | --- | --- | --- | --- | --- |
-| `VERY a` | a² | 0.49 | 0.09 | a ≥ 0.71 |
-| `EXTREMELY a` | a³ | 0.34 | 0.03 | a ≥ 0.79 |
+| `VERY a` | a² | 0.49 | 0.09 | a ≥ √0.5 ≈ 0.7071 |
+| `EXTREMELY a` | a³ | 0.34 | 0.03 | a ≥ ∛0.5 ≈ 0.7937 (0.79 doesn't: 0.79³ = 0.493) |
 | `SOMEWHAT a` | √a | 0.84 | 0.55 | a ≥ 0.25 |
-| `INDEED a` | 2a² when a ≤ 0.5, else 1 − 2(1 − a)² | 0.82 | 0.18 | a ≥ 0.5 (it pushes away from 0.5) |
+| `INDEED a` | 2a² when a ≤ 0.5, else 1 − 2(1 − a)² | 0.82 | 0.18 | a ≥ 0.5 (it pushes away from 0.5, and leaves 0.5 where it is) |
 
 The names come from fuzzy logic, where "very hot" squares a membership in "hot". Here the degree is
 a probability, so `VERY angry` squares the probability of the level Angry: it asks for more
@@ -318,9 +326,10 @@ A set is a shape on the output's axis that says how much each point belongs to i
 
 The points must be in order along the axis and inside `range`. Sets are drawn and listed in order
 along the axis, whatever order the file has them in. An output's sets are **all shapes or all
-points**: a point has no area to weigh against a shape's, so a mix is refused. **Overlap
-neighbouring sets**, as a Score's levels overlap, so that an answer between two levels gives a value
-between their sets.
+points**: a point has no area to weigh against a shape's, so a mix is refused. Whether
+**neighbouring sets overlap** is a choice your policy makes: overlapping sets let support for two
+of them give a value between the two. (A Score's levels don't overlap in this sense: they exclude
+each other, even when several have some probability.)
 
 ### How the value is computed
 
@@ -333,10 +342,15 @@ This is Mamdani inference with centroid defuzzification:
 3. **Merge** the clipped shapes with the file's OR, point by point along the axis.
 4. **Take the centroid**, the balance point of the merged shape. That is the output's value.
 
-The centroid is exact. Between two neighbouring corners or clip points every clipped set is a
-straight line, so the merged shape is a polynomial on each piece (once `max`'s crossings and
-`bounded`'s reaching 1 are cut out), and its area and balance point are worked out in closed form.
-A set that is narrow next to its range counts in full.
+The centroid is worked out analytically, not sampled: between two neighbouring corners or clip
+points every clipped set is a straight line, so the merged shape is a polynomial on each piece
+(once `max`'s crossings and `bounded`'s reaching 1 are cut out). Under `max` and `bounded` each
+piece is straight and its area and balance point have a closed form; under `probsum` the piece is
+evaluated as `−expm1(Σ ln(1 − a))`, which keeps a tiny support, and integrated with enough
+Gauss–Legendre points to be exact for its degree. The range is scaled to 0–1 first, so a wide one
+can't overflow. What is left is ordinary floating-point rounding, and a result the arithmetic
+can't make finite is an error (`[output.y] has no value: …`), never taken for no support. A set
+that is narrow next to its range counts in full.
 
 | Situation | Value |
 | --- | --- |
@@ -615,7 +629,10 @@ Every error is found before the call, except the ones marked *from the reply*. E
 | *from the reply:* an answer is missing | ``no answer for question `raining` `` |
 | *from the reply:* a probability is missing | ``question `team` gives no probability for `storm` `` |
 | *from the reply:* an answer isn't probabilities | ``the answer to question `raining` can't be read: the probability of yes is 1.2, which isn't a probability from 0 to 1`` |
-| | ``… its probabilities add up to 1.200, not 1``, ``… it gives a probability for `hail`, which isn't one of the question's options`` |
+| | ``… its probabilities add up to 1.020, which no distribution rounds to``, ``… it gives a probability for `hail`, which isn't one of the question's options`` |
+| | ``… its expected level is 2, which its probabilities can't give: they allow 0.00 to 0.01``, ``… it chose `a` at 0.2, while another option has 0.8`` |
+| a level named twice | ``[terms] high: `q` has the level `High` 2 times (levels 1 and 2), so a term can't say which …`` |
+| *from the arithmetic:* an output too extreme to add up | ``[output.y] has no value: its sets have support, but their shape's area came to 0 …`` |
 
 ## From Rust
 
