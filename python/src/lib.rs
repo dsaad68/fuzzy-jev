@@ -20,7 +20,12 @@ create_exception!(jev, JevError, PyException, "Every error this package raises."
 create_exception!(jev, HttpError, JevError, "The request could not be sent, or its reply could not be read.");
 create_exception!(jev, StatusError, JevError, "The endpoint answered with an error status; `status` is the HTTP status.");
 create_exception!(jev, DecodeError, JevError, "A request could not be encoded, or a reply could not be decoded.");
-create_exception!(jev, InvalidQuestionError, JevError, "A question the endpoint can't answer as asked, or an id asked twice.");
+create_exception!(
+    jev,
+    InvalidQuestionError,
+    JevError,
+    "A question the endpoint can't answer as asked, an id asked twice, or a question a yes/no-only model can't take."
+);
 create_exception!(jev, MissingAnswerError, JevError, "The reply has no answer under this question id.");
 create_exception!(jev, WrongTypeError, JevError, "The answer under this id is of another type than the one asked for.");
 create_exception!(
@@ -682,6 +687,19 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("DEFAULT_MODEL", jev::DEFAULT_MODEL)?;
+    // The supported models, the default first: each an `id`, what it is (`about`), and whether it
+    // answers yes/no questions only (`noul_only`), which a request is checked against before it's sent.
+    let models = jev::MODELS
+        .iter()
+        .map(|model| {
+            let dict = PyDict::new(py);
+            dict.set_item("id", model.id)?;
+            dict.set_item("about", model.about)?;
+            dict.set_item("noul_only", model.noul_only)?;
+            Ok(dict)
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    m.add("MODELS", PyList::new(py, models)?)?;
     m.add("DECISIONS_URL", jev::DECISIONS_URL)?;
     m.add("DEFAULT_TIMEOUT", jev::DEFAULT_TIMEOUT.as_secs_f64())?;
     m.add_class::<Client>()?;

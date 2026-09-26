@@ -1,10 +1,19 @@
 """Types for the extension module. Its documentation is in src/lib.rs."""
 
 from collections.abc import Awaitable, Iterable, Mapping
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, TypedDict
+
+class Model(TypedDict):
+    """A supported model: its id, what it is, and whether it answers yes/no questions only."""
+
+    id: str
+    about: str
+    noul_only: bool
 
 __version__: str
 DEFAULT_MODEL: str
+#: The supported models, the default first.
+MODELS: list[Model]
 DECISIONS_URL: str
 DEFAULT_TIMEOUT: float
 

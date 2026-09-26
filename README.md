@@ -51,6 +51,7 @@ extra question costs a few tokens and no extra round trip.
 
 - [Install](#install)
 - [Asking](#asking)
+  - [Models](#models)
   - [A structured state](#a-structured-state)
 - [Fuzzy rules](#fuzzy-rules)
   - [Outputs: a crisp amount](#outputs-a-crisp-amount)
@@ -108,7 +109,7 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | --- | --- |
 | `STATE` | The state, as text. Without it, it's read from `--state-file` (`-f`, `-` for standard input), or from standard input when that isn't a terminal. |
 | `--state-json` | Parse the state as JSON: `cat ticket.json \| jev --state-json -q questions.json` |
-| `--model` (`-m`) | Another model; the default is TypeSafe's `typesafe/jev-1.13`. |
+| `--model` (`-m`) | Another model; the default is `~typesafe/jev-latest`. See [Models](#models). |
 | `--url` | Another endpoint. With one, `OPENROUTER_API_KEY` may be unset, for an endpoint that adds the key. |
 | `--text` | One line per question. The default. |
 | `--table` | A table: question, type, answer, confidence, and every option's probability. |
@@ -118,6 +119,32 @@ with a `|` in it, or structured criteria, goes in a JSON file of ids to question
 | `--svg PATH` | With `-r`: draw the rules as an SVG image. Without a state, either one draws the structure alone, with no call. |
 | `--timeout SECONDS` | Give up on the request after this long; 60 by default. It is not sent again. |
 | `--dry-run` | Print the request instead of sending it. No key needed. |
+
+### Models
+
+Six models on the same endpoint are supported, and `-m` picks one:
+
+| Model | | Questions |
+| --- | --- | --- |
+| `~typesafe/jev-latest` | TypeSafe's Jev, whichever version is the latest. **The default.** | all |
+| `typesafe/jev-1.13` | Jev 1.13, pinned: the same model until you change it | all |
+| `jaredpalmer/kev-4b` | Kev 4B, from jaredpalmer | all |
+| `respan/span-01` | Respan's Span 01 | yes/no only |
+| `respan/span-01-lite` | Span 01 Lite, the lighter Span | yes/no only |
+| `respan/span-01-lite:free` | OpenRouter's free variant of Span 01 Lite | yes/no only |
+
+```sh
+jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
+```
+
+- **Pin a version** for answers that don't change under you: the `~` id follows TypeSafe's latest
+  Jev (today `typesafe/jev-1.13`), and the reply's `model` names the one that answered, with its
+  date, such as `typesafe/jev-1.13-20260917`.
+- **The Span models answer yes/no questions only**, with plain-text instructions and criteria. A
+  Score, a Choice, or structured instructions asked of one is refused before any call is made:
+  ``question `anger`: respan/span-01 answers yes/no questions only, and this is a score``.
+- **Any other id** the endpoint serves works too, sent as it is and not checked. `jev --help`
+  lists the supported ones, and so do `jev::MODELS` and `jev.MODELS`.
 
 ### A structured state
 
@@ -494,7 +521,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.4", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.5", default-features = false }
 ```
 
 ```rust

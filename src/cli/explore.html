@@ -40,7 +40,8 @@
   header h1 span { color: var(--muted); font-weight: 400; }
   header .spacer { flex: 1; }
   header .controls { display: flex; gap: 8px; align-items: center; }
-  #model { width: 240px; }
+  #modelButton { max-width: 280px; }
+  .model-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* The examples menu: the page's own, so it takes the page's font and theme. */
   .menu { position: relative; }
@@ -56,6 +57,12 @@
   .menu-list li .title { font-weight: 600; }
   .menu-list li .about { color: var(--muted); font-size: 13px; }
   .menu-list li[aria-selected=true] { background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+  .menu-list li[aria-current=true] .title::after { content: " ✓"; color: var(--accent); }
+  .menu-list li .tag { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--warn); border: 1px solid var(--warn); border-radius: 999px; padding: 0 6px; }
+  .model-panel { min-width: 380px; }
+  .model-panel ul { list-style: none; margin: 0; padding: 0; outline: none; }
+  .model-panel .other { display: flex; gap: 6px; border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 4px 2px; }
+  .model-panel .other input { flex: 1; min-width: 0; }
 
   /* Controls */
   textarea, input[type=text], select {
@@ -109,7 +116,7 @@
     main { grid-template-columns: 1fr; padding: 12px 16px 24px; }
     header { flex-wrap: wrap; padding: 10px 16px; }
     header .controls { flex: 1 1 100%; }
-    #model { flex: 1; width: auto; }
+    #modelMenu { flex: 1; } #modelButton { max-width: none; width: 100%; justify-content: space-between; }
     .editor { position: static; }
   }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); min-width: 0; }
@@ -332,7 +339,14 @@
       <ul class="menu-list" id="exampleList" role="listbox" aria-label="Examples" tabindex="-1" hidden></ul>
     </div>
     <button id="reset" title="Clear the state, the questions, the rules and the results">Reset</button>
-    <input type="text" id="model" aria-label="Model" spellcheck="false" title="The model to ask">
+    <div class="menu" id="modelMenu">
+      <button id="modelButton" aria-haspopup="listbox" aria-expanded="false" aria-controls="modelList"><span class="model-label" id="modelLabel"></span> <span class="caret" aria-hidden="true">▾</span></button>
+      <input type="hidden" id="model">
+      <div class="menu-list model-panel" id="modelPanel" hidden>
+        <ul id="modelList" role="listbox" aria-label="Models" tabindex="-1"></ul>
+        <div class="other"><input type="text" id="modelOther" aria-label="Another model id" placeholder="another model id" spellcheck="false"><button type="button" id="modelUse">Use</button></div>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -1137,7 +1151,7 @@ function fill(fields) {
   $("stateJson").checked = fields.stateJson;
   remember("stateJson", fields.stateJson);
   $("formatState").hidden = !fields.stateJson;
-  $("model").value = fields.model;
+  setModel(fields.model);
   highlightAll();
   readQuestions();
   summarize();
@@ -1231,7 +1245,8 @@ async function start() {
   const fromCommand = given.state != null || given.questions != null || given.rules != null;
   for (const name of inputs) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
   defaultModel = given.model;
-  $("model").value = given.model;
+  listModels(given.models || []);
+  setModel(given.model);
   $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
   $("formatState").hidden = !$("stateJson").checked;
   // Questions, and a JSON state, start pretty-printed, whoever wrote them.
@@ -1243,7 +1258,6 @@ async function start() {
   summarize();
   for (const name of inputs) $(name).addEventListener("input", () => { remember(name, $(name).value); edited(name); });
   $("stateJson").addEventListener("change", () => { remember("stateJson", $("stateJson").checked); edited("state"); });
-  $("model").addEventListener("input", () => edited("model"));
   const firstVisit = !fromCommand && remembered("questions") === null;
   if (firstVisit && examples.length) load(examples[0].name);
   else redraw();
@@ -1613,55 +1627,96 @@ $("expand").addEventListener("click", () => expand(!document.body.classList.cont
 // ---------- wiring ----------
 $("run").addEventListener("click", run);
 $("rerun").addEventListener("click", run);
-// The examples menu: opens on a click or ↓, is walked with the arrows, picks with Enter or a
-// click, and closes on Esc, Tab or a click anywhere else.
-let menuAt = -1;
-function menuOpen() { return !$("exampleList").hidden; }
-function openMenu() {
-  $("exampleList").hidden = false;
-  $("example").setAttribute("aria-expanded", "true");
-  moveMenu(0);
-  $("exampleList").focus();
+// A menu: `button` opens `panel`, which holds `list`, a listbox of <li>s. It opens on a click or
+// ↓, is walked with the arrows, picks with Enter or a click, and closes on Esc, on a click
+// anywhere else, or when the focus leaves it. `pick(li)` is what choosing one does.
+function makeMenu({ wrap, button, panel = null, list, pick }) {
+  panel = panel || list;
+  let at = -1;
+  const isOpen = () => !panel.hidden;
+  const options = () => [...list.children];
+  function move(to) {
+    const all = options();
+    if (!all.length) return;
+    at = (to + all.length) % all.length;
+    all.forEach((option, index) => option.setAttribute("aria-selected", index === at));
+    list.setAttribute("aria-activedescendant", all[at].id);
+    all[at].scrollIntoView({ block: "nearest" });
+  }
+  function open() {
+    panel.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    const current = options().findIndex((option) => option.getAttribute("aria-current") === "true");
+    move(Math.max(0, current));
+    list.focus();
+  }
+  function close(refocus) {
+    if (!isOpen()) return;
+    panel.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    if (refocus) button.focus();
+  }
+  function choose(index) {
+    const option = options()[index];
+    close(true);
+    if (option) pick(option);
+  }
+  button.addEventListener("click", () => (isOpen() ? close(true) : open()));
+  button.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); open(); }
+  });
+  list.addEventListener("keydown", (event) => {
+    const keys = { ArrowDown: () => move(at + 1), ArrowUp: () => move(at - 1), Home: () => move(0), End: () => move(-1),
+      Enter: () => choose(at), " ": () => choose(at), Escape: () => close(true) };
+    if (!keys[event.key]) return;
+    event.preventDefault();
+    event.stopPropagation();
+    keys[event.key]();
+  });
+  panel.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.stopPropagation(); close(true); } });
+  list.addEventListener("mousemove", (event) => {
+    const option = event.target.closest("li");
+    if (option) move(options().indexOf(option));
+  });
+  list.addEventListener("click", (event) => {
+    const option = event.target.closest("li");
+    if (option) choose(options().indexOf(option));
+  });
+  panel.addEventListener("focusout", (event) => { if (!wrap.contains(event.relatedTarget)) close(false); });
+  document.addEventListener("pointerdown", (event) => { if (!wrap.contains(event.target)) close(false); });
+  return { close };
 }
-function closeMenu(refocus) {
-  if (!menuOpen()) return;
-  $("exampleList").hidden = true;
-  $("example").setAttribute("aria-expanded", "false");
-  if (refocus) $("example").focus();
+
+makeMenu({ wrap: $("exampleMenu"), button: $("example"), list: $("exampleList"), pick: (option) => load(option.dataset.name) });
+
+// The model: one of the supported models, from the menu, or any other id typed under it.
+let models = [];
+function setModel(id, byHand) {
+  $("model").value = id;
+  $("modelLabel").textContent = id;
+  const known = models.find((model) => model.id === id);
+  $("modelButton").title = known ? `${id}: ${known.about}` : `${id}: a model this page doesn't know, sent as it is`;
+  for (const option of $("modelList").children) option.setAttribute("aria-current", option.dataset.id === id);
+  if (byHand) edited("model");
 }
-function moveMenu(at) {
-  const options = [...$("exampleList").children];
-  if (!options.length) return;
-  menuAt = (at + options.length) % options.length;
-  options.forEach((option, index) => option.setAttribute("aria-selected", index === menuAt));
-  $("exampleList").setAttribute("aria-activedescendant", options[menuAt].id);
+function listModels(list) {
+  models = list;
+  $("modelList").replaceChildren(...models.map((model, at) =>
+    el("li", { role: "option", id: `model-${at}`, "data-id": model.id, "aria-selected": "false" },
+      el("span", { class: "title" }, model.id, model.noulOnly ? el("span", { class: "tag" }, "yes/no only") : null),
+      el("span", { class: "about" }, model.about))));
 }
-function pickMenu(at) {
-  const option = $("exampleList").children[at];
-  closeMenu(true);
-  if (option) load(option.dataset.name);
+const modelMenu = makeMenu({ wrap: $("modelMenu"), button: $("modelButton"), panel: $("modelPanel"), list: $("modelList"),
+  pick: (option) => setModel(option.dataset.id, true) });
+function useOtherModel() {
+  const id = $("modelOther").value.trim();
+  if (!id) return;
+  $("modelOther").value = "";
+  modelMenu.close(true);
+  setModel(id, true);
 }
-$("example").addEventListener("click", () => (menuOpen() ? closeMenu(true) : openMenu()));
-$("example").addEventListener("keydown", (event) => {
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); openMenu(); }
-});
-$("exampleList").addEventListener("keydown", (event) => {
-  const keys = { ArrowDown: () => moveMenu(menuAt + 1), ArrowUp: () => moveMenu(menuAt - 1), Home: () => moveMenu(0), End: () => moveMenu(-1),
-    Enter: () => pickMenu(menuAt), " ": () => pickMenu(menuAt), Escape: () => closeMenu(true), Tab: () => closeMenu(false) };
-  if (!keys[event.key]) return;
-  if (event.key !== "Tab") event.preventDefault();
-  event.stopPropagation();
-  keys[event.key]();
-});
-$("exampleList").addEventListener("mousemove", (event) => {
-  const option = event.target.closest("li");
-  if (option) moveMenu([...$("exampleList").children].indexOf(option));
-});
-$("exampleList").addEventListener("click", (event) => {
-  const option = event.target.closest("li");
-  if (option) pickMenu([...$("exampleList").children].indexOf(option));
-});
-document.addEventListener("pointerdown", (event) => { if (!$("exampleMenu").contains(event.target)) closeMenu(false); });
+$("modelUse").addEventListener("click", useOtherModel);
+$("modelOther").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); useOtherModel(); } });
 for (const tab of document.querySelectorAll(".tabs [role=tab]")) tab.addEventListener("click", () => { rawTab = tab.dataset.tab; renderRaw(); });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); if (!$("run").disabled) run(); }
