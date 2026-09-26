@@ -155,6 +155,7 @@ fn start(args: &Args, can_ask: bool) -> anyhow::Result<Value> {
         "rules": file(&args.rules)?,
         "model": args.model,
         "canAsk": can_ask,
+        "models": jev::MODELS.iter().map(|model| json!({"id": model.id, "about": model.about, "noulOnly": model.noul_only})).collect::<Vec<_>>(),
         "examples": examples,
     }))
 }

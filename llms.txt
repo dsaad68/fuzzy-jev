@@ -4,7 +4,7 @@
 
 Things to know before using it:
 
-- It needs an OpenRouter key in `OPENROUTER_API_KEY`. The default model is `typesafe/jev-1.13`.
+- It needs an OpenRouter key in `OPENROUTER_API_KEY`. The default model is `~typesafe/jev-latest`; also supported are `typesafe/jev-1.13`, `jaredpalmer/kev-4b`, and `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free`, which answer yes/no (Noul) questions only.
 - Jev doesn't write, summarize or rewrite text. It only answers the questions you define.
 - Every question sees the same state and is answered on its own, so ask them all in one call.
 - The id a question is sent under is never shown to the model, so its instructions must say everything.

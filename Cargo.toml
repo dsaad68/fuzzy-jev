@@ -2,7 +2,7 @@
 # On crates.io as fuzzy-jev, since `jev` there is another project's; the library is still imported
 # as `jev` and the command is still `jev`.
 name = "fuzzy-jev"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "A client for TypeSafe's Jev on OpenRouter's decisions endpoint: typed Choice, Score and Noul answers about a state, fuzzy rules over them, and drawings of those rules. Native and wasm32, and a CLI."
 repository = "https://github.com/dsaad68/fuzzy-jev"

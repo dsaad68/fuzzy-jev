@@ -35,7 +35,7 @@ def triage():
 def test_builds_the_documented_request():
     request = jev.Client("key").request("Help! My payouts have been failing for 3 days.", triage())
     assert request == {
-        "model": "typesafe/jev-1.13",
+        "model": "~typesafe/jev-latest",
         "state": "Help! My payouts have been failing for 3 days.",
         "questions": {
             "is_urgent": {
@@ -222,3 +222,17 @@ def test_refuses_a_bad_timeout():
 
 def test_keeps_the_key_out_of_repr():
     assert "secret" not in repr(jev.Client("secret"))
+
+
+def test_lists_the_supported_models():
+    ids = [model["id"] for model in jev.MODELS]
+    assert ids[0] == jev.DEFAULT_MODEL == "~typesafe/jev-latest"
+    assert {"typesafe/jev-1.13", "jaredpalmer/kev-4b", "respan/span-01", "respan/span-01-lite", "respan/span-01-lite:free"} <= set(ids)
+    assert all(model["noul_only"] == model["id"].startswith("respan/") for model in jev.MODELS)
+
+
+def test_a_yes_no_model_is_refused_other_questions_before_any_call():
+    # Nothing listens on the discard port: the refusal comes before a connection is tried.
+    client = jev.Client("key", url="http://127.0.0.1:9", model="respan/span-01")
+    with pytest.raises(jev.InvalidQuestionError, match="yes/no questions only"):
+        client.decide("state", triage())

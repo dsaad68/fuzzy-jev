@@ -50,6 +50,16 @@ NAME:DESCRIPTION) for --choice, two to ten levels from the lowest for --score, a
 |WHAT YES MEANS|WHAT NO MEANS for --noul. A --questions file is a JSON object of ids to questions
 in the endpoint's own shape. The key is read from OPENROUTER_API_KEY.";
 
+/// The examples, then the supported models, from [`jev::MODELS`] so the list can't drift from them.
+fn help_after() -> String {
+    let width = jev::MODELS.iter().map(|model| model.id.len()).max().unwrap_or(0);
+    let models: String = jev::MODELS.iter().map(|model| format!("\n  {:width$}  {}", model.id, model.about)).collect();
+    format!(
+        "{EXAMPLES}\n\nModels (-m), all on the same endpoint; any other id works too, unchecked:{models}\n\nA yes/no-only model is \
+         refused a Choice or a Score before any call is made."
+    )
+}
+
 #[derive(Parser)]
 // `-v` as well as clap's `-V`: what most people type first.
 #[command(
@@ -57,7 +67,7 @@ in the endpoint's own shape. The key is read from OPENROUTER_API_KEY.";
     version,
     disable_version_flag = true,
     about = "Ask Jev typed questions about a state, through OpenRouter",
-    after_help = EXAMPLES
+    after_help = help_after()
 )]
 pub struct Args {
     /// Print the version
@@ -96,7 +106,7 @@ pub struct Args {
     #[arg(long, short = 'r', value_name = "PATH")]
     rules: Option<PathBuf>,
 
-    /// The model to ask
+    /// The model to ask: one of the models listed below, or any other the endpoint serves
     #[arg(long, short = 'm', default_value = jev::DEFAULT_MODEL)]
     model: String,
 
@@ -269,6 +279,8 @@ fn request(invocation: &Invocation, piped: Option<String>) -> anyhow::Result<(De
     let args = &invocation.args;
     let (questions, ids, rules) = questions(invocation, true)?;
     let request = DecisionRequest { model: args.model.clone(), state: state(args, piped)?, questions: questions.into_iter().collect() };
+    // A question the model can't answer is refused here, so --dry-run finds it as sending would.
+    jev::models::check_request(&request)?;
     Ok((request, ids, rules))
 }
 
@@ -481,6 +493,8 @@ mod tests {
         assert!(request_error(&["state", "--choice", "a=?|one"]).contains("at least two options"));
         assert!(request_error(&["--state-file", "-", "--questions", "-"]).contains("only one of"));
         assert!(request_error(&["--questions", "q.json", "--rules", "-"]).contains("only one of"));
+        let yes_no_only = request_error(&["state", "--choice", "c=Which?|a|b", "-m", "respan/span-01", "--dry-run"]);
+        assert!(yes_no_only.contains("question `c`: respan/span-01 answers yes/no questions only"), "{yes_no_only}");
         // A flag's choice is held to the endpoint's limit too, not only a file's.
         let many: Vec<String> = (0..256).map(|at| format!("o{at}")).collect();
         let error = request_error(&["state", "--choice", &format!("c=?|{}", many.join("|"))]);

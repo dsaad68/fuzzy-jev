@@ -60,7 +60,7 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
-| `-m ID` | Another model. Default `typesafe/jev-1.13`. |
+| `-m ID` | Another model. Default `~typesafe/jev-latest`; also `typesafe/jev-1.13`, `jaredpalmer/kev-4b`, and the yes/no-only `respan/span-01`, `respan/span-01-lite`, `respan/span-01-lite:free`. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
 A `-q` file is a JSON object of ids to questions, kept in order. A Choice's `criteria` maps option

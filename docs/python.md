@@ -90,7 +90,7 @@ jev.Client(key=None, *, model=None, url=None, timeout=None)
 | Argument | |
 | --- | --- |
 | `key` | An OpenRouter API key. Without one it is read from `OPENROUTER_API_KEY`. An empty key sends no `Authorization` header, for an endpoint (`url`) that adds the key itself. |
-| `model` | Another model; `jev.DEFAULT_MODEL` (`typesafe/jev-1.13`) otherwise. |
+| `model` | Another model; `jev.DEFAULT_MODEL` (`~typesafe/jev-latest`) otherwise. `jev.MODELS` lists the supported ones. |
 | `url` | Another endpoint; `jev.DECISIONS_URL` otherwise. |
 | `timeout` | Seconds for the whole request, from sending it to reading the reply; `jev.DEFAULT_TIMEOUT` (60) otherwise. A request that timed out is not sent again: it may have been answered, and billed, all the same. |
 
@@ -276,7 +276,7 @@ wrong shape (a Noul with only `yes`, a timeout of 0, an unknown render format).
 
 | Exception | When |
 | --- | --- |
-| `InvalidQuestionError` | A question the endpoint can't answer as asked, or an id asked twice. Before any call. |
+| `InvalidQuestionError` | A question the endpoint can't answer as asked, an id asked twice, or a question a yes/no-only model (the `respan/` ones) can't take. Before any call. |
 | `RulesError` | A rules file that doesn't parse or doesn't fit the questions. Before any call. |
 | `HttpError` | The request couldn't be sent, its reply couldn't be read, or it timed out. |
 | `StatusError` | The endpoint answered with an error; `.status` is the HTTP status, and the message is the endpoint's. |
@@ -336,7 +336,7 @@ Everything is importable from `jev`; types are in `jev/_jev.pyi`.
 | `ChoiceAnswer`, `ScoreAnswer`, `NoulAnswer`, `Usage` | the fields above |
 | `Rules(text, questions)` | `.evaluate`, `.graph_svg`, `.graph_text` |
 | `Outcome`, `Item`, `OutputValue` | the fields above |
-| `DEFAULT_MODEL`, `DECISIONS_URL`, `DEFAULT_TIMEOUT`, `__version__` | |
+| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only"}`, the default first |
 | `JevError` and its subclasses | [Errors](#errors) |
 
 ## Building and releasing

@@ -27,6 +27,7 @@
 //! Works natively and on wasm32, where requests go through the host's `fetch`.
 
 mod error;
+pub mod models;
 #[cfg(feature = "command")]
 pub mod print;
 #[cfg(feature = "command")]
@@ -43,12 +44,15 @@ use std::time::Duration;
 use serde::Serialize;
 
 pub use error::{Error, Result};
+pub use models::{Model, MODELS};
 pub use types::{
     Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer, NoulCriteria, Options, Question, ScoreAnswer, Usage, ROUNDING,
 };
 
-/// The model requests go to unless the client says otherwise.
-pub const DEFAULT_MODEL: &str = "typesafe/jev-1.13";
+/// The model requests go to unless the client says otherwise: TypeSafe's Jev, whichever version is
+/// the latest. [`MODELS`] lists every supported model; pin one, such as `typesafe/jev-1.13`, for
+/// answers that don't change when a new version comes out.
+pub const DEFAULT_MODEL: &str = "~typesafe/jev-latest";
 
 /// OpenRouter's decisions endpoint.
 pub const DECISIONS_URL: &str = "https://openrouter.ai/api/alpha/decisions";
@@ -119,7 +123,8 @@ impl Client {
         self.send(&self.request(state, questions)?).await
     }
 
-    /// The request [`Client::decide`] sends.
+    /// The request [`Client::decide`] sends. A question its model can't answer is refused here, as
+    /// in [`Client::send`].
     pub fn request<K: Into<String>>(
         &self,
         state: impl Serialize,
@@ -135,17 +140,24 @@ impl Client {
                 return Err(Error::DuplicateQuestion(id));
             }
         }
-        Ok(DecisionRequest {
+        let request = DecisionRequest {
             model: self.model.clone(),
             state: serde_json::to_value(state).map_err(|e| Error::Decode(format!("state: {e}")))?,
             questions: asked,
-        })
+        };
+        // What the model can't answer is refused here as well as in `send`, so the request a
+        // caller builds to look at first is one that sending would take.
+        models::check_request(&request)?;
+        Ok(request)
     }
 
-    /// Sends `request` as it is, whatever model it names. The reply is checked against the request
+    /// Sends `request` as it is, whatever model it names. A question the model can't answer (one
+    /// of [`MODELS`] that takes yes/no questions only, asked anything else) is refused here, before
+    /// the call, as [`Error::Invalid`]. The reply is checked against the request
     /// ([`DecisionResponse::check_against`]): an answer missing, of another type, or that isn't
     /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
+        models::check_request(request)?;
         let body = serde_json::to_vec(request).map_err(|e| Error::Decode(e.to_string()))?;
         let mut post = self.http.post(&self.url).header("content-type", "application/json").timeout(self.usable_timeout()).body(body);
         if !self.key.is_empty() {
@@ -217,11 +229,31 @@ mod tests {
         ]
     }
 
+    #[tokio::test]
+    async fn refuses_what_a_yes_no_model_cant_answer_before_calling() {
+        // Nothing listens on the discard port: the refusal comes before any connection is tried.
+        let client = Client::new("key").with_url("http://127.0.0.1:9").with_model("respan/span-01");
+        match client.decide("state", triage()).await {
+            Err(Error::Invalid { id, why }) => {
+                assert_eq!(id, "department");
+                assert!(why.contains("respan/span-01 answers yes/no questions only"), "{why}");
+            }
+            other => panic!("expected Invalid, got {other:?}"),
+        }
+        // Building the request refuses it too, and a request built by hand is refused on sending.
+        assert!(matches!(client.request("state", triage()), Err(Error::Invalid { .. })));
+        let by_hand = Client::new("key")
+            .request("state", triage())
+            .map(|request| DecisionRequest { model: "respan/span-01".to_owned(), ..request })
+            .unwrap();
+        assert!(matches!(client.send(&by_hand).await, Err(Error::Invalid { .. })));
+    }
+
     #[test]
     fn builds_the_documented_request() {
         let request = Client::new("key").request("Help! My payouts have been failing for 3 days.", triage()).unwrap();
         let expected = json!({
-            "model": "typesafe/jev-1.13",
+            "model": "~typesafe/jev-latest",
             "state": "Help! My payouts have been failing for 3 days.",
             "questions": {
                 "is_urgent": {
