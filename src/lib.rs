@@ -123,7 +123,8 @@ impl Client {
         self.send(&self.request(state, questions)?).await
     }
 
-    /// The request [`Client::decide`] sends.
+    /// The request [`Client::decide`] sends. A question its model can't answer is refused here, as
+    /// in [`Client::send`].
     pub fn request<K: Into<String>>(
         &self,
         state: impl Serialize,
@@ -139,11 +140,15 @@ impl Client {
                 return Err(Error::DuplicateQuestion(id));
             }
         }
-        Ok(DecisionRequest {
+        let request = DecisionRequest {
             model: self.model.clone(),
             state: serde_json::to_value(state).map_err(|e| Error::Decode(format!("state: {e}")))?,
             questions: asked,
-        })
+        };
+        // What the model can't answer is refused here as well as in `send`, so the request a
+        // caller builds to look at first is one that sending would take.
+        models::check_request(&request)?;
+        Ok(request)
     }
 
     /// Sends `request` as it is, whatever model it names. A question the model can't answer (one
@@ -152,11 +157,7 @@ impl Client {
     /// ([`DecisionResponse::check_against`]): an answer missing, of another type, or that isn't
     /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
-        if let Some(model) = models::model(&request.model) {
-            for (id, question) in &request.questions {
-                model.check(question).map_err(|why| Error::Invalid { id: id.clone(), why })?;
-            }
-        }
+        models::check_request(request)?;
         let body = serde_json::to_vec(request).map_err(|e| Error::Decode(e.to_string()))?;
         let mut post = self.http.post(&self.url).header("content-type", "application/json").timeout(self.usable_timeout()).body(body);
         if !self.key.is_empty() {
@@ -239,6 +240,13 @@ mod tests {
             }
             other => panic!("expected Invalid, got {other:?}"),
         }
+        // Building the request refuses it too, and a request built by hand is refused on sending.
+        assert!(matches!(client.request("state", triage()), Err(Error::Invalid { .. })));
+        let by_hand = Client::new("key")
+            .request("state", triage())
+            .map(|request| DecisionRequest { model: "respan/span-01".to_owned(), ..request })
+            .unwrap();
+        assert!(matches!(client.send(&by_hand).await, Err(Error::Invalid { .. })));
     }
 
     #[test]

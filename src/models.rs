@@ -4,7 +4,7 @@
 //! checked against. Some answer only yes/no questions, and a request asking one of them anything
 //! else is refused before it is sent ([`Model::check`]), rather than costing a call that fails.
 
-use crate::Question;
+use crate::{DecisionRequest, Error, Question};
 
 /// A model this crate supports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +35,18 @@ pub const MODELS: [Model; 6] = [
 /// The supported model with this id, if it is one.
 pub fn model(id: &str) -> Option<&'static Model> {
     MODELS.iter().find(|model| model.id == id)
+}
+
+/// Whether `request`'s model can answer each of its questions ([`Model::check`]), when it is one of
+/// [`MODELS`]; any other model is taken at its word. The first question it can't is an
+/// [`Error::Invalid`]. [`crate::Client`] checks this where it builds a request and again where it
+/// sends one, and the CLI where it builds one, so a dry run finds what sending would.
+pub fn check_request(request: &DecisionRequest) -> crate::Result<()> {
+    let Some(model) = model(&request.model) else { return Ok(()) };
+    for (id, question) in &request.questions {
+        model.check(question).map_err(|why| Error::Invalid { id: id.clone(), why })?;
+    }
+    Ok(())
 }
 
 impl Model {

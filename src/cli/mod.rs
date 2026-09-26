@@ -279,6 +279,8 @@ fn request(invocation: &Invocation, piped: Option<String>) -> anyhow::Result<(De
     let args = &invocation.args;
     let (questions, ids, rules) = questions(invocation, true)?;
     let request = DecisionRequest { model: args.model.clone(), state: state(args, piped)?, questions: questions.into_iter().collect() };
+    // A question the model can't answer is refused here, so --dry-run finds it as sending would.
+    jev::models::check_request(&request)?;
     Ok((request, ids, rules))
 }
 
@@ -491,6 +493,8 @@ mod tests {
         assert!(request_error(&["state", "--choice", "a=?|one"]).contains("at least two options"));
         assert!(request_error(&["--state-file", "-", "--questions", "-"]).contains("only one of"));
         assert!(request_error(&["--questions", "q.json", "--rules", "-"]).contains("only one of"));
+        let yes_no_only = request_error(&["state", "--choice", "c=Which?|a|b", "-m", "respan/span-01", "--dry-run"]);
+        assert!(yes_no_only.contains("question `c`: respan/span-01 answers yes/no questions only"), "{yes_no_only}");
         // A flag's choice is held to the endpoint's limit too, not only a file's.
         let many: Vec<String> = (0..256).map(|at| format!("o{at}")).collect();
         let error = request_error(&["state", "--choice", &format!("c=?|{}", many.join("|"))]);
