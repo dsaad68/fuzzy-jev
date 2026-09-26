@@ -494,7 +494,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.3", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.4", default-features = false }
 ```
 
 ```rust
