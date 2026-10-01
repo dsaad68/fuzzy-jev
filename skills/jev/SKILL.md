@@ -92,7 +92,8 @@ criteria = ["No deadline", "This week", "Today"]
 ```
 
 A Noul's criteria are `criteria = { true = "…", false = "…" }`. TOML has no `null`, so a Choice's
-options without descriptions are a list of names: `criteria = ["billing", "support"]`. A `.json` or
+options without descriptions are a list of names: `criteria = ["billing", "support"]`. Quote dates
+(`"2026-10-01"`): a bare TOML date, `nan` or `inf` has no JSON form and is refused. A `.json` or
 `.toml` name says which format a file is; from stdin, text starting with `{` is JSON. Two questions
 with one `name` are refused.
 

@@ -110,6 +110,10 @@ def test_says_what_is_wrong_with_a_questions_file():
     # A dict can't hold two questions with one name, so the file is refused rather than one dropped.
     with pytest.raises(jev.InvalidQuestionError, match="asked twice"):
         jev.load_questions('[[question]]\nname = "n"\ntype = "noul"\ninstruction = "?"\n' * 2)
+    with pytest.raises(jev.InvalidQuestionError, match="is a TOML date"):
+        jev.load_questions('[[question]]\nname = "n"\ntype = "noul"\ninstruction = { by = 2026-10-01 }\n')
+    with pytest.raises(jev.InvalidQuestionError, match="which JSON can't hold"):
+        jev.load_questions('[[question]]\nname = "n"\ntype = "noul"\ninstruction = { weight = nan }\n')
     with pytest.raises(ValueError, match='"json" or "toml"'):
         jev.load_questions("{}", format="yaml")
 

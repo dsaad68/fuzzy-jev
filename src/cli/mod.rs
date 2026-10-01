@@ -449,6 +449,10 @@ mod tests {
         let twice = "[[question]]\nname = \"n\"\ntype = \"noul\"\ninstruction = \"?\"\n".repeat(2);
         let error = format!("{:#}", asked(&file("twice.toml", &twice)).unwrap_err());
         assert!(error.contains("question `n` is asked twice"), "{error}");
+        // A date would go to the model as the toml crate's private object, so it doesn't go.
+        let dated = "[[question]]\nname = \"n\"\ntype = \"noul\"\ninstruction = { question = \"Due?\", by = 2026-10-01 }\n";
+        let error = format!("{:#}", asked(&file("dated.toml", dated)).unwrap_err());
+        assert!(error.starts_with("--questions: `question[0].instruction.by` is a TOML date"), "{error}");
         // A TOML file with no tables in it asks nothing.
         let error = format!("{:#}", asked(&file("empty.toml", "# none yet\n")).unwrap_err());
         assert!(error.contains("no questions"), "{error}");

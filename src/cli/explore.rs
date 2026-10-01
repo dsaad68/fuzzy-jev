@@ -505,6 +505,9 @@ mod tests {
         let broken = dir.join("broken.toml");
         std::fs::write(&broken, "[[question]]\nname = \"q\"\ntype = \"score\"\ninstruction = \"?\"\ncriteria = []").unwrap();
         assert!(format!("{:#}", page_questions(&broken).unwrap_err()).contains("question `q`: a score needs levels"));
+        let infinite = dir.join("infinite.toml");
+        std::fs::write(&infinite, "[[question]]\nname = \"n\"\ntype = \"noul\"\ninstruction = { weight = inf }").unwrap();
+        assert!(format!("{:#}", page_questions(&infinite).unwrap_err()).contains("`question[0].instruction.weight` is inf"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

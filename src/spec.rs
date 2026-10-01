@@ -195,9 +195,17 @@ pub fn questions_in(text: &str, format: Format) -> Result<Vec<(String, Question)
             questions
         }
         Format::Toml => {
-            let TomlFile { question } = toml::from_str(text).map_err(|error| {
+            let wrong = |error: toml::de::Error| {
                 format!("expected [[question]] tables, each with a name, a type and an instruction: {}", error.to_string().trim_end())
-            })?;
+            };
+            // Every value goes to the model as JSON, which TOML's dates and its `nan` and `inf` are
+            // not: read straight into a JSON value, a date would be the toml crate's private
+            // object and a non-finite number `null`. So they are refused first, where they are.
+            let document: toml::Table = toml::from_str(text).map_err(wrong)?;
+            for (key, value) in &document {
+                json_only(value, key)?;
+            }
+            let TomlFile { question } = toml::from_str(text).map_err(wrong)?;
             let questions: Vec<(String, Question)> = question.into_iter().map(TomlQuestion::into_question).collect();
             for (at, (name, _)) in questions.iter().enumerate() {
                 if name.trim().is_empty() {
@@ -218,6 +226,32 @@ pub fn questions_in(text: &str, format: Format) -> Result<Vec<(String, Question)
         question.check().map_err(|why| format!("question `{id}`: {why}"))?;
     }
     Ok(questions)
+}
+
+/// Whether a TOML `value`, at `at` (as `question[0].instruction`), and everything in it, says the
+/// same as JSON: a date or time is refused with how to send it as text, and `nan` and `inf`, which
+/// JSON can't hold, are refused.
+fn json_only(value: &toml::Value, at: &str) -> Result<(), String> {
+    match value {
+        toml::Value::Float(number) if !number.is_finite() => {
+            Err(format!("`{at}` is {number}, which JSON can't hold, so it can't be sent: write a finite number, or a string"))
+        }
+        toml::Value::Datetime(date) => {
+            Err(format!("`{at}` is a TOML date or time, which JSON has no type for: write it as a string, \"{date}\""))
+        }
+        toml::Value::Array(values) => values.iter().enumerate().try_for_each(|(index, value)| json_only(value, &format!("{at}[{index}]"))),
+        toml::Value::Table(table) => table.iter().try_for_each(|(key, value)| json_only(value, &format!("{at}.{}", toml_key(key)))),
+        _ => Ok(()),
+    }
+}
+
+/// A key as a dotted path writes it: bare when TOML allows, and quoted otherwise.
+fn toml_key(key: &str) -> String {
+    if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        key.to_owned()
+    } else {
+        format!("{key:?}")
+    }
 }
 
 /// A TOML questions file: its `[[question]]` tables. None is an empty file, which asks nothing.
@@ -467,6 +501,50 @@ mod toml_tests {
         // TOML itself refuses a key written twice, which JSON would quietly keep one of.
         let option_twice = noul("name = \"c\"\ntype = \"choice\"\ninstruction = \"?\"\ncriteria = { a = \"\", a = \"again\" }");
         assert!(option_twice.contains("duplicate key"), "{option_twice}");
+    }
+
+    #[test]
+    fn refuses_what_json_cant_say_where_it_is() {
+        let question = |rest: &str| toml(&format!("[[question]]\nname = \"n\"\ntype = \"noul\"\n{rest}\n"));
+        // A date or a time, of each kind TOML has, would be the toml crate's private object.
+        for (date, shown) in [
+            ("2026-10-01", "2026-10-01"),
+            ("2026-10-01T09:30:00Z", "2026-10-01T09:30:00Z"),
+            ("2026-10-01T09:30:00", "2026-10-01T09:30:00"),
+            ("09:30:00", "09:30:00"),
+        ] {
+            let error = question(&format!("instruction = {{ question = \"Is it due?\", deadline = {date} }}")).unwrap_err();
+            assert_eq!(
+                error,
+                format!("`question[0].instruction.deadline` is a TOML date or time, which JSON has no type for: write it as a string, \"{shown}\"")
+            );
+        }
+        // NaN and the infinities would be `null`.
+        for number in ["nan", "+nan", "-nan", "inf", "+inf", "-inf"] {
+            let error = question(&format!("instruction = {{ question = \"?\", weight = {number} }}")).unwrap_err();
+            assert!(error.starts_with("`question[0].instruction.weight` is "), "{error}");
+            assert!(error.contains("which JSON can't hold"), "{error}");
+        }
+        // Anywhere in a question: criteria, arrays within, keys that need quoting, later questions.
+        let level = toml("[[question]]\nname = \"s\"\ntype = \"score\"\ninstruction = \"?\"\ncriteria = [\"low\", { by = 2026-01-01 }]\n");
+        assert!(level.unwrap_err().starts_with("`question[0].criteria[1].by` is a TOML date"));
+        let option = toml("[[question]]\nname = \"c\"\ntype = \"choice\"\ninstruction = \"?\"\ncriteria = { \"on time\" = [1.0, inf] }\n");
+        assert!(option.unwrap_err().starts_with("`question[0].criteria.\"on time\"[1]` is inf"));
+        let second = toml(
+            "[[question]]\nname = \"a\"\ntype = \"noul\"\ninstruction = \"?\"\n\
+             [[question]]\nname = \"b\"\ntype = \"noul\"\ninstruction = \"?\"\ncriteria = { true = 2026-10-01, false = \"no\" }\n",
+        );
+        assert!(second.unwrap_err().starts_with("`question[1].criteria.true` is a TOML date"));
+        // Outside the questions too, before the field is found unknown.
+        assert!(toml("when = 2026-10-01\n").unwrap_err().starts_with("`when` is a TOML date"));
+
+        // A finite number, and the date quoted as a string, go as they are.
+        let fine = question("instruction = { question = \"Is it due?\", deadline = \"2026-10-01\", weight = 0.5, tries = 3, sure = true }")
+            .unwrap();
+        assert_eq!(
+            fine[0].1,
+            Question::noul(json!({"question": "Is it due?", "deadline": "2026-10-01", "weight": 0.5, "tries": 3, "sure": true}))
+        );
     }
 
     #[test]
