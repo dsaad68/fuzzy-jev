@@ -48,7 +48,10 @@ Examples:
 A question is ID=INSTRUCTIONS followed by `|`-separated criteria: two or more options (NAME or
 NAME:DESCRIPTION) for --choice, two to ten levels from the lowest for --score, and none or
 |WHAT YES MEANS|WHAT NO MEANS for --noul. A --questions file is a JSON object of ids to questions
-in the endpoint's own shape. The key is read from OPENROUTER_API_KEY.";
+in the endpoint's own shape, or TOML: a [[question]] table per question with its name, type,
+instruction and criteria, and a choice's options without descriptions as a list of names. A .json
+or .toml name says which; otherwise a file that starts with `{` is JSON. The key is read from
+OPENROUTER_API_KEY.";
 
 /// The examples, then the supported models, from [`jev::MODELS`] so the list can't drift from them.
 fn help_after() -> String {
@@ -97,7 +100,7 @@ pub struct Args {
     #[arg(long, value_name = "SPEC")]
     score: Vec<String>,
 
-    /// Questions from a JSON file of ids to questions (`-` for standard input)
+    /// Questions from a JSON or TOML file (`-` for standard input)
     #[arg(long, short = 'q', value_name = "PATH")]
     questions: Option<PathBuf>,
 
@@ -295,7 +298,7 @@ fn questions(
     one_reader_of_stdin(args, with_state)?;
 
     let mut questions = match &args.questions {
-        Some(path) => spec::questions_file(&read(path)?).map_err(|error| anyhow::anyhow!("--questions: {error}"))?,
+        Some(path) => questions_file(path)?,
         None => Vec::new(),
     };
     for (kind, spec) in asked {
@@ -323,6 +326,14 @@ fn questions(
         None => None,
     };
     Ok((questions, ids, rules))
+}
+
+/// The questions in a `--questions` file, JSON or TOML: its name says which when it ends in
+/// `.json` or `.toml`, and its text otherwise (standard input, say).
+fn questions_file(path: &Path) -> anyhow::Result<Vec<(String, jev::Question)>> {
+    let text = read(path)?;
+    let format = spec::Format::guess(path.to_str(), &text);
+    spec::questions_in(&text, format).map_err(|error| anyhow::anyhow!("--questions: {error}"))
 }
 
 /// At most one of the state, `--questions` and `--rules` may come from standard input, which can be
@@ -395,6 +406,57 @@ mod tests {
         let kinds: Vec<_> = asked.iter().map(|(kind, _)| *kind).collect();
         assert_eq!(kinds, [Kind::Score, Kind::Noul, Kind::Choice, Kind::Noul]);
         assert_eq!(asked[3].1, "m=?");
+    }
+
+    #[test]
+    fn reads_a_toml_questions_file_as_its_json() {
+        let ask = |questions: &str| {
+            request(&invocation(&["state", "-q", questions, "-r", "examples/rules/triage.toml", "--noul", "extra=?"]), None).unwrap()
+        };
+        let (from_toml, toml_ids, toml_rules) = ask("examples/rules/triage.questions.toml");
+        let (from_json, json_ids, _) = ask("examples/rules/triage.json");
+        assert_eq!(from_toml, from_json);
+        // The file's questions in its order, then the flags'; and the rules check against them.
+        assert_eq!(toml_ids, ["team", "urgency", "blocked", "anger", "extra"]);
+        assert_eq!(toml_ids, json_ids);
+        assert!(toml_rules.is_some());
+    }
+
+    #[test]
+    fn tells_toml_from_json_by_the_text_when_the_name_doesnt() {
+        let dir = std::env::temp_dir().join(format!("jev-cli-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = |name: &str, text: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            path.to_str().unwrap().to_owned()
+        };
+        let asked = |path: &str| request(&invocation(&["state", "-q", path]), None).map(|(request, ids, _)| (request, ids));
+
+        let (toml, ids) = asked(&file("questions", "[[question]]\nname = \"n\"\ntype = \"noul\"\ninstruction = \"Is it?\"\n")).unwrap();
+        assert_eq!(ids, ["n"]);
+        assert_eq!(toml.questions["n"], jev::Question::noul("Is it?"));
+        let (json, _) = asked(&file("questions.txt", r#"{"n": {"type": "noul", "instructions": "Is it?"}}"#)).unwrap();
+        assert_eq!(json, toml);
+
+        // The name wins over the text: JSON in a .toml file is read as TOML, and fails as it.
+        let error = format!("{:#}", asked(&file("q.toml", r#"{"n": {"type": "noul", "instructions": "?"}}"#)).unwrap_err());
+        assert!(error.starts_with("--questions: expected [[question]] tables"), "{error}");
+        let bad = "[[question]]\nname = \"n\"\ntype = \"noul\"\ncritera = []\ninstruction = \"?\"\n";
+        let error = format!("{:#}", asked(&file("bad.toml", bad)).unwrap_err());
+        assert!(error.contains("--questions") && error.contains("unknown field `critera`"), "{error}");
+        // Two tables with one name are refused, as two flags with one id are.
+        let twice = "[[question]]\nname = \"n\"\ntype = \"noul\"\ninstruction = \"?\"\n".repeat(2);
+        let error = format!("{:#}", asked(&file("twice.toml", &twice)).unwrap_err());
+        assert!(error.contains("question `n` is asked twice"), "{error}");
+        // A date would go to the model as the toml crate's private object, so it doesn't go.
+        let dated = "[[question]]\nname = \"n\"\ntype = \"noul\"\ninstruction = { question = \"Due?\", by = 2026-10-01 }\n";
+        let error = format!("{:#}", asked(&file("dated.toml", dated)).unwrap_err());
+        assert!(error.starts_with("--questions: `question[0].instruction.by` is a TOML date"), "{error}");
+        // A TOML file with no tables in it asks nothing.
+        let error = format!("{:#}", asked(&file("empty.toml", "# none yet\n")).unwrap_err());
+        assert!(error.contains("no questions"), "{error}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

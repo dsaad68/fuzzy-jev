@@ -21,6 +21,7 @@ Things to know before using it:
 ## Examples
 
 - [Triage questions](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/triage.json): a questions file (`jev -q`), with a Choice, two Scores and a Noul in the endpoint's JSON shape
+- [Triage questions in TOML](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/triage.questions.toml): the same questions file written as TOML, a `[[question]]` table per question
 - [Triage rules](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/triage.toml): hedges, parentheses, a weight, `probsum`, a threshold, items and an output together
 - [Weather rules](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/wear.toml): items from Scores and a Noul with AND, OR and NOT
 - [Irrigation rules](https://raw.githubusercontent.com/dsaad68/fuzzy-jev/main/examples/rules/irrigation.toml): an output, a crisp amount from fuzzy sets

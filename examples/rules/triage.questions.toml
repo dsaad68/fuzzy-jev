@@ -1,0 +1,26 @@
+# The questions of triage.json, in TOML: a [[question]] table per question, in the order asked.
+# `jev -q examples/rules/triage.questions.toml -r examples/rules/triage.toml` asks the same as the JSON.
+
+[[question]]
+name = "team"
+type = "choice"
+instruction = "Which team should handle this ticket? Route by what the sender asks for, not by what happened to them."
+criteria = { billing = "money that has moved or should move: charges, invoices, refunds", support = "the product not working or not understood", security = "who can get into the account, and keeping others out", other = "none of these" }
+
+[[question]]
+name = "urgency"
+type = "score"
+instruction = "How soon does the sender need an answer? Today: something stops or a deadline falls today. This week: a deadline within the next few days. No deadline: none given or implied."
+criteria = ["No deadline", "This week", "Today"]
+
+[[question]]
+name = "blocked"
+type = "noul"
+instruction = "Is the sender unable to do their work until this is answered?"
+criteria = { true = "They say they can't work, log in, pay or ship until it is fixed", false = "They can carry on meanwhile" }
+
+[[question]]
+name = "anger"
+type = "score"
+instruction = "How angry does the sender sound? Calm: neutral or polite. Annoyed: frustrated but civil. Angry: hostile, shouting in capitals, or threatening to leave."
+criteria = ["Calm", "Annoyed", "Angry"]

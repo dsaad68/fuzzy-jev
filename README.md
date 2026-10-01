@@ -102,8 +102,8 @@ A question on the command line is `ID=INSTRUCTIONS`, then `|`-separated criteria
 | `--score` | two to ten levels, lowest first |
 
 Each flag can be repeated, and the answers print in the order the questions were written. Text
-with a `|` in it, or structured criteria, goes in a JSON file of ids to questions passed with
-`--questions` (`-q`); file questions come first, then the flags'.
+with a `|` in it, or structured criteria, goes in a JSON or TOML file of ids to questions passed
+with `--questions` (`-q`); file questions come first, then the flags'.
 
 | Option | |
 | --- | --- |
@@ -195,6 +195,32 @@ which is what the endpoint calls them — the `--noul` flag spells the same thin
 
 ```sh
 cat ticket.json | jev --state-json -q questions.json
+```
+
+The same questions in TOML, as `questions.toml`, ask the same thing: a `[[question]]` table per
+question, in the order asked, with its id as `name` and its instructions as `instruction`. TOML has
+no `null`, so a choice's options without descriptions are a list of names,
+`criteria = ["billing", "support"]`; JSON takes that list too. A name ending in `.json` or `.toml`
+says which a file is; otherwise (standard input, say) one that starts with `{` is JSON.
+
+```toml
+[[question]]
+name = "team"
+type = "choice"
+instruction = "Which team should own this ticket?"
+criteria = { billing = "charges, invoices, refunds", support = "the product itself, bugs, outages", success = "the relationship, renewals, escalations" }
+
+[[question]]
+name = "urgency"
+type = "score"
+instruction = "How urgently does this need a human today?"
+criteria = ["Can wait a week", "This week", "Today", "Now"]
+
+[[question]]
+name = "churn_risk"
+type = "noul"
+instruction = "Is this account at risk of leaving?"
+criteria = { true = "Threats, repeated escalation, money at stake", false = "Routine, patient, one-off" }
 ```
 
 ```text
@@ -521,7 +547,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.5", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.6", default-features = false }
 ```
 
 ```rust
