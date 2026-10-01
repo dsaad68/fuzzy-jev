@@ -56,20 +56,45 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `STATE` / `-f PATH` | The state as an argument or from a file (`-` for stdin); stdin is read when it isn't a terminal. |
 | `--state-json` | Parse the state as JSON, so questions can point at named parts. |
 | `--noul` / `--choice` / `--score` | A question, repeatable. Noul criteria: none, or `\|YES MEANS\|NO MEANS`. Choice: two or more `NAME[:DESCRIPTION]`. Score: two to ten levels, lowest first. |
-| `-q FILE` | Questions from a JSON or TOML file — the only way to use text containing `\|`, or structured criteria. TOML: a `[[question]]` table per question with `name`, `type`, `instruction` and `criteria`; a choice's options without descriptions as a list of names. |
+| `-q FILE` | Questions from a JSON or TOML file ([below](#write-a-questions-file)) — the only way to use text containing `\|`, or structured criteria. |
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
 | `-m ID` | Another model. Default `~typesafe/jev-latest`; also `typesafe/jev-1.13`, `jaredpalmer/kev-4b`, and the yes/no-only `respan/span-01`, `respan/span-01-lite`, `respan/span-01-lite:free`. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
-A `-q` file is a JSON object of ids to questions, kept in order. A Choice's `criteria` maps option
-to description, a Score's is an array lowest first, a Noul's is optional `{"true":…, "false":…}`:
+### Write a questions file
+
+A `-q` file is JSON or TOML, and its questions are asked in the order written. A Choice's
+`criteria` maps option to description, a Score's is an array lowest first, a Noul's is optional
+`{"true":…, "false":…}`. In JSON it is an object of ids to questions:
 
 ```json
 {"team":    {"type": "choice", "instructions": "Which team?", "criteria": {"billing": "charges and invoices", "support": "the product misbehaving", "other": "neither"}},
  "urgency": {"type": "score",  "instructions": "How soon does this need an answer?", "criteria": ["No deadline", "This week", "Today"]}}
 ```
+
+The same in TOML is a `[[question]]` table per question, with the id as `name` and the
+instructions as `instruction` (singular — `instructions` is an error there):
+
+```toml
+[[question]]
+name = "team"
+type = "choice"
+instruction = "Which team?"
+criteria = { billing = "charges and invoices", support = "the product misbehaving", other = "neither" }
+
+[[question]]
+name = "urgency"
+type = "score"
+instruction = "How soon does this need an answer?"
+criteria = ["No deadline", "This week", "Today"]
+```
+
+A Noul's criteria are `criteria = { true = "…", false = "…" }`. TOML has no `null`, so a Choice's
+options without descriptions are a list of names: `criteria = ["billing", "support"]`. A `.json` or
+`.toml` name says which format a file is; from stdin, text starting with `{` is JSON. Two questions
+with one `name` are refused.
 
 ## Read
 
