@@ -85,6 +85,35 @@ def test_refuses_questions_before_a_call():
         jev.Question.choice("Which?", ["a", "a"]).check()
 
 
+def test_loads_questions_from_json_or_toml():
+    from_json = jev.load_questions((RULES / "triage.json").read_text())
+    toml = (RULES / "triage.questions.toml").read_text()
+    for from_toml in (jev.load_questions(toml), jev.load_questions(toml, format="toml")):
+        assert list(from_toml) == ["team", "urgency", "blocked", "anger"]
+        assert from_toml == from_json
+    assert list(from_toml["team"].to_dict()["criteria"]) == ["billing", "support", "security", "other"]
+    names = jev.load_questions('[[question]]\nname = "c"\ntype = "choice"\ninstruction = "Which?"\ncriteria = ["b", "a"]\n')
+    assert names["c"].to_dict()["criteria"] == {"b": None, "a": None}
+    assert list(names["c"].to_dict()["criteria"]) == ["b", "a"]
+    assert jev.load_questions('{"n": {"type": "noul", "instructions": "?"}}', format="json")["n"] == jev.Question.noul("?")
+
+
+def test_says_what_is_wrong_with_a_questions_file():
+    with pytest.raises(jev.InvalidQuestionError, match=r"expected \[\[question\]\] tables"):
+        jev.load_questions('{"n": {"type": "noul", "instructions": "?"}}', format="toml")
+    with pytest.raises(jev.InvalidQuestionError, match="expected a JSON object"):
+        jev.load_questions('[[question]]\nname = "n"\ntype = "noul"\ninstruction = "?"\n', format="json")
+    with pytest.raises(jev.InvalidQuestionError, match="unknown field `critera`"):
+        jev.load_questions('[[question]]\nname = "n"\ntype = "noul"\ninstruction = "?"\ncritera = []\n')
+    with pytest.raises(jev.InvalidQuestionError, match="up to 10 levels"):
+        jev.load_questions('[[question]]\nname = "s"\ntype = "score"\ninstruction = "?"\ncriteria = ' + json.dumps(["l"] * 11))
+    # A dict can't hold two questions with one name, so the file is refused rather than one dropped.
+    with pytest.raises(jev.InvalidQuestionError, match="asked twice"):
+        jev.load_questions('[[question]]\nname = "n"\ntype = "noul"\ninstruction = "?"\n' * 2)
+    with pytest.raises(ValueError, match='"json" or "toml"'):
+        jev.load_questions("{}", format="yaml")
+
+
 def test_reads_a_reply():
     reply = jev.DecisionResponse.from_json(FIXTURE)
     assert reply.model == "typesafe/jev-1.13-20260917"

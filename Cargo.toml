@@ -37,8 +37,10 @@ required-features = ["cli"]
 reqwest = { version = "0.13", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# A `-r` rules file (`rules`). Parsing only: nothing writes TOML.
-toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "serde"], optional = true }
+# A `-r` rules file (`rules`), and a `-q` questions file written in TOML (`spec`). Parsing only:
+# nothing writes TOML. `preserve_order` keeps a table's keys in the file's order, so the questions
+# are asked, and a Choice's options offered, in the order they were written.
+toml = { version = "1.1.6", default-features = false, features = ["std", "parse", "serde", "preserve_order"], optional = true }
 # How wide a --table cell prints: a CJK character or an emoji takes two terminal columns, which
 # counting `char`s would put a column short and the borders out of line. Not target-specific: the
 # `command` feature prints the same table in the browser build of dx's shell.

@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for Options {
             type Value = Options;
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("an object of options and their descriptions")
+                f.write_str("an object of options and their descriptions, or a list of option names")
             }
 
             fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> std::result::Result<Options, A::Error> {
@@ -134,8 +134,19 @@ impl<'de> Deserialize<'de> for Options {
                 }
                 Ok(Options(options))
             }
+
+            /// A list of names: options without descriptions, each `null`. It is how a TOML file,
+            /// which has no `null`, writes them.
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut names: A) -> std::result::Result<Options, A::Error> {
+                let mut options = Vec::new();
+                while let Some(name) = names.next_element::<String>()? {
+                    options.push((name, Value::Null));
+                }
+                Ok(Options(options))
+            }
         }
-        deserializer.deserialize_map(Visitor)
+        // Any, not a map, so a list of names reaches `visit_seq`.
+        deserializer.deserialize_any(Visitor)
     }
 }
 

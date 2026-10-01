@@ -151,13 +151,28 @@ fn start(args: &Args, can_ask: bool) -> anyhow::Result<Value> {
     Ok(json!({
         "state": state,
         "stateJson": args.state_json,
-        "questions": file(&args.questions)?,
+        "questions": args.questions.as_deref().map(page_questions).transpose()?,
         "rules": file(&args.rules)?,
         "model": args.model,
         "canAsk": can_ask,
         "models": jev::MODELS.iter().map(|model| json!({"id": model.id, "about": model.about, "noulOnly": model.noul_only})).collect::<Vec<_>>(),
         "examples": examples,
     }))
+}
+
+/// A `-q` file's questions as the page takes them: JSON, as written, so that one with a mistake
+/// still fills the page to be put right there; TOML, read and written out as JSON in its order,
+/// since the page edits JSON only.
+fn page_questions(path: &Path) -> anyhow::Result<String> {
+    let text = read(path)?;
+    match jev::spec::Format::guess(path.to_str(), &text) {
+        jev::spec::Format::Json => Ok(text),
+        jev::spec::Format::Toml => {
+            let questions =
+                jev::spec::questions_in(&text, jev::spec::Format::Toml).map_err(|error| anyhow::anyhow!("--questions: {error}"))?;
+            Ok(jev::spec::questions_json(&questions))
+        }
+    }
 }
 
 /// Opens `address` in the default browser, or says to. The opener is waited for on a thread of its
@@ -469,6 +484,28 @@ mod tests {
         let error = start(&args(&["--explore", "-q", "-", "-r", "-"]), true).unwrap_err();
         assert!(error.to_string().contains("only one of"), "{error}");
         assert!(start(&args(&["--explore", "-f", "-", "-q", "-"]), true).is_err());
+    }
+
+    #[test]
+    fn fills_the_page_with_a_toml_file_s_questions_as_json() {
+        let dir = std::env::temp_dir().join(format!("jev-explore-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let toml = dir.join("triage.toml");
+        std::fs::write(&toml, include_str!("../../examples/rules/triage.questions.toml")).unwrap();
+        let page = page_questions(&toml).unwrap();
+        assert_eq!(
+            jev::spec::questions_file(&page).unwrap(),
+            jev::spec::questions_file(include_str!("../../examples/rules/triage.json")).unwrap()
+        );
+        // JSON goes to the page as it was written, mistakes and all.
+        let json = dir.join("broken.json");
+        std::fs::write(&json, "{\"q\": ").unwrap();
+        assert_eq!(page_questions(&json).unwrap(), "{\"q\": ");
+        // TOML the page couldn't show is refused here, with what is wrong.
+        let broken = dir.join("broken.toml");
+        std::fs::write(&broken, "[[question]]\nname = \"q\"\ntype = \"score\"\ninstruction = \"?\"\ncriteria = []").unwrap();
+        assert!(format!("{:#}", page_questions(&broken).unwrap_err()).contains("question `q`: a score needs levels"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[tokio::test]

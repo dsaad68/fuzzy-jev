@@ -135,10 +135,13 @@ works too (the endpoint's "Advanced: structure").
 jev.Question.choice({"question": "Which team?", "focus": "the primary request"}, ["billing", "support"])
 ```
 
-A questions file, as `jev -q` reads it, loads into a dict of `Question`s in the file's order:
+A questions file, as `jev -q` reads it, JSON or TOML, loads into a dict of `Question`s in the
+file's order. `format="json"` or `format="toml"` says which; without it, text that starts with `{`
+is JSON and any other is TOML:
 
 ```python
 questions = jev.load_questions(open("examples/rules/triage.json").read())
+questions = jev.load_questions(open("examples/rules/triage.questions.toml").read(), format="toml")
 ```
 
 | On a `Question` | |
@@ -331,7 +334,7 @@ Everything is importable from `jev`; types are in `jev/_jev.pyi`.
 | --- | --- |
 | `Client(key=None, *, model=None, url=None, timeout=None)` | `.decide`, `.decide_async`, `.request`, `.model`, `.url` |
 | `Question` | `.choice`, `.score`, `.noul`, `.from_dict`; `.kind`, `.instructions`, `.to_dict()`, `.check()` |
-| `load_questions(text)` | a `jev -q` file's questions, as a dict |
+| `load_questions(text, format=None)` | a `jev -q` file's questions, JSON or TOML, as a dict |
 | `DecisionResponse` | `.choice`, `.score`, `.noul`, `.answer`, `[id]`, `.answers`, `.model`, `.id`, `.provider`, `.usage`, `.render`, `.to_dict`, `.to_json`, `.from_dict`, `.from_json` |
 | `ChoiceAnswer`, `ScoreAnswer`, `NoulAnswer`, `Usage` | the fields above |
 | `Rules(text, questions)` | `.evaluate`, `.graph_svg`, `.graph_text` |

@@ -180,12 +180,21 @@ fn questions(questions: &Bound<'_, PyAny>) -> PyResult<Vec<(String, jev::Questio
     Ok(asked)
 }
 
-/// Reads a questions file's text (a JSON object of ids to questions, as `jev -q` reads it) into a
-/// dict of `Question`s, in the file's order. Every question is checked.
+/// Reads a questions file's text (a JSON object of ids to questions, or the same as TOML, as
+/// `jev -q` reads it) into a dict of `Question`s, in the file's order. `format` is `"json"` or
+/// `"toml"`; without it, text that starts with `{` is JSON and any other is TOML. Every question is
+/// checked.
 #[pyfunction]
-fn load_questions<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyDict>> {
+#[pyo3(signature = (text, format = None))]
+fn load_questions<'py>(py: Python<'py>, text: &str, format: Option<&str>) -> PyResult<Bound<'py, PyDict>> {
+    let format = match format {
+        None => jev::spec::Format::guess(None, text),
+        Some("json") => jev::spec::Format::Json,
+        Some("toml") => jev::spec::Format::Toml,
+        Some(other) => return Err(PyValueError::new_err(format!("format is \"json\" or \"toml\", not {other:?}"))),
+    };
     let dict = PyDict::new(py);
-    for (id, question) in jev::spec::questions_file(text).map_err(InvalidQuestionError::new_err)? {
+    for (id, question) in jev::spec::questions_in(text, format).map_err(InvalidQuestionError::new_err)? {
         dict.set_item(id, Question(question))?;
     }
     Ok(dict)

@@ -56,7 +56,7 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `STATE` / `-f PATH` | The state as an argument or from a file (`-` for stdin); stdin is read when it isn't a terminal. |
 | `--state-json` | Parse the state as JSON, so questions can point at named parts. |
 | `--noul` / `--choice` / `--score` | A question, repeatable. Noul criteria: none, or `\|YES MEANS\|NO MEANS`. Choice: two or more `NAME[:DESCRIPTION]`. Score: two to ten levels, lowest first. |
-| `-q FILE` | Questions from a JSON file — the only way to use text containing `\|`, or structured criteria. |
+| `-q FILE` | Questions from a JSON or TOML file — the only way to use text containing `\|`, or structured criteria. TOML: a `[[question]]` table per question with `name`, `type`, `instruction` and `criteria`; a choice's options without descriptions as a list of names. |
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
