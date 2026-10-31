@@ -1,6 +1,7 @@
 //! A client for TypeSafe's Jev, a System One model, on OpenRouter's decisions endpoint. Jev reads a
-//! state (a string, a JSON object or an array) and answers typed questions about it: a Choice
-//! between options, a Score along levels, or a Noul, the probability that something is true.
+//! state (a string, a JSON object or an array, which can hold images: [`image_part`]) and answers
+//! typed questions about it: a Choice between options, a Score along levels, or a Noul, the
+//! probability that something is true.
 //!
 //! ```no_run
 //! # async fn run() -> jev::Result<()> {
@@ -27,6 +28,7 @@
 //! Works natively and on wasm32, where requests go through the host's `fetch`.
 
 mod error;
+mod image;
 pub mod models;
 #[cfg(feature = "command")]
 pub mod print;
@@ -44,6 +46,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 pub use error::{Error, Result};
+pub use image::{has_images, image_part, text_part};
 pub use models::{Model, MODELS};
 pub use types::{
     Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer, NoulCriteria, Options, Question, ScoreAnswer, Usage, ROUNDING,
@@ -153,7 +156,8 @@ impl Client {
 
     /// Sends `request` as it is, whatever model it names. A question the model can't answer (one
     /// of [`MODELS`] that takes yes/no questions only, asked anything else) is refused here, before
-    /// the call, as [`Error::Invalid`]. The reply is checked against the request
+    /// the call, as [`Error::Invalid`], and images it can't read as [`Error::Image`]. The reply is
+    /// checked against the request
     /// ([`DecisionResponse::check_against`]): an answer missing, of another type, or that isn't
     /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {

@@ -31,6 +31,7 @@ from ._jev import (
     DecisionResponse,
     DecodeError,
     HttpError,
+    ImageError,
     InvalidQuestionError,
     Item,
     JevError,
@@ -46,7 +47,9 @@ from ._jev import (
     Usage,
     WrongTypeError,
     __version__,
+    image_part,
     load_questions,
+    text_part,
 )
 
 __all__ = [
@@ -61,6 +64,7 @@ __all__ = [
     "DecisionResponse",
     "DecodeError",
     "HttpError",
+    "ImageError",
     "InvalidQuestionError",
     "Item",
     "JevError",
@@ -76,5 +80,7 @@ __all__ = [
     "Usage",
     "WrongTypeError",
     "__version__",
+    "image_part",
     "load_questions",
+    "text_part",
 ]

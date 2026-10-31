@@ -28,6 +28,10 @@ Examples:
 
   cat ticket.json | jev --state-json --questions questions.json --json
 
+  jev 'Returned by a customer.' -i parcel.jpg --noul 'damaged=Is the parcel damaged?'
+                             images in the state, with or without text; repeat -i for more.
+                             PNG or JPEG, and a text-only model is refused them before any call
+
   jev '16°C, sticky air, light drizzle' -q weather.json -r wear.toml
                              fuzzy rules over the answers (AND, OR, NOT, VERY, SOMEWHAT, …):
                              prints each outcome's score, and yes at or over the threshold
@@ -59,7 +63,7 @@ fn help_after() -> String {
     let models: String = jev::MODELS.iter().map(|model| format!("\n  {:width$}  {}", model.id, model.about)).collect();
     format!(
         "{EXAMPLES}\n\nModels (-m), all on the same endpoint; any other id works too, unchecked:{models}\n\nA yes/no-only model is \
-         refused a Choice or a Score before any call is made."
+         refused a Choice or a Score, and a text-only model an image, before any call is made."
     )
 }
 
@@ -87,6 +91,11 @@ pub struct Args {
     /// Parse the state as JSON (an object or an array) rather than sending it as text
     #[arg(long)]
     state_json: bool,
+
+    /// An image to judge, PNG or JPEG, after any text; repeatable. With one, the text comes only
+    /// from STATE or --state-file: standard input isn't read unless --state-file says `-`
+    #[arg(long, short = 'i', value_name = "PATH", conflicts_with = "state_json")]
+    image: Vec<PathBuf>,
 
     /// A yes/no question: ID=INSTRUCTIONS[|WHAT YES MEANS|WHAT NO MEANS]; repeatable
     #[arg(long, value_name = "SPEC")]
@@ -154,7 +163,7 @@ pub struct Args {
 
     /// Open a page in the browser to write a state, questions and rules, run them, and see the
     /// answers, the outcome and the drawing; a state, -q and -r fill it in to start with
-    #[arg(long, conflicts_with_all = ["noul", "choice", "score", "format", "svg", "width", "dry_run"])]
+    #[arg(long, conflicts_with_all = ["noul", "choice", "score", "image", "format", "svg", "width", "dry_run"])]
     explore: bool,
 
     /// The port --explore listens on, on 127.0.0.1; any free one by default
@@ -224,7 +233,7 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     // here to tell: a script that pipes nothing in is asking for the structure, not an empty state.
     let draws = args.graph || args.svg.is_some();
     let mut piped = None;
-    if draws && args.state.is_none() && args.state_file.is_none() {
+    if draws && args.state.is_none() && args.state_file.is_none() && args.image.is_empty() {
         let dash = |path: &Option<PathBuf>| path.as_deref() == Some(Path::new("-"));
         let stdin_is_state = !std::io::stdin().is_terminal() && !dash(&args.questions) && !dash(&args.rules);
         let text = if stdin_is_state { read(Path::new("-"))? } else { String::new() };
@@ -339,7 +348,12 @@ fn questions_file(path: &Path) -> anyhow::Result<Vec<(String, jev::Question)>> {
 /// At most one of the state, `--questions` and `--rules` may come from standard input, which can be
 /// read once. The state counts only when one will be read.
 fn one_reader_of_stdin(args: &Args, with_state: bool) -> anyhow::Result<()> {
-    let state_from_stdin = with_state && args.state.is_none() && args.state_file.as_deref().is_none_or(|path| path == Path::new("-"));
+    let state_from_stdin = with_state
+        && args.state.is_none()
+        && match args.state_file.as_deref() {
+            Some(path) => path == Path::new("-"),
+            None => args.image.is_empty(),
+        };
     let stdin = |path: &Option<PathBuf>| path.as_deref() == Some(Path::new("-"));
     if [state_from_stdin, stdin(&args.questions), stdin(&args.rules)].into_iter().filter(|from| *from).count() > 1 {
         bail!("only one of the state, --questions and --rules can come from standard input");
@@ -348,8 +362,11 @@ fn one_reader_of_stdin(args: &Args, with_state: bool) -> anyhow::Result<()> {
 }
 
 /// The state: the argument, the file, or standard input (read already when `piped`), as text or
-/// as JSON.
+/// as JSON; or, with images, an array of any text and then the images.
 fn state(args: &Args, piped: Option<String>) -> anyhow::Result<Value> {
+    if !args.image.is_empty() {
+        return state_with_images(args);
+    }
     let text = match (&args.state, &args.state_file) {
         (Some(text), _) => text.clone(),
         (None, Some(path)) => read(path)?,
@@ -369,6 +386,28 @@ fn parse_state(text: String, json: bool) -> anyhow::Result<Value> {
         return serde_json::from_str(&text).context("--state-json: the state isn't JSON");
     }
     Ok(Value::String(text.trim_end_matches(['\n', '\r']).to_owned()))
+}
+
+/// The state as parts: the text, if STATE or --state-file gave any, then the images in the order
+/// written. Standard input isn't read for text unless asked: a script's may be open and silent,
+/// and the images are a state on their own.
+fn state_with_images(args: &Args) -> anyhow::Result<Value> {
+    let text = match (&args.state, &args.state_file) {
+        (Some(text), _) => Some(text.clone()),
+        (None, Some(path)) => Some(read(path)?),
+        (None, None) => None,
+    };
+    let mut parts = Vec::with_capacity(args.image.len() + 1);
+    if let Some(text) = text {
+        if let Value::String(text) = parse_state(text, false)? {
+            parts.push(jev::text_part(&text));
+        }
+    }
+    for path in &args.image {
+        let file = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+        parts.push(jev::image_part(&file).map_err(|error| anyhow::anyhow!("--image {}: {error}", path.display()))?);
+    }
+    Ok(Value::Array(parts))
 }
 
 /// `--timeout`: a number of seconds over zero.
@@ -541,6 +580,55 @@ mod tests {
             request(&invocation(&[r#"{"message": "hi", "order": {"id": "A-104"}}"#, "--state-json", "--noul", "n=?"]), None).unwrap();
         assert_eq!(request.state, json!({"message": "hi", "order": {"id": "A-104"}}));
         assert!(request_error(&["not json", "--state-json", "--noul", "n=?"]).contains("isn't JSON"));
+    }
+
+    /// A small PNG and a small JPEG, as far as the first bytes of each go, in a directory of their own.
+    fn images(name: &str) -> (std::path::PathBuf, String, String) {
+        let dir = std::env::temp_dir().join(format!("jev-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (png, jpeg) = (dir.join("a.png"), dir.join("b.jpg"));
+        std::fs::write(&png, b"\x89PNG\r\n\x1a\n").unwrap();
+        std::fs::write(&jpeg, b"\xff\xd8\xff").unwrap();
+        (dir, png.display().to_string(), jpeg.display().to_string())
+    }
+
+    #[test]
+    fn puts_images_in_the_state_after_any_text() {
+        let (dir, png, jpeg) = images("state");
+        let (with_text, _, _) = request(&invocation(&["A note.", "-i", &png, "--image", &jpeg, "--noul", "n=?"]), None).unwrap();
+        assert_eq!(
+            with_text.state,
+            json!([
+                {"type": "text", "text": "A note."},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/"}}
+            ])
+        );
+        // Images alone are a state: standard input isn't read for text, or a script's would hang this.
+        let alone = invocation(&["-i", &png, "--noul", "n=?"]);
+        assert!(one_reader_of_stdin(&alone.args, true).is_ok());
+        assert_eq!(request(&alone, None).unwrap().0.state.as_array().map(Vec::len), Some(1));
+        // Asked for, it is read, and it still can't be the questions as well.
+        assert!(request_error(&["-f", "-", "-i", &png, "-q", "-"]).contains("only one of"));
+        assert!(request_error(&["  ", "-i", &png, "--noul", "n=?"]).contains("empty"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_images_it_cant_send() {
+        let (dir, png, _) = images("refused");
+        let text_only = request_error(&["-i", &png, "--noul", "n=?", "-m", "scaledown/classify-1", "--dry-run"]);
+        assert!(text_only.contains("scaledown/classify-1 reads text only"), "{text_only}");
+        let gif = dir.join("c.gif");
+        std::fs::write(&gif, b"GIF89a").unwrap();
+        let gif = gif.display().to_string();
+        let error = request_error(&["-i", &gif, "--noul", "n=?"]);
+        assert!(error.contains("--image") && error.contains("c.gif") && error.contains("PNG and JPEG"), "{error}");
+        assert!(request_error(&["-i", "missing.png", "--noul", "n=?"]).contains("reading missing.png"));
+        // Parts are an array of their own, which a JSON state would have to be merged into.
+        assert!(Args::command().try_get_matches_from(["jev", "{}", "--state-json", "-i", &png, "--noul", "n=?"]).is_err());
+        assert!(Args::command().try_get_matches_from(["jev", "--explore", "-i", &png]).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn request_error(argv: &[&str]) -> String {

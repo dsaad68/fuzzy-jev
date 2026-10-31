@@ -109,6 +109,7 @@ with `--questions` (`-q`); file questions come first, then the flags'.
 | --- | --- |
 | `STATE` | The state, as text. Without it, it's read from `--state-file` (`-f`, `-` for standard input), or from standard input when that isn't a terminal. |
 | `--state-json` | Parse the state as JSON: `cat ticket.json \| jev --state-json -q questions.json` |
+| `--image` (`-i`) | A PNG or JPEG to judge, after any text; repeatable. See [Images](#images). |
 | `--model` (`-m`) | Another model; the default is `~typesafe/jev-latest`. See [Models](#models). |
 | `--url` | Another endpoint. With one, `OPENROUTER_API_KEY` may be unset, for an endpoint that adds the key. |
 | `--text` | One line per question. The default. |
@@ -122,27 +123,59 @@ with `--questions` (`-q`); file questions come first, then the flags'.
 
 ### Models
 
-Six models on the same endpoint are supported, and `-m` picks one:
+33 models on the same endpoint are supported, and `-m` picks one. Every one was called to see what it
+takes, since OpenRouter's listing isn't always right about it:
 
-| Model | | Questions |
-| --- | --- | --- |
-| `~typesafe/jev-latest` | TypeSafe's Jev, whichever version is the latest. **The default.** | all |
-| `typesafe/jev-1.13` | Jev 1.13, pinned: the same model until you change it | all |
-| `jaredpalmer/kev-4b` | Kev 4B, from jaredpalmer | all |
-| `respan/span-01` | Respan's Span 01 | yes/no only |
-| `respan/span-01-lite` | Span 01 Lite, the lighter Span | yes/no only |
-| `respan/span-01-lite:free` | OpenRouter's free variant of Span 01 Lite | yes/no only |
+| Model | | Questions | Images |
+| --- | --- | --- | --- |
+| `~typesafe/jev-latest` | TypeSafe's Jev, whichever version is the latest. **The default.** | all | yes |
+| `typesafe/jev-1.14` | TypeSafe's Jev 1.14, pinned: the same model until you change it | all | yes |
+| `typesafe/jev-1.13` | TypeSafe's Jev 1.13, pinned: the same model until you change it | all | yes |
+| `jaredpalmer/kev-4b` | Kev 4B, from jaredpalmer | all | no |
+| `respan/span-02` | Respan's Span 02 | all | yes |
+| `respan/span-01` | Respan's Span 01 | yes/no only | no |
+| `respan/span-01-lite` | Span 01 Lite, the lighter Span | yes/no only | no |
+| `respan/span-01-lite:free` | Span 01 Lite, OpenRouter's free variant of it | yes/no only | no |
+| `~liquid/d1-latest` | Liquid's d1, whichever version is the latest | all | yes |
+| `liquid/d1.1` | Liquid's d1.1, pinned | all | yes |
+| `liquid/d1` | Liquid's d1, pinned: leaves OpenRouter on 2026-11-20 | all | yes |
+| `~liquid/d1-ultra-latest` | Liquid's largest, d1-ultra, whichever version is the latest | all | yes |
+| `liquid/d1-ultra` | Liquid's d1-ultra, pinned | all | yes |
+| `~perplexity/pplx-decider-latest` | Perplexity's Decider, whichever version is the latest | all | yes |
+| `perplexity/pplx-decider-v1.2` | Perplexity's Decider V1.2, pinned | all | yes |
+| `~perplexity/pplx-decider-flash-latest` | Decider Flash, the smaller Decider, whichever version is the latest | all | yes |
+| `perplexity/pplx-decider-flash-v1.2` | Decider Flash V1.2, pinned | all | yes |
+| `baseten/mammoth-1` | Mammoth 1, Baseten's largest, 27B | all | yes |
+| `baseten/elephant-1` | Elephant 1, from Baseten, 9B | all | yes |
+| `baseten/joey-1` | Joey 1, Baseten's smallest, 2B | all | yes |
+| `cloudflare/clef` | Cloudflare's Clef, 27B | all | yes |
+| `cloudflare/clef-flash` | Clef Flash, the fast Clef, 9B | all | yes |
+| `cloudflare/clef-omni` | Clef Omni, the mixture-of-experts Clef | all | yes |
+| `nace-ai/drex-max` | Drex Max, Nace.AI's largest | all | yes |
+| `nace-ai/drex-v2.0` | Drex v2.0, from Nace.AI | all | no |
+| `nace-ai/drex-v1.5` | Drex v1.5, from Nace.AI | all | no |
+| `openai/gpt-6-luna-decisions` | GPT-6 Luna, served for decisions | all | yes |
+| `inception/mercury-decide` | Inception's Mercury Decide | all | yes |
+| `microsoft/microsoft-decision-1` | Microsoft's Decision 1 | all | no |
+| `upstage/solar-decide` | Upstage's Solar Decide | all | no |
+| `upstage/solar-decide-flash` | Solar Decide Flash, the low-latency Solar | all | no |
+| `togethercomputer/tev1-4b-experimental` | Tev1 4B, Together AI's experiment | all | no |
+| `scaledown/classify-1` | ScaleDown's Classify 1, and every Choice option needs a description | all | no |
 
 ```sh
 jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
 ```
 
 - **Pin a version** for answers that don't change under you: the `~` id follows TypeSafe's latest
-  Jev (today `typesafe/jev-1.13`), and the reply's `model` names the one that answered, with its
-  date, such as `typesafe/jev-1.13-20260917`.
-- **The Span models answer yes/no questions only**, with plain-text instructions and criteria. A
+  Jev (today `typesafe/jev-1.14`), and the reply's `model` names the one that answered, with its
+  date, such as `typesafe/jev-1.14-20261014`. Liquid's and Perplexity's `~` ids work the same way.
+- **The Span 01 models answer yes/no questions only**, with plain-text instructions and criteria. A
   Score, a Choice, or structured instructions asked of one is refused before any call is made:
   ``question `anger`: respan/span-01 answers yes/no questions only, and this is a score``.
+  Span 02 answers every type.
+- **`scaledown/classify-1` needs a description on every Choice option**: `--choice
+  'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`.
+- **`liquid/d1` leaves OpenRouter on 2026-11-20.** `~liquid/d1-latest` keeps working.
 - **Any other id** the endpoint serves works too, sent as it is and not checked. `jev --help`
   lists the supported ones, and so do `jev::MODELS` and `jev.MODELS`.
 
@@ -240,6 +273,83 @@ With `--json`, each answer is named after its type — `.noul`, `.choice` (with 
 cat ticket.json | jev --state-json -q questions.json --json > answers.json
 jq -r 'if .answers.churn_risk.noul > 0.8 then "page the account team" else "queue normally" end' answers.json
 ```
+
+### Images
+
+`--image` (`-i`) puts a PNG or JPEG in the state, after any text:
+
+```sh
+jev 'Returned by a customer.' -i parcel.jpg --noul 'damaged=Is the parcel damaged?'
+jev -i shelf.jpg --score 'stock=How full is the shelf?|Empty|Half full|Full' -m '~liquid/d1-latest'
+```
+
+#### Several images
+
+Give each image its own `-i`. They go to the model in the order written, and every question sees
+all of them, so a question should say what to look for across them:
+
+```sh
+jev 'One parcel, from three sides.' -i front.jpg -i side.jpg -i back.jpg \
+  --noul 'damaged=Is the parcel damaged in any of these photos?'
+```
+
+For a folder of images, build the flags in a loop:
+
+```sh
+args=(); for photo in photos/*.jpg; do args+=(-i "$photo"); done
+jev 'One parcel, from every side.' "${args[@]}" --noul 'damaged=Is the parcel damaged in any of these photos?'
+```
+
+`-i photos/*.jpg` doesn't work: `-i` takes one path, so the shell's second file becomes the text of
+the state, and only one image is sent. A third is an error.
+
+To get an answer for each image rather than one for them all, make one call per image:
+
+```sh
+ls photos/*.jpg | xargs -P 8 -I{} sh -c '
+  jev -i "$1" --noul "damaged=Is the parcel damaged?" --json |
+    jq -r --arg photo "$1" "[\$photo, .answers.damaged.noul] | @tsv"
+' _ {}
+```
+
+How many fit in one request depends on the model. `jev` doesn't count them: over the limit, the
+endpoint refuses the whole request, and there are no partial answers.
+
+| Images in a request | Models |
+| --- | --- |
+| 4 | `respan/span-02`, `nace-ai/drex-max`, the three `cloudflare/clef` models |
+| 8 | Liquid's and Perplexity's |
+| 16 | Baseten's, `inception/mercury-decide` |
+| 64 or more | Jev, `openai/gpt-6-luna-decisions` |
+
+These come from calling each model with small images, and the models don't all state them:
+`cloudflare/clef` and `cloudflare/clef-flash` failed at 5 without saying why, Mercury took 16 and
+refused 32, and 64 is the most that was tried. Large photos hit other limits first. Jev takes 16 MiB
+per image and 32 MiB per request, base64 included, so about 24 MiB of files, and every image also
+uses up the model's context.
+
+#### What to know about images
+
+- **22 of the models read images**, marked in the [table](#models). One that doesn't is refused
+  before any call is made: `nace-ai/drex-v2.0 reads text only, and this state has images in it`.
+  Any other id is sent as it is.
+- **With an image, the text comes only from `STATE` or `--state-file`.** Standard input isn't read
+  unless `-f -` asks for it. `--state-json` doesn't combine with `--image`.
+- **Sizes differ by model**, so they are left to the endpoint: Jev refuses a side under 280 pixels
+  or over 1568, and the others took a 64-pixel image. The format is checked before the call.
+- **Ask what is in an image, not where it comes in the list.** Given two, `typesafe/jev-1.13` and
+  Decider Flash mixed up which one was second.
+
+In Rust, a state with images is an array of `jev::text_part` and `jev::image_part` items, with an
+`image_part` for each image:
+
+```rust
+let state = serde_json::json!([jev::text_part("One parcel, from two sides."), jev::image_part(&front)?, jev::image_part(&back)?]);
+```
+
+These are OpenRouter's own `image_url` parts, not the `assets` map TypeSafe documents. Only Jev reads
+`assets` everywhere: most other models refuse a reference inside text or an object, and Liquid's
+take a reference that is the whole state as text and answer without having seen the image.
 
 ## Fuzzy rules
 
@@ -547,7 +657,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.6", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.7", default-features = false }
 ```
 
 ```rust
