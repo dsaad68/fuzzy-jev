@@ -4,7 +4,7 @@
 use std::fmt::Write;
 
 use crate::rules::Outcome;
-use crate::{Answer, DecisionResponse};
+use crate::{Answer, DecisionResponse, ModelInfo};
 use serde_json::{json, Value};
 use unicode_width::UnicodeWidthStr;
 
@@ -37,6 +37,15 @@ pub fn render_outcome(format: Format, reply: &DecisionResponse, outcome: &Outcom
         Format::Text => for_terminal(&(outcome.text() + &usage(reply))),
         Format::Table => for_terminal(&(outcome_table(outcome, width) + &usage(reply))),
         Format::Json => serde_json::to_string_pretty(&json!({"reply": reply, "outcome": outcome}))? + "\n",
+    })
+}
+
+/// `models` in `format`: a table within `width` columns, which is what `Text` gets too, since a list
+/// of models has no shorter form, or JSON for scripts. Ends with a newline.
+pub fn render_models(format: Format, models: &[ModelInfo], width: usize) -> serde_json::Result<String> {
+    Ok(match format {
+        Format::Json => serde_json::to_string_pretty(models)? + "\n",
+        Format::Text | Format::Table => for_terminal(&models_table(models, width)),
     })
 }
 
@@ -162,7 +171,7 @@ fn table(reply: &DecisionResponse, ids: &[String], width: usize) -> String {
         let confidence = row.confidence();
         rows.push(vec![id.clone(), row.kind.to_owned(), row.answer, confidence, row.probabilities]);
     }
-    boxed(rows, &DROP_ORDER, &SQUEEZE_ORDER, width) + &usage(reply)
+    boxed(rows, &DROP_ORDER, &SQUEEZE_ORDER, &[], width) + &usage(reply)
 }
 
 /// An outcome's columns. The rules behind each score come out first when the table doesn't fit,
@@ -196,13 +205,76 @@ fn outcome_table(outcome: &Outcome, width: usize) -> String {
         rows.push(vec![output.output.clone(), format!("{} ({})", output.value_text(), output.sets_text()), String::new(), sets.join("; ")]);
     }
     let threshold = if outcome.items.is_empty() { String::new() } else { format!("threshold {:.2}\n", outcome.threshold) };
-    boxed(rows, &OUTCOME_DROP_ORDER, &OUTCOME_SQUEEZE_ORDER, width) + &threshold
+    boxed(rows, &OUTCOME_DROP_ORDER, &OUTCOME_SQUEEZE_ORDER, &[], width) + &threshold
+}
+
+/// A model's columns. None comes out when the table doesn't fit, since each was asked for. The
+/// inputs wrap first, and the id, which can't, last. The numbers line up on the right.
+const MODEL_COLUMNS: [&str; 4] = ["model", "context", "$/1M", "input"];
+const MODEL_SQUEEZE_ORDER: [usize; 4] = [3, 2, 1, 0];
+const MODEL_RIGHT: [usize; 2] = [1, 2];
+
+/// A boxed table of `models`, and what it takes to read it.
+fn models_table(models: &[ModelInfo], width: usize) -> String {
+    let mut rows = vec![MODEL_COLUMNS.map(String::from).to_vec()];
+    for model in models {
+        let context = match (model.context, model.measured) {
+            (Some(context), true) => format!("~{}", thousands(context)),
+            (Some(context), false) => thousands(context),
+            (None, _) => "-".to_owned(),
+        };
+        rows.push(vec![model.id.clone(), context, price(model.price), model.inputs.join(", ")]);
+    }
+    let mut notes = vec!["Context is in tokens and the price is per million input tokens, both from OpenRouter just now.".to_owned()];
+    if models.iter().any(|model| model.measured) {
+        notes.push(
+            "~ measured, as OpenRouter lists none: these read the start and end of a state, about that many tokens in all, and skip the \
+             middle without saying so."
+                .to_owned(),
+        );
+    }
+    if models.iter().any(|model| model.inputs.iter().any(|input| input != "text" && input != "image")) {
+        notes.push("-i sends images. Audio, video and files go in a --state-json state, in the shape the model reads.".to_owned());
+    }
+    let unchecked: Vec<&str> = models.iter().filter(|model| !model.supported).map(|model| model.id.as_str()).collect();
+    if !unchecked.is_empty() {
+        notes.push(format!("Not checked by this version of jev, so taken at OpenRouter's word: {}.", unchecked.join(", ")));
+    }
+    let mut out = boxed(rows, &[], &MODEL_SQUEEZE_ORDER, &MODEL_RIGHT, width);
+    for line in notes.iter().flat_map(|note| wrap(note, width)) {
+        let _ = writeln!(out, "{line}");
+    }
+    out
+}
+
+/// `number` with a comma every three digits: `262,144`.
+fn thousands(number: u64) -> String {
+    let digits = number.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (at, digit) in digits.chars().enumerate() {
+        if at > 0 && (digits.len() - at).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
+}
+
+/// A price per million tokens, with three decimals, and more only where three would round it.
+fn price(price: Option<f64>) -> String {
+    let Some(price) = price else { return "-".to_owned() };
+    if price == 0.0 {
+        return "free".to_owned();
+    }
+    let text = format!("{price:.6}");
+    let least = text.find('.').map_or(text.len(), |dot| dot + 4);
+    format!("${}", &text[..text.trim_end_matches('0').len().max(least)])
 }
 
 /// `rows`, the first of them the header, in a boxed table within `width` columns. When it doesn't
 /// fit, the columns in `drop_order` come out until every one left fits at its narrowest, and then
-/// the ones in `squeeze_order` give up space in turn.
-fn boxed(mut rows: Vec<Vec<String>>, drop_order: &[usize], squeeze_order: &[usize], width: usize) -> String {
+/// the ones in `squeeze_order` give up space in turn. The columns in `right` line up on the right.
+fn boxed(mut rows: Vec<Vec<String>>, drop_order: &[usize], squeeze_order: &[usize], right: &[usize], width: usize) -> String {
     let count = rows[0].len();
     let natural = |rows: &[Vec<String>], column: usize| rows.iter().map(|row| columns(&row[column])).max().unwrap_or(0);
     // A column wraps down to its longest word, which is as narrow as it gets without cutting a
@@ -227,6 +299,7 @@ fn boxed(mut rows: Vec<Vec<String>>, drop_order: &[usize], squeeze_order: &[usiz
     let kept: Vec<usize> = (0..count).filter(|column| widths[*column] > 0).collect();
     let order: Vec<usize> = squeeze_order.iter().filter_map(|column| kept.iter().position(|kept| kept == column)).collect();
     let narrowest: Vec<usize> = kept.iter().map(|column| narrowest[*column]).collect();
+    let right: Vec<bool> = kept.iter().map(|column| right.contains(column)).collect();
     let mut widths: Vec<usize> = kept.iter().map(|column| widths[*column]).collect();
     let rows: Vec<Vec<String>> = rows.iter().map(|row| kept.iter().map(|column| row[*column].clone()).collect()).collect();
 
@@ -257,8 +330,18 @@ fn boxed(mut rows: Vec<Vec<String>>, drop_order: &[usize], squeeze_order: &[usiz
         let mut out = String::new();
         for line in 0..height {
             let empty = String::new();
-            let cells: Vec<String> =
-                cells.iter().zip(&widths).map(|(cell, width)| format!(" {} ", pad(cell.get(line).unwrap_or(&empty), *width))).collect();
+            let cells: Vec<String> = cells
+                .iter()
+                .zip(&widths)
+                .zip(&right)
+                .map(|((cell, width), right)| {
+                    let text = cell.get(line).unwrap_or(&empty);
+                    match right {
+                        true => format!(" {}{text} ", " ".repeat(width.saturating_sub(columns(text)))),
+                        false => format!(" {} ", pad(text, *width)),
+                    }
+                })
+                .collect();
             let _ = writeln!(out, "│{}│", cells.join("│"));
         }
         out
@@ -357,6 +440,66 @@ fn level_text(level: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn listed(id: &str, context: Option<u64>, price: Option<f64>, inputs: &[&str]) -> ModelInfo {
+        let inputs = inputs.iter().map(|input| (*input).to_owned()).collect();
+        ModelInfo { id: id.to_owned(), context, measured: false, price, inputs, supported: true }
+    }
+
+    #[test]
+    fn prints_models_in_a_table_with_the_numbers_on_the_right() {
+        let models = [
+            listed("typesafe/jev-1.14", Some(262_144), Some(0.042), &["text", "image"]),
+            listed("openai/gpt-6-luna-decisions", Some(1_050_000), Some(0.1), &["text", "image"]),
+            ModelInfo { measured: true, ..listed("respan/span-01-lite:free", Some(3000), Some(0.0), &["text"]) },
+            listed("liquid/d1", None, None, &["text", "image"]),
+        ];
+        let out = render_models(Format::Table, &models, 100).unwrap();
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[1], "│ model                       │   context │   $/1M │ input       │", "{out}");
+        assert_eq!(lines[3], "│ typesafe/jev-1.14           │   262,144 │ $0.042 │ text, image │", "{out}");
+        assert_eq!(lines[4], "│ openai/gpt-6-luna-decisions │ 1,050,000 │ $0.100 │ text, image │", "{out}");
+        assert_eq!(lines[5], "│ respan/span-01-lite:free    │    ~3,000 │   free │ text        │", "{out}");
+        assert_eq!(lines[6], "│ liquid/d1                   │         - │      - │ text, image │", "{out}");
+        assert!(out.contains("from OpenRouter just now"), "{out}");
+        // A note is there only for what the table shows.
+        assert!(out.contains("skip the middle"), "{out}");
+        assert!(!out.contains("--state-json") && !out.contains("Not checked"), "{out}");
+        assert_eq!(render_models(Format::Text, &models, 100).unwrap(), out);
+    }
+
+    #[test]
+    fn says_what_a_table_of_models_shows_when_it_shows_it() {
+        let models = [
+            listed("cloudflare/clef-omni", Some(65_536), Some(0.15), &["text", "image", "audio", "video"]),
+            ModelInfo { supported: false, ..listed("some\u{1b}one/new", Some(1024), Some(0.0375), &["text"]) },
+        ];
+        let out = render_models(Format::Table, &models, 100).unwrap();
+        assert!(out.contains("--state-json") && !out.contains("skip the middle"), "{out}");
+        assert!(out.contains("taken at OpenRouter's word: some\\u{1b}one/new."), "{out}");
+        // A digit past the third is kept rather than rounded away.
+        assert!(out.contains("$0.0375"), "{out}");
+    }
+
+    #[test]
+    fn a_narrow_table_of_models_wraps_the_inputs_and_keeps_every_column() {
+        let models = [listed("cloudflare/clef-omni", Some(65_536), Some(0.15), &["text", "image", "audio", "video"])];
+        let out = render_models(Format::Table, &models, 60).unwrap();
+        for word in ["cloudflare/clef-omni", "65,536", "$0.150", "video"] {
+            assert!(out.contains(word), "{word} in {out}");
+        }
+        assert!(out.lines().all(|line| columns(line) <= 60), "{out}");
+    }
+
+    #[test]
+    fn prints_models_as_json_for_scripts() {
+        let models = [listed("liquid/d1", None, None, &["text"])];
+        let out: Value = serde_json::from_str(&render_models(Format::Json, &models, 80).unwrap()).unwrap();
+        assert_eq!(
+            out,
+            json!([{"id": "liquid/d1", "context": null, "measured": false, "price": null, "inputs": ["text"], "supported": true}])
+        );
+    }
 
     #[test]
     fn a_narrow_table_keeps_a_nouls_probability() {

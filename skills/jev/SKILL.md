@@ -2,7 +2,7 @@
 name: jev
 description: >-
   Ask Jev (TypeSafe's System One model, on OpenRouter's decisions endpoint) typed questions about a
-  piece of text and get probabilities back instead of prose — a Choice between named
+  piece of text or an image and get probabilities back instead of prose — a Choice between named
   options, a Score on an ordered scale, or a Noul, the probability that something is true. Use when
   classifying, routing, triaging, labelling, rating, scoring or flagging text, especially many items
   against one set of criteria; when a judgment needs a confidence number to gate on rather than an
@@ -55,12 +55,13 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | --- | --- |
 | `STATE` / `-f PATH` | The state as an argument or from a file (`-` for stdin); stdin is read when it isn't a terminal. |
 | `--state-json` | Parse the state as JSON, so questions can point at named parts. |
+| `-i PATH` | A PNG or JPEG in the state, after any text; repeatable. With one, stdin is read only for `-f -`. Not with `--state-json`. |
 | `--noul` / `--choice` / `--score` | A question, repeatable. Noul criteria: none, or `\|YES MEANS\|NO MEANS`. Choice: two or more `NAME[:DESCRIPTION]`. Score: two to ten levels, lowest first. |
 | `-q FILE` | Questions from a JSON or TOML file ([below](#write-a-questions-file)) — the only way to use text containing `\|`, or structured criteria. |
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
-| `-m ID` | Another model. Default `~typesafe/jev-latest`; also `typesafe/jev-1.13`, `jaredpalmer/kev-4b`, and the yes/no-only `respan/span-01`, `respan/span-01-lite`, `respan/span-01-lite:free`. |
+| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 33 supported and what each can't do, and `jev --list-models` each one's context window, price and inputs. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. Quote a `~` id, or the shell may expand it. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
 ### Write a questions file
@@ -217,10 +218,33 @@ ls emails/*.txt | xargs -P 8 -I{} sh -c '
 
 Rows arrive as they finish, so sort if order matters.
 
+## Several images
+
+Each image takes its own `-i`, in order, and every question sees all of them, so one call gives one
+answer across the set. For an answer per image, make one call per image, as above with `jev -i "$1"`.
+
+```sh
+jev 'One parcel, from three sides.' -i front.jpg -i side.jpg -i back.jpg \
+  --noul 'damaged=Is the parcel damaged in any of these photos?'
+
+args=(); for photo in photos/*.jpg; do args+=(-i "$photo"); done   # a folder
+jev "${args[@]}" --noul 'damaged=Is the parcel damaged in any of these photos?'
+```
+
+`-i photos/*.jpg` is wrong: `-i` takes one path, so a second file silently becomes the state's text
+and only one image is sent. Limits per request differ by model, and over one the whole request is
+refused: 4 for `respan/span-02`, `nace-ai/drex-max` and the `cloudflare/clef` models, 8 for Liquid's
+and Perplexity's, 16 for Baseten's and `inception/mercury-decide`; Jev and
+`openai/gpt-6-luna-decisions` took 64, the most tried. Large photos hit the 32 MiB request limit
+sooner.
+
 ## Gotchas
 
 - **Jev sees only the state** — not your files, not the conversation, not the question ids. Quote
   into the state everything it needs.
+- **Images need a model that reads them.** `jev --help` marks the others `text only`, and they are
+  refused before any call. Jev itself refuses a side under 280 pixels or over 1568. Ask what is in
+  an image rather than where it comes in the list: some models mix up which of two came second.
 - **A Noul has no `confidence` field.** Its probability is the answer.
 - **A Score's `score` is an expectation, not an index.** `1.98 of 2` is nearly the top level, but
   `1.2 of 2` may be a case between two levels or a split between distant ones (`[0.4, 0, 0.6]` also

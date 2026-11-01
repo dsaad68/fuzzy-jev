@@ -26,6 +26,7 @@ create_exception!(
     JevError,
     "A question the endpoint can't answer as asked, an id asked twice, or a question a yes/no-only model can't take."
 );
+create_exception!(jev, ImageError, JevError, "An image that can't be sent: no PNG or JPEG, or a model that reads text only.");
 create_exception!(jev, MissingAnswerError, JevError, "The reply has no answer under this question id.");
 create_exception!(jev, WrongTypeError, JevError, "The answer under this id is of another type than the one asked for.");
 create_exception!(
@@ -51,6 +52,7 @@ fn error(e: jev::Error) -> PyErr {
         }
         jev::Error::Decode(_) => DecodeError::new_err(message),
         jev::Error::DuplicateQuestion(_) | jev::Error::Invalid { .. } => InvalidQuestionError::new_err(message),
+        jev::Error::Image(_) => ImageError::new_err(message),
         jev::Error::MissingAnswer(_) => MissingAnswerError::new_err(message),
         jev::Error::WrongType { .. } => WrongTypeError::new_err(message),
         jev::Error::MissingProbability { .. } | jev::Error::BadAnswer { .. } => BadAnswerError::new_err(message),
@@ -691,13 +693,26 @@ fn fired<'py>(py: Python<'py>, rules: &[jev::rules::Fired]) -> PyResult<Bound<'p
     PyList::new(py, rules)
 }
 
+/// One item of a state's list: text, to sit beside images.
+#[pyfunction]
+fn text_part<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    object(py, &jev::text_part(text))
+}
+
+/// One item of a state's list: an image, from the bytes of a PNG or JPEG file.
+#[pyfunction]
+fn image_part<'py>(py: Python<'py>, file: &[u8]) -> PyResult<Bound<'py, PyAny>> {
+    object(py, &jev::image_part(file).map_err(error)?)
+}
+
 #[pymodule]
 fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("DEFAULT_MODEL", jev::DEFAULT_MODEL)?;
     // The supported models, the default first: each an `id`, what it is (`about`), and whether it
-    // answers yes/no questions only (`noul_only`), which a request is checked against before it's sent.
+    // answers yes/no questions only (`noul_only`) and reads images (`images`), which a request is
+    // checked against before it's sent.
     let models = jev::MODELS
         .iter()
         .map(|model| {
@@ -705,6 +720,7 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
             dict.set_item("id", model.id)?;
             dict.set_item("about", model.about)?;
             dict.set_item("noul_only", model.noul_only)?;
+            dict.set_item("images", model.images)?;
             Ok(dict)
         })
         .collect::<PyResult<Vec<_>>>()?;
@@ -723,11 +739,14 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Item>()?;
     m.add_class::<OutputValue>()?;
     m.add_function(wrap_pyfunction!(load_questions, m)?)?;
+    m.add_function(wrap_pyfunction!(text_part, m)?)?;
+    m.add_function(wrap_pyfunction!(image_part, m)?)?;
     m.add("JevError", py.get_type::<JevError>())?;
     m.add("HttpError", py.get_type::<HttpError>())?;
     m.add("StatusError", py.get_type::<StatusError>())?;
     m.add("DecodeError", py.get_type::<DecodeError>())?;
     m.add("InvalidQuestionError", py.get_type::<InvalidQuestionError>())?;
+    m.add("ImageError", py.get_type::<ImageError>())?;
     m.add("MissingAnswerError", py.get_type::<MissingAnswerError>())?;
     m.add("WrongTypeError", py.get_type::<WrongTypeError>())?;
     m.add("BadAnswerError", py.get_type::<BadAnswerError>())?;

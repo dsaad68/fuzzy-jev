@@ -1,7 +1,7 @@
 # fuzzy-jev for Python
 
-Python bindings for [fuzzy-jev](https://github.com/dsaad68/fuzzy-jev): ask TypeSafe's **Jev**
-typed questions about a piece of text through OpenRouter's decisions endpoint, and get
+Python bindings for [fuzzy-jev](https://github.com/dsaad68/fuzzy-jev): ask OpenRouter's decision
+models, TypeSafe's **Jev** by default, typed questions about text or images, and get
 probabilities back — a **Choice** between named options, a **Score** on an ordered scale, or a
 **Noul**, the probability that something is true. [Rules](https://github.com/dsaad68/fuzzy-jev/blob/main/docs/rules.md) then combine those
 answers by fuzzy logic into decisions and amounts, and draw themselves as SVG.

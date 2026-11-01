@@ -124,11 +124,11 @@ jev '16°C, the air feels sticky, and a light drizzle has started.' -q weather.j
 ```
 
 ```text
-raincoat  0.98  yes
+raincoat  0.97  yes
 threshold 0.50
 ```
 
-Jev gave `raining` 0.98 and `hot` 0.00, so `raining AND NOT hot` = min(0.98, 1 − 0.00) = **0.98**.
+Jev gave `raining` 0.97 and `hot` 0.01, so `raining AND NOT hot` = min(0.97, 1 − 0.01) = **0.97**.
 That is at or over the default threshold of 0.5, so the policy supports a raincoat.
 
 ## The file at a glance
@@ -169,8 +169,8 @@ Where the degree comes from, for the ticket in the [worked example](#a-complete-
 
 ```text
 urgency: No deadline 0.00 · This week 0.00 · [Today 1.00]      today = "urgency.Today"        → 1.00
-team:    billing 0.13 · support 0.08 · [security 0.78] · other 0.01    security = "team.security" → 0.78
-blocked: no 0.09 · [yes 0.91]                                  blocked = "blocked"            → 0.91
+team:    billing 0.04 · support 0.06 · [security 0.90] · other 0.00    security = "team.security" → 0.90
+blocked: no 0.10 · [yes 0.90]                                  blocked = "blocked"            → 0.90
 ```
 
 Every answer is checked, and a problem is an error, never a guess. `jev` checks the whole reply
@@ -393,26 +393,26 @@ standard input too (`-r -`), as long as the state and the questions don't.
 ### Text
 
 ```text
-page on-call          0.91  yes
-escalate to a lead    0.79  yes
+page on-call          0.90  yes
+escalate to a lead    0.72  yes
 weekly billing queue  0.00
 threshold 0.60
 reply_within          2.17  (soon 1.00, same_day 0.00, later 0.00)
-617 tokens in, 89 out, $0.000026, typesafe/jev-1.13-20260917
+617 tokens in, 89 out, $0.000026, typesafe/jev-1.14-20261014
 ```
 
 ### `--table`
 
 ```text
-┌──────────────────────┬───────┬──────┬──────────────────────────────────────────────────────────────────────┐
-│ item                 │ score │ yes? │ rules                                                                │
-├──────────────────────┼───────┼──────┼──────────────────────────────────────────────────────────────────────┤
-│ page on-call         │ 0.91  │ yes  │ blocked AND (security OR today) = 0.91                               │
-│ escalate to a lead   │ 0.79  │ yes  │ VERY angry OR INDEED blocked AND billing = 0.79                      │
-│ weekly billing queue │ 0.00  │      │ billing AND relaxed = 0.00                                           │
-│ reply_within         │ 2.17  │      │ soon: today OR blocked = 1.00; same_day: this_week = 0.00; later:    │
-│                      │       │      │ relaxed = 0.00                                                       │
-└──────────────────────┴───────┴──────┴──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────┬─────────────────────────────────────────────┬──────┬──────────────────────────────────────────────────────┐
+│ item                 │ score                                       │ yes? │ rules                                                │
+├──────────────────────┼─────────────────────────────────────────────┼──────┼──────────────────────────────────────────────────────┤
+│ page on-call         │ 0.90                                        │ yes  │ blocked AND (security OR today) = 0.90               │
+│ escalate to a lead   │ 0.72                                        │ yes  │ VERY angry OR INDEED blocked AND billing = 0.72      │
+│ weekly billing queue │ 0.00                                        │      │ billing AND relaxed = 0.00                           │
+│ reply_within         │ 2.17 (soon 1.00, same_day 0.00, later 0.00) │      │ soon: today OR blocked = 1.00; same_day: this_week = │
+│                      │                                             │      │ 0.00; later: relaxed = 0.00                          │
+└──────────────────────┴─────────────────────────────────────────────┴──────┴──────────────────────────────────────────────────────┘
 threshold 0.60
 ```
 
@@ -428,9 +428,9 @@ The `outcome` part (`reply` is Jev's answer, as this crate reads it: the fields 
   "items": [
     {
       "item": "page on-call",
-      "score": 0.91,
+      "score": 0.9,
       "yes": true,
-      "rules": [{"if": "blocked AND (security OR today)", "weight": 1.0, "score": 0.91}]
+      "rules": [{"if": "blocked AND (security OR today)", "weight": 1.0, "score": 0.9}]
     }
   ],
   "outputs": [
@@ -489,14 +489,14 @@ option's probability and the term's own in brackets:
 
 ```text
 R2  VERY angry OR INDEED blocked AND billing  ⇒  escalate to a lead
-    OR (a + b − ab)  0.88
-    ├─ VERY (x²)  0.86
-    │  └─ angry  0.93  ← anger: Calm 0.00 · Annoyed 0.07 · [Angry 0.93]
-    └─ AND (min)  0.13
+    OR (a + b − ab)  0.80
+    ├─ VERY (x²)  0.79
+    │  └─ angry  0.89  ← anger: Calm 0.00 · Annoyed 0.11 · [Angry 0.89]
+    └─ AND (min)  0.04
        ├─ INDEED (toward 0 or 1)  0.98
-       │  └─ blocked  0.91  ← blocked: no 0.09 · [yes 0.91]
-       └─ billing  0.13  ← team: [billing 0.13] · support 0.08 · security 0.78 · other 0.01
-    ⇒ escalate to a lead  0.79 (× weight 0.9)  ███████████████▉
+       │  └─ blocked  0.90  ← blocked: no 0.10 · [yes 0.90]
+       └─ billing  0.04  ← team: [billing 0.04] · support 0.06 · security 0.90 · other 0.00
+    ⇒ escalate to a lead  0.72 (× weight 0.9)  ██████████████▍
 ```
 
 An output is drawn as a plot. `░` is every set's outline, the blocks are the merged shape, and `↑`
@@ -504,7 +504,7 @@ marks the centroid:
 
 ```text
   reply_within = 2.17
-  1.0 ┤██▄       ░                           ░░░░░░░░░░░░░░░░░░░░░░
+  1.0 ┤███       ░                           ░░░░░░░░░░░░░░░░░░░░░░
       │███     ░░░░░                    ░░░░░░░░░░░░░░░░░░░░░░░░░░░
       │███▇   ░░░░░░░░             ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
       │████▃ ░░░░░░░░░░░       ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -570,21 +570,21 @@ if   = "relaxed"
 then = "reply_within IS later"
 ```
 
-**What Jev said** (the degrees): `blocked` 0.91, `security` 0.78, `billing` 0.13, `today` 1.00,
-`this_week` 0.00, `relaxed` 0.00, `angry` 0.93.
+**What Jev said** (the degrees): `blocked` 0.90, `security` 0.90, `billing` 0.04, `today` 1.00,
+`this_week` 0.00, `relaxed` 0.00, `angry` 0.89.
 
-**R1, page on-call.** `security OR today` with probsum = 0.78 + 1.00 − 0.78 × 1.00 = 1.00. Then
-`blocked AND 1.00` = min(0.91, 1.00) = **0.91**. That is ≥ 0.6, so **yes**.
+**R1, page on-call.** `security OR today` with probsum = 0.90 + 1.00 − 0.90 × 1.00 = 1.00. Then
+`blocked AND 1.00` = min(0.90, 1.00) = **0.90**. That is ≥ 0.6, so **yes**.
 
 **R2, escalate to a lead.**
-- `VERY angry` = 0.93² = 0.86.
-- `INDEED blocked` = 1 − 2 × (1 − 0.91)² = 0.98.
-- `INDEED blocked AND billing` = min(0.98, 0.13) = 0.13. `AND` binds tighter than `OR`, so it is
+- `VERY angry` = 0.89² = 0.79.
+- `INDEED blocked` = 1 − 2 × (1 − 0.90)² = 0.98.
+- `INDEED blocked AND billing` = min(0.98, 0.04) = 0.04. `AND` binds tighter than `OR`, so it is
   worked out first.
-- `0.86 OR 0.13` with probsum = 0.86 + 0.13 − 0.86 × 0.13 = 0.88.
-- Times the weight: 0.88 × 0.9 = **0.79**, so **yes**.
+- `0.79 OR 0.04` with probsum = 0.79 + 0.04 − 0.79 × 0.04 = 0.80.
+- Times the weight: 0.80 × 0.9 = **0.72**, so **yes**.
 
-**R3, weekly billing queue.** `billing AND relaxed` = min(0.13, 0.00) = **0.00**, so **no**: this
+**R3, weekly billing queue.** `billing AND relaxed` = min(0.04, 0.00) = **0.00**, so **no**: this
 ticket is urgent, not one for the weekly queue. The rule names the level `relaxed` (No deadline)
 rather than `NOT (today OR this_week)`. The levels exclude each other, so "neither Today nor This
 week" is exactly No deadline. `today OR this_week` under probsum would treat them as separate
@@ -592,7 +592,7 @@ reasons instead: for an answer split `[0, 0.5, 0.5]` it gives 0.75, so `NOT` it 
 no probability at all is on No deadline.
 
 **R4–R6, reply_within.**
-- `soon` is clipped at `today OR blocked` = 1.00 + 0.91 − 0.91 = **1.00**.
+- `soon` is clipped at `today OR blocked` = 1.00 + 0.90 − 0.90 = **1.00**.
 - `same_day` is clipped at 0.00, and so is `later`.
 - The merged shape is therefore `soon` itself: 1 from 0 to 2, falling to 0 at 6.
 - Its centroid: the flat part (area 2, centre 1) plus the slope (area 2, centre 2 + 4/3 ≈ 3.33)

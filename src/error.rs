@@ -15,6 +15,8 @@ pub enum Error {
     DuplicateQuestion(String),
     /// A question cannot be answered as asked: too many options, an option twice, no levels.
     Invalid { id: String, why: String },
+    /// An image can't be sent as given: it is no PNG or JPEG, or the model reads text only.
+    Image(String),
     /// The reply has no answer under this question id.
     MissingAnswer(String),
     /// The answer under `id` is of another type than the one asked for.
@@ -40,6 +42,7 @@ impl fmt::Display for Error {
             Error::Decode(message) => write!(f, "invalid message: {message}"),
             Error::DuplicateQuestion(id) => write!(f, "question `{id}` is asked twice"),
             Error::Invalid { id, why } => write!(f, "question `{id}`: {why}"),
+            Error::Image(why) => f.write_str(why),
             Error::MissingAnswer(id) => write!(f, "no answer for question `{id}`"),
             Error::WrongType { id, expected, found } => write!(f, "question `{id}` is a {found}, not a {expected}"),
             Error::MissingProbability { id, label } => write!(f, "question `{id}` gives no probability for `{label}`"),

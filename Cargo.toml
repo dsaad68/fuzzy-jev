@@ -2,9 +2,9 @@
 # On crates.io as fuzzy-jev, since `jev` there is another project's; the library is still imported
 # as `jev` and the command is still `jev`.
 name = "fuzzy-jev"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
-description = "A client for TypeSafe's Jev on OpenRouter's decisions endpoint: typed Choice, Score and Noul answers about a state, fuzzy rules over them, and drawings of those rules. Native and wasm32, and a CLI."
+description = "A client for OpenRouter's decision models, TypeSafe's Jev by default: typed Choice, Score and Noul answers about text and images, fuzzy rules over them, and drawings of those rules. Native and wasm32, and a CLI."
 repository = "https://github.com/dsaad68/fuzzy-jev"
 readme = "README.md"
 license = "MIT"
@@ -34,6 +34,8 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [dependencies]
+# The bytes of an image in a state, in the data URL the endpoint reads. reqwest brings this version.
+base64 = "0.23"
 reqwest = { version = "0.13", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

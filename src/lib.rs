@@ -1,6 +1,7 @@
-//! A client for TypeSafe's Jev, a System One model, on OpenRouter's decisions endpoint. Jev reads a
-//! state (a string, a JSON object or an array) and answers typed questions about it: a Choice
-//! between options, a Score along levels, or a Noul, the probability that something is true.
+//! A client for OpenRouter's decision models, TypeSafe's Jev by default, on its decisions endpoint.
+//! A model reads a state (a string, a JSON object or an array, which can hold images: [`image_part`])
+//! and answers typed questions about it: a Choice between options, a Score along levels, or a Noul, the
+//! probability that something is true.
 //!
 //! ```no_run
 //! # async fn run() -> jev::Result<()> {
@@ -27,6 +28,7 @@
 //! Works natively and on wasm32, where requests go through the host's `fetch`.
 
 mod error;
+mod image;
 pub mod models;
 #[cfg(feature = "command")]
 pub mod print;
@@ -44,7 +46,8 @@ use std::time::Duration;
 use serde::Serialize;
 
 pub use error::{Error, Result};
-pub use models::{Model, MODELS};
+pub use image::{has_images, image_part, text_part};
+pub use models::{Model, ModelInfo, MODELS};
 pub use types::{
     Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer, NoulCriteria, Options, Question, ScoreAnswer, Usage, ROUNDING,
 };
@@ -56,6 +59,9 @@ pub const DEFAULT_MODEL: &str = "~typesafe/jev-latest";
 
 /// OpenRouter's decisions endpoint.
 pub const DECISIONS_URL: &str = "https://openrouter.ai/api/alpha/decisions";
+
+/// OpenRouter's list of the models on that endpoint, with each one's price and context window.
+pub const MODELS_URL: &str = "https://openrouter.ai/api/v1/models?output_modalities=decisions";
 
 /// How long a request may take, from sending it to reading the whole reply, unless the client says
 /// otherwise ([`Client::with_timeout`]). A reply usually takes a second or two.
@@ -153,7 +159,8 @@ impl Client {
 
     /// Sends `request` as it is, whatever model it names. A question the model can't answer (one
     /// of [`MODELS`] that takes yes/no questions only, asked anything else) is refused here, before
-    /// the call, as [`Error::Invalid`]. The reply is checked against the request
+    /// the call, as [`Error::Invalid`], and images it can't read as [`Error::Image`]. The reply is
+    /// checked against the request
     /// ([`DecisionResponse::check_against`]): an answer missing, of another type, or that isn't
     /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
@@ -173,6 +180,19 @@ impl Client {
         let reply: DecisionResponse = serde_json::from_slice(&body).map_err(|e| Error::Decode(e.to_string()))?;
         reply.check_against(&request.questions)?;
         Ok(reply)
+    }
+
+    /// The models on offer now, from the list at `url`, usually [`MODELS_URL`]: each one's context
+    /// window, price and inputs, corrected by what this crate has checked
+    /// ([`models::read_listing`]). The list is public, so no key is sent.
+    pub async fn list_models(&self, url: &str) -> Result<Vec<ModelInfo>> {
+        let reply = self.http.get(url).timeout(self.usable_timeout()).send().await.map_err(|e| Error::Http(e.to_string()))?;
+        let status = reply.status();
+        let body = reply.bytes().await.map_err(|e| Error::Http(e.to_string()))?;
+        if !status.is_success() {
+            return Err(Error::Http(format!("{url} returned HTTP {}: {}", status.as_u16(), error_message(&body))));
+        }
+        models::read_listing(&body)
     }
 
     /// The timeout, cut to what the target's timer takes: reqwest on wasm32 hands JavaScript's

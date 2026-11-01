@@ -72,10 +72,10 @@ print(reply.render())
 ```
 
 ```text
-department   billing  confidence 0.82  (billing 0.88, technical 0.12, sales 0.00)
-frustration  1.04 of 2, nearest "Frustrated"  confidence 0.94
-is_urgent    0.95 yes
-427 tokens in, 73 out, $0.000018, typesafe/jev-1.13-20260917
+department   billing  confidence 0.80  (billing 0.87, technical 0.13, sales 0.00)
+frustration  1.01 of 2, nearest "Frustrated"  confidence 0.97
+is_urgent    0.96 yes
+427 tokens in, 73 out, $0.000018, typesafe/jev-1.14-20261014
 ```
 
 Every question sees the same state and is answered on its own, so ask them all in one call: an extra
@@ -161,6 +161,33 @@ What the questions are about: a string, or anything JSON can hold, such as a dic
 client.decide({"subject": "Refund", "body": "I was charged twice", "plan": "pro"}, questions)
 ```
 
+A state can hold images: a list of `jev.text_part` and `jev.image_part` items, the second taking the
+bytes of a PNG or JPEG file. A model that reads text only is refused them before any call, with
+`ImageError`, and `MODELS` says which ones do (`images`).
+
+```python
+photo = pathlib.Path("parcel.jpg").read_bytes()
+reply = client.decide(
+    [jev.text_part("Returned by a customer."), jev.image_part(photo)],
+    {"damaged": jev.Question.noul("Is the parcel damaged?")},
+)
+```
+
+For several images, add an `image_part` for each. They go to the model in the order of the list, and
+every question sees all of them:
+
+```python
+photos = sorted(pathlib.Path("photos").glob("*.jpg"))
+reply = client.decide(
+    [jev.text_part("One parcel, from every side."), *(jev.image_part(p.read_bytes()) for p in photos)],
+    {"damaged": jev.Question.noul("Is the parcel damaged in any of these photos?")},
+)
+```
+
+How many fit in one request depends on the model, from 4 to 64 or more, and over the limit the whole
+request is refused. The [README](../README.md#several-images) lists them. For an answer per image,
+make one call per image.
+
 ## The reply
 
 ```python
@@ -170,7 +197,7 @@ reply.score("frustration")               # ScoreAnswer
 reply["department"]                      # the answer, of whichever type
 "department" in reply, len(reply)
 reply.answers                            # every answer by id
-reply.model, reply.id, reply.provider    # "typesafe/jev-1.13-20260917", OpenRouter's id, "TypeSafe"
+reply.model, reply.id, reply.provider    # "typesafe/jev-1.14-20261014", OpenRouter's id, "TypeSafe"
 reply.usage                              # input_tokens, output_tokens, cost (US dollars, or None)
 ```
 
@@ -279,7 +306,8 @@ wrong shape (a Noul with only `yes`, a timeout of 0, an unknown render format).
 
 | Exception | When |
 | --- | --- |
-| `InvalidQuestionError` | A question the endpoint can't answer as asked, an id asked twice, or a question a yes/no-only model (the `respan/` ones) can't take. Before any call. |
+| `InvalidQuestionError` | A question the endpoint can't answer as asked, an id asked twice, or a question a yes/no-only model (the `respan/span-01` ones) can't take. Before any call. |
+| `ImageError` | An image that is no PNG or JPEG, or one sent to a model that reads text only. Before any call. |
 | `RulesError` | A rules file that doesn't parse or doesn't fit the questions. Before any call. |
 | `HttpError` | The request couldn't be sent, its reply couldn't be read, or it timed out. |
 | `StatusError` | The endpoint answered with an error; `.status` is the HTTP status, and the message is the endpoint's. |
@@ -339,7 +367,7 @@ Everything is importable from `jev`; types are in `jev/_jev.pyi`.
 | `ChoiceAnswer`, `ScoreAnswer`, `NoulAnswer`, `Usage` | the fields above |
 | `Rules(text, questions)` | `.evaluate`, `.graph_svg`, `.graph_text` |
 | `Outcome`, `Item`, `OutputValue` | the fields above |
-| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only"}`, the default first |
+| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only", "images"}`, the default first |
 | `JevError` and its subclasses | [Errors](#errors) |
 
 ## Building and releasing

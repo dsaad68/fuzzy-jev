@@ -3,7 +3,36 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use jev::{Client, Question};
+use jev::{image_part, text_part, Client, Question};
+use serde_json::json;
+
+/// The image has to reach the model, not only the request: Liquid's models, sent an image in
+/// `assets` as the whole state, answer as confidently as ever without having seen it. Solid red, so
+/// only a model that saw it says red, and an option list where a guess is usually wrong.
+#[tokio::test]
+#[ignore = "calls OpenRouter"]
+async fn sees_an_image_beside_text() {
+    let Ok(key) = std::env::var("OPENROUTER_API_KEY") else {
+        eprintln!("OPENROUTER_API_KEY is not set: skipped");
+        return;
+    };
+    let state = json!([text_part("A note from Marta in Lisbon."), image_part(include_bytes!("fixtures/red.png")).unwrap()]);
+    for model in ["~typesafe/jev-latest", "~liquid/d1-latest", "~perplexity/pplx-decider-latest"] {
+        let reply = Client::new(&key)
+            .with_model(model)
+            .decide(
+                state.clone(),
+                [
+                    ("colour", Question::choice("What colour is the image?", [("red", ""), ("green", ""), ("blue", ""), ("yellow", "")])),
+                    ("city", Question::noul("Does the text name the city of Lisbon?")),
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(reply.choice("colour").unwrap().choice, "red", "{model}");
+        assert!(reply.noul("city").unwrap() > 0.5, "{model}");
+    }
+}
 
 #[tokio::test]
 #[ignore = "calls OpenRouter"]

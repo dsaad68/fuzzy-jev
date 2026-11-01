@@ -261,7 +261,26 @@ def test_lists_the_supported_models():
     ids = [model["id"] for model in jev.MODELS]
     assert ids[0] == jev.DEFAULT_MODEL == "~typesafe/jev-latest"
     assert {"typesafe/jev-1.13", "jaredpalmer/kev-4b", "respan/span-01", "respan/span-01-lite", "respan/span-01-lite:free"} <= set(ids)
-    assert all(model["noul_only"] == model["id"].startswith("respan/") for model in jev.MODELS)
+    assert all(model["noul_only"] == model["id"].startswith("respan/span-01") for model in jev.MODELS)
+    assert {model["id"] for model in jev.MODELS if model["images"]} >= {jev.DEFAULT_MODEL, "~liquid/d1-latest", "respan/span-02"}
+
+
+def test_a_state_of_parts_holds_text_and_images():
+    assert jev.text_part("A note.") == {"type": "text", "text": "A note."}
+    png = (ROOT / "tests" / "fixtures" / "red.png").read_bytes()
+    part = jev.image_part(png)
+    assert part["type"] == "image_url"
+    assert part["image_url"]["url"].startswith("data:image/png;base64,iVBOR")
+    with pytest.raises(jev.ImageError, match="PNG and JPEG"):
+        jev.image_part(b"GIF89a")
+
+
+def test_a_text_only_model_is_refused_images_before_any_call():
+    # Nothing listens on the discard port: the refusal comes before a connection is tried.
+    client = jev.Client("key", url="http://127.0.0.1:9", model="scaledown/classify-1")
+    png = (ROOT / "tests" / "fixtures" / "red.png").read_bytes()
+    with pytest.raises(jev.ImageError, match="reads text only"):
+        client.decide([jev.image_part(png)], {"n": jev.Question.noul("Is it red?")})
 
 
 def test_a_yes_no_model_is_refused_other_questions_before_any_call():
