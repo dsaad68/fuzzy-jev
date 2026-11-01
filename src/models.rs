@@ -7,6 +7,11 @@
 //!
 //! What each one takes comes from calling it, not from OpenRouter's listing, which says
 //! `scaledown/classify-1` reads images when it refuses them.
+//!
+//! What changes without notice, a model's price and context window, isn't kept here: OpenRouter is
+//! asked for it ([`crate::Client::list_models`]), and [`read_listing`] corrects what it says.
+
+use serde::{Deserialize, Serialize};
 
 use crate::{DecisionRequest, Error, Question};
 
@@ -116,6 +121,99 @@ pub const MODELS: [Model; 33] = [
     },
 ];
 
+/// Roughly how many tokens of a state these models read, where OpenRouter lists a context window of
+/// 0. Measured: they take a state of any size, read its start and end, and skip the middle without
+/// saying so. A fact in the middle of a long state scores as if it weren't there.
+const MEASURED_CONTEXT: [(&str, u64); 3] = [("respan/span-01", 3000), ("respan/span-01-lite", 3000), ("respan/span-01-lite:free", 3000)];
+
+/// A model as it is on offer now: OpenRouter's listing, corrected by what this crate has checked.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ModelInfo {
+    /// Its id, as a request names it.
+    pub id: String,
+    /// How many tokens it reads at once, if that is known.
+    pub context: Option<u64>,
+    /// Whether [`ModelInfo::context`] was measured by this crate rather than listed by OpenRouter.
+    pub measured: bool,
+    /// Dollars per million input tokens, if it is listed; 0 for a free model.
+    pub price: Option<f64>,
+    /// What a state can hold for it: `text`, `image`, and for some `audio`, `video` or `file`.
+    pub inputs: Vec<String>,
+    /// Whether it is one of [`MODELS`], the ones this crate is checked against.
+    pub supported: bool,
+}
+
+/// One entry of OpenRouter's listing, as far as this crate reads it.
+#[derive(Deserialize)]
+struct Listed {
+    id: String,
+    #[serde(default)]
+    context_length: Option<u64>,
+    #[serde(default)]
+    pricing: Pricing,
+    #[serde(default)]
+    architecture: Architecture,
+}
+
+#[derive(Default, Deserialize)]
+struct Pricing {
+    /// Dollars per input token, as a string: `"0.000000042"`.
+    #[serde(default)]
+    prompt: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+struct Architecture {
+    #[serde(default)]
+    input_modalities: Vec<String>,
+}
+
+impl Listed {
+    fn info(&self, model: Option<&Model>) -> ModelInfo {
+        let listed = self.context_length.filter(|context| *context > 0);
+        let measured = MEASURED_CONTEXT.iter().find(|(id, _)| *id == self.id).map(|(_, tokens)| *tokens);
+        let price = self.pricing.prompt.as_deref().and_then(|price| price.parse::<f64>().ok());
+        let mut inputs = self.architecture.input_modalities.clone();
+        // A call settles this where the listing and this crate differ: see the top of this file.
+        inputs.retain(|input| input != "image" || model.is_none_or(|model| model.images));
+        ModelInfo {
+            id: self.id.clone(),
+            context: listed.or(measured),
+            measured: listed.is_none() && measured.is_some(),
+            // To the millionth of a dollar: multiplying leaves 0.042 as 0.042000000000000004. A
+            // price below zero is OpenRouter's way of saying it varies.
+            price: price.filter(|price| *price >= 0.0).map(|price| (price * 1e12).round() / 1e6),
+            inputs,
+            supported: model.is_some(),
+        }
+    }
+}
+
+/// OpenRouter's listing ([`crate::MODELS_URL`]) as [`ModelInfo`]s: [`MODELS`] in their order, and
+/// then any model the listing has that they don't. One the listing has dropped is kept, with what
+/// this crate knows of it and neither a price nor a context window.
+pub fn read_listing(body: &[u8]) -> crate::Result<Vec<ModelInfo>> {
+    #[derive(Deserialize)]
+    struct Listing {
+        data: Vec<Listed>,
+    }
+    let Listing { data } = serde_json::from_slice(body).map_err(|e| Error::Decode(format!("the models list: {e}")))?;
+    let known = |one: &Model| match data.iter().find(|listed| listed.id == one.id) {
+        Some(listed) => listed.info(Some(one)),
+        None => ModelInfo {
+            id: one.id.to_owned(),
+            context: None,
+            measured: false,
+            price: None,
+            inputs: if one.images { vec!["text".to_owned(), "image".to_owned()] } else { vec!["text".to_owned()] },
+            supported: true,
+        },
+    };
+    let mut models: Vec<ModelInfo> = MODELS.iter().map(known).collect();
+    models.extend(data.iter().filter(|listed| model(&listed.id).is_none()).map(|listed| listed.info(None)));
+    Ok(models)
+}
+
 /// The supported model with this id, if it is one.
 pub fn model(id: &str) -> Option<&'static Model> {
     MODELS.iter().find(|model| model.id == id)
@@ -184,6 +282,61 @@ mod tests {
             assert_eq!(model.noul_only, model.about.contains("yes/no questions only"), "{}", model.id);
             assert_eq!(model.images, !model.about.contains("text only"), "{}", model.id);
         }
+    }
+
+    #[test]
+    fn reads_the_listing_and_corrects_it() {
+        let listing = json!({"data": [
+            {"id": "someone/new", "context_length": 1024, "pricing": {"prompt": "0.0000005", "completion": "0"},
+             "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "typesafe/jev-1.14", "context_length": 262144, "pricing": {"prompt": "0.000000042", "completion": "0"},
+             "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "scaledown/classify-1", "context_length": 1000000, "pricing": {"prompt": "0.00000004"},
+             "architecture": {"input_modalities": ["text", "image", "file"]}},
+            {"id": "cloudflare/clef-omni", "context_length": 65536, "pricing": {"prompt": "-1"},
+             "architecture": {"input_modalities": ["text", "image", "audio", "video"]}},
+            {"id": "respan/span-01", "context_length": 0, "pricing": {"prompt": "0.00000002"},
+             "architecture": {"input_modalities": ["text"]}},
+            {"id": "respan/span-01-lite:free", "context_length": 0, "pricing": {"prompt": "0"},
+             "architecture": {"input_modalities": ["text"]}},
+        ]});
+        let models = read_listing(listing.to_string().as_bytes()).unwrap();
+        let find = |id: &str| models.iter().find(|model| model.id == id).unwrap();
+
+        // The supported models in their own order, the default first, and then the rest.
+        assert_eq!(models.len(), MODELS.len() + 1);
+        assert_eq!(models[0].id, crate::DEFAULT_MODEL);
+        let new = &models[MODELS.len()];
+        assert_eq!((new.id.as_str(), new.supported, new.context), ("someone/new", false, Some(1024)));
+        assert_eq!(new.inputs, ["text", "image"]);
+
+        // Exactly, where multiplying by a million alone wouldn't be.
+        assert_eq!(find("typesafe/jev-1.14").price, Some(0.042));
+        assert_eq!(find("typesafe/jev-1.14").context, Some(262_144));
+        assert!(!find("typesafe/jev-1.14").measured);
+        assert_eq!(find("respan/span-01-lite:free").price, Some(0.0));
+        // The listing says this one reads images, and it refuses them; its other input stays.
+        assert_eq!(find("scaledown/classify-1").inputs, ["text", "file"]);
+        assert_eq!(find("cloudflare/clef-omni").inputs, ["text", "image", "audio", "video"]);
+        // A price that varies isn't a price.
+        assert_eq!(find("cloudflare/clef-omni").price, None);
+        // A context of 0 means none is listed, which a measurement fills in.
+        assert_eq!((find("respan/span-01").context, find("respan/span-01").measured), (Some(3000), true));
+
+        // Gone from the listing, it is still supported, and nothing is made up about it.
+        let gone = find("liquid/d1");
+        assert_eq!((gone.context, gone.price, gone.supported), (None, None, true));
+        assert_eq!(gone.inputs, ["text", "image"]);
+
+        assert!(read_listing(b"<html>").unwrap_err().to_string().contains("the models list"));
+    }
+
+    #[test]
+    fn a_listed_context_replaces_a_measured_one() {
+        let listing = json!({"data": [{"id": "respan/span-01", "context_length": 8192}]});
+        let models = read_listing(listing.to_string().as_bytes()).unwrap();
+        let span = models.iter().find(|model| model.id == "respan/span-01").unwrap();
+        assert_eq!((span.context, span.measured), (Some(8192), false));
     }
 
     #[test]

@@ -61,7 +61,7 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
-| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 33 supported and what each can't do. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only. Quote a `~` id, or the shell may expand it. |
+| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 33 supported and what each can't do, and `jev --list-models` each one's context window, price and inputs. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. Quote a `~` id, or the shell may expand it. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
 ### Write a questions file

@@ -8,17 +8,18 @@
 <text x="336.0" y="42.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#9aa0a6">raining</text>
 <text x="538.0" y="42.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#9aa0a6">humidity</text>
 <text x="962.0" y="42.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#9aa0a6">items</text>
+<g class="rule" data-rule="1" data-kind="item" data-then="coat">
 <text x="8.0" y="127.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R1</text>
 <text x="44.0" y="77.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if cold  ⇒  coat</text>
 <rect x="44.0" y="84.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="160.0" width="52.0" height="0.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="74.0" y="157.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.00</text>
+<rect x="48.0" y="159.3" width="52.0" height="0.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="74.0" y="156.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.01</text>
 <rect x="48.0" y="94.0" width="52.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="74.0" y="172.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">Cold</text>
-<rect x="108.0" y="94.0" width="52.0" height="66.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="108.0" y="95.3" width="52.0" height="64.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="108.0" y="94.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="134.0" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Mild</text>
-<rect x="168.0" y="160.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="168.0" y="159.3" width="52.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="168.0" y="94.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="194.0" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Hot</text>
 <path d="M134.0,174.0 l-4,7 h8 z" fill="#c2410c"/>
@@ -26,124 +27,132 @@
 <line x1="632.0" y1="122.0" x2="640.0" y2="122.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M646.0,122.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="650.0" y="84.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="658.0" y="100.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">cold  0.00</text>
+<text x="658.0" y="100.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">cold  0.01</text>
 <line x1="854.0" y1="122.0" x2="862.0" y2="122.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M868.0,122.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="872.0" y="84.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="878.0" y="100.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">coat</text>
-<rect x="878.0" y="116.0" width="0.0" height="22.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="1046.0" y="100.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.00</text>
+<rect x="878.0" y="116.0" width="1.7" height="22.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="1046.0" y="100.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.01</text>
 <rect x="878.0" y="116.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="962.0" y1="111.0" x2="962.0" y2="143.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="2" data-kind="item" data-then="light jacket">
 <text x="8.0" y="269.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R2</text>
 <text x="44.0" y="219.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if mild AND NOT raining  ⇒  light jacket</text>
 <rect x="44.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="302.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="301.3" width="52.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="236.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="74.0" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Cold</text>
-<rect x="108.0" y="236.0" width="52.0" height="66.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="134.0" y="248.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">1.00</text>
+<rect x="108.0" y="237.3" width="52.0" height="64.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="134.0" y="249.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.98</text>
 <rect x="108.0" y="236.0" width="52.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="134.0" y="314.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">Mild</text>
-<rect x="168.0" y="302.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="168.0" y="301.3" width="52.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="168.0" y="236.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="194.0" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Hot</text>
 <path d="M134.0,316.0 l-4,7 h8 z" fill="#c2410c"/>
 <text x="134.0" y="332.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#c2410c">expected 1.00</text>
 <rect x="246.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="250.0" y="300.7" width="82.0" height="1.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="250.0" y="300.0" width="82.0" height="2.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="250.0" y="236.0" width="82.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="291.0" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">no</text>
-<rect x="340.0" y="237.3" width="82.0" height="64.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="381.0" y="249.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.98</text>
+<rect x="340.0" y="238.0" width="82.0" height="64.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="381.0" y="250.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.97</text>
 <rect x="340.0" y="236.0" width="82.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="381.0" y="314.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">yes</text>
 <line x1="632.0" y1="264.0" x2="640.0" y2="264.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M646.0,264.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="650.0" y="226.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="658.0" y="242.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.02</text>
-<text x="658.0" y="255.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ mild  1.00</text>
-<text x="658.0" y="268.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ NOT (1 − x)  0.02</text>
-<text x="658.0" y="281.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  └ raining  0.98</text>
+<text x="658.0" y="242.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.03</text>
+<text x="658.0" y="255.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ mild  0.98</text>
+<text x="658.0" y="268.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ NOT (1 − x)  0.03</text>
+<text x="658.0" y="281.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  └ raining  0.97</text>
 <line x1="854.0" y1="264.0" x2="862.0" y2="264.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M868.0,264.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="872.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="878.0" y="242.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">light jacket</text>
-<rect x="878.0" y="258.0" width="3.4" height="22.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="1046.0" y="242.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.02</text>
+<rect x="878.0" y="258.0" width="5.0" height="22.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="1046.0" y="242.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.03</text>
 <rect x="878.0" y="258.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="962.0" y1="253.0" x2="962.0" y2="285.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="3" data-kind="item" data-then="raincoat">
 <text x="8.0" y="411.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R3</text>
 <text x="44.0" y="361.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if raining AND NOT hot  ⇒  raincoat</text>
 <rect x="44.0" y="368.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="444.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="443.3" width="52.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="378.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="74.0" y="456.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Cold</text>
-<rect x="108.0" y="378.0" width="52.0" height="66.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="108.0" y="379.3" width="52.0" height="64.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="108.0" y="378.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="134.0" y="456.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Mild</text>
-<rect x="168.0" y="444.0" width="52.0" height="0.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="194.0" y="441.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.00</text>
+<rect x="168.0" y="443.3" width="52.0" height="0.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="194.0" y="440.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.01</text>
 <rect x="168.0" y="378.0" width="52.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="194.0" y="456.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">Hot</text>
 <path d="M134.0,458.0 l-4,7 h8 z" fill="#c2410c"/>
 <text x="134.0" y="474.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#c2410c">expected 1.00</text>
 <rect x="246.0" y="368.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="250.0" y="442.7" width="82.0" height="1.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="250.0" y="442.0" width="82.0" height="2.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="250.0" y="378.0" width="82.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="291.0" y="456.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">no</text>
-<rect x="340.0" y="379.3" width="82.0" height="64.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="381.0" y="391.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.98</text>
+<rect x="340.0" y="380.0" width="82.0" height="64.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="381.0" y="392.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.97</text>
 <rect x="340.0" y="378.0" width="82.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="381.0" y="456.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">yes</text>
 <line x1="632.0" y1="406.0" x2="640.0" y2="406.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M646.0,406.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="650.0" y="368.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="658.0" y="384.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.98</text>
-<text x="658.0" y="397.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ raining  0.98</text>
-<text x="658.0" y="410.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ NOT (1 − x)  1.00</text>
-<text x="658.0" y="423.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  └ hot  0.00</text>
+<text x="658.0" y="384.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.97</text>
+<text x="658.0" y="397.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ raining  0.97</text>
+<text x="658.0" y="410.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ NOT (1 − x)  0.99</text>
+<text x="658.0" y="423.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  └ hot  0.01</text>
 <line x1="854.0" y1="406.0" x2="862.0" y2="406.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M868.0,406.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="872.0" y="368.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="878.0" y="384.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">raincoat</text>
-<rect x="878.0" y="400.0" width="164.6" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1046.0" y="384.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.98</text>
+<rect x="878.0" y="400.0" width="163.0" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1046.0" y="384.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.97</text>
 <rect x="878.0" y="400.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="962.0" y1="395.0" x2="962.0" y2="427.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="4" data-kind="item" data-then="umbrella">
 <text x="8.0" y="553.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R4</text>
 <text x="44.0" y="503.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if raining  ⇒  umbrella</text>
 <rect x="246.0" y="510.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="250.0" y="584.7" width="82.0" height="1.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="250.0" y="584.0" width="82.0" height="2.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="250.0" y="520.0" width="82.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="291.0" y="598.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">no</text>
-<rect x="340.0" y="521.3" width="82.0" height="64.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="381.0" y="533.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.98</text>
+<rect x="340.0" y="522.0" width="82.0" height="64.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="381.0" y="534.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.97</text>
 <rect x="340.0" y="520.0" width="82.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="381.0" y="598.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">yes</text>
 <line x1="632.0" y1="548.0" x2="640.0" y2="548.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M646.0,548.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="650.0" y="510.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="658.0" y="526.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">raining  0.98</text>
+<text x="658.0" y="526.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">raining  0.97</text>
 <line x1="854.0" y1="548.0" x2="862.0" y2="548.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M868.0,548.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="872.0" y="510.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="878.0" y="526.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">umbrella</text>
-<rect x="878.0" y="542.0" width="164.6" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1046.0" y="526.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.98</text>
+<rect x="878.0" y="542.0" width="163.0" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1046.0" y="526.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.97</text>
 <rect x="878.0" y="542.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="962.0" y1="537.0" x2="962.0" y2="569.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="5" data-kind="item" data-then="t-shirt">
 <text x="8.0" y="695.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R5</text>
 <text x="44.0" y="645.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if hot AND humid  ⇒  t-shirt</text>
 <rect x="44.0" y="652.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="728.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="727.3" width="52.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="662.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="74.0" y="740.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Cold</text>
-<rect x="108.0" y="662.0" width="52.0" height="66.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="108.0" y="663.3" width="52.0" height="64.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="108.0" y="662.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="134.0" y="740.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Mild</text>
-<rect x="168.0" y="728.0" width="52.0" height="0.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="194.0" y="725.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.00</text>
+<rect x="168.0" y="727.3" width="52.0" height="0.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="194.0" y="724.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.01</text>
 <rect x="168.0" y="662.0" width="52.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="194.0" y="740.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">Hot</text>
 <path d="M134.0,742.0 l-4,7 h8 z" fill="#c2410c"/>
@@ -164,28 +173,30 @@
 <line x1="632.0" y1="690.0" x2="640.0" y2="690.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M646.0,690.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="650.0" y="652.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="658.0" y="668.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.00</text>
-<text x="658.0" y="681.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ hot  0.00</text>
+<text x="658.0" y="668.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.01</text>
+<text x="658.0" y="681.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ hot  0.01</text>
 <text x="658.0" y="694.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ humid  1.00</text>
 <line x1="854.0" y1="690.0" x2="862.0" y2="690.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M868.0,690.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="872.0" y="652.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="878.0" y="668.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">t-shirt</text>
-<rect x="878.0" y="684.0" width="0.0" height="22.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="1046.0" y="668.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.00</text>
+<rect x="878.0" y="684.0" width="1.7" height="22.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="1046.0" y="668.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.01</text>
 <rect x="878.0" y="684.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="962.0" y1="679.0" x2="962.0" y2="711.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="6" data-kind="item" data-then="breathable fabric">
 <text x="8.0" y="837.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R6</text>
 <text x="44.0" y="787.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if humid OR hot  ⇒  breathable fabric</text>
 <rect x="44.0" y="794.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="870.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="869.3" width="52.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="804.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="74.0" y="882.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Cold</text>
-<rect x="108.0" y="804.0" width="52.0" height="66.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="108.0" y="805.3" width="52.0" height="64.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="108.0" y="804.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="134.0" y="882.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Mild</text>
-<rect x="168.0" y="870.0" width="52.0" height="0.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="194.0" y="867.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.00</text>
+<rect x="168.0" y="869.3" width="52.0" height="0.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="194.0" y="866.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.01</text>
 <rect x="168.0" y="804.0" width="52.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="194.0" y="882.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">Hot</text>
 <path d="M134.0,884.0 l-4,7 h8 z" fill="#c2410c"/>
@@ -208,7 +219,7 @@
 <rect x="650.0" y="794.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
 <text x="658.0" y="810.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">OR (max)  1.00</text>
 <text x="658.0" y="823.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ humid  1.00</text>
-<text x="658.0" y="836.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ hot  0.00</text>
+<text x="658.0" y="836.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ hot  0.01</text>
 <line x1="854.0" y1="832.0" x2="862.0" y2="832.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M868.0,832.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="872.0" y="794.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -217,31 +228,32 @@
 <text x="1046.0" y="810.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">1.00</text>
 <rect x="878.0" y="826.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="962.0" y1="821.0" x2="962.0" y2="853.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
 <text x="1096.0" y="77.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">items (threshold 0.50)</text>
 <text x="1096.0" y="104.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">coat</text>
-<rect x="1196.0" y="92.0" width="0.0" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="1322.0" y="104.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.00</text>
+<rect x="1196.0" y="92.0" width="1.2" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="1322.0" y="104.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.01</text>
 <rect x="1196.0" y="92.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1096.0" y="126.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">light jacket</text>
-<rect x="1196.0" y="114.0" width="2.4" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="1322.0" y="126.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.02</text>
+<rect x="1196.0" y="114.0" width="3.6" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="1322.0" y="126.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.03</text>
 <rect x="1196.0" y="114.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1096.0" y="148.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">raincoat</text>
-<rect x="1196.0" y="136.0" width="117.6" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1322.0" y="148.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.98 yes</text>
+<rect x="1196.0" y="136.0" width="116.4" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1322.0" y="148.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.97 yes</text>
 <rect x="1196.0" y="136.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1096.0" y="170.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">umbrella</text>
-<rect x="1196.0" y="158.0" width="117.6" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1322.0" y="170.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.98 yes</text>
+<rect x="1196.0" y="158.0" width="116.4" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1322.0" y="170.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.97 yes</text>
 <rect x="1196.0" y="158.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1096.0" y="192.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">t-shirt</text>
-<rect x="1196.0" y="180.0" width="0.0" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="1322.0" y="192.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.00</text>
+<rect x="1196.0" y="180.0" width="1.2" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="1322.0" y="192.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.01</text>
 <rect x="1196.0" y="180.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1096.0" y="214.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">breathable fabr…</text>
 <rect x="1196.0" y="202.0" width="120.0" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
 <text x="1322.0" y="214.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">1.00 yes</text>
 <rect x="1196.0" y="202.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <line x1="1256.0" y1="86.0" x2="1256.0" y2="224.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
-<text x="44.0" y="934.0" font-size="11" text-anchor="start" font-weight="normal" fill="#9aa0a6">typesafe/jev-1.13-20260917 · AND = min, OR = max</text>
+<text x="44.0" y="934.0" font-size="11" text-anchor="start" font-weight="normal" fill="#9aa0a6">typesafe/jev-1.14-20261014 · AND = min, OR = max</text>
 </svg>

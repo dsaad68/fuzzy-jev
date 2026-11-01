@@ -45,6 +45,9 @@ Examples:
                              them, and see the answers, the outcome and the drawing (text and
                              SVG). -q, -r and a state fill it in to start with
 
+  jev --list-models          every model with its context window, price and what it reads, from
+                             OpenRouter just now, so it needs no key. --json for a script
+
   jev add skill              teach an agent in this project to use jev: writes the bundled
                              Agent Skill to .agents/skills/jev, or .claude/skills/jev with --claude.
                              A file already there and different stops it; --force replaces it
@@ -73,7 +76,7 @@ fn help_after() -> String {
     name = "jev",
     version,
     disable_version_flag = true,
-    about = "Ask Jev typed questions about a state, through OpenRouter",
+    about = "Ask a decision model typed questions about text or images, through OpenRouter",
     after_help = help_after()
 )]
 pub struct Args {
@@ -122,7 +125,8 @@ pub struct Args {
     #[arg(long, short = 'm', default_value = jev::DEFAULT_MODEL)]
     model: String,
 
-    /// The decisions endpoint. Another one may add the key itself, so none is needed
+    /// The decisions endpoint. Another one may add the key itself, so none is needed. With
+    /// --list-models, where the list of models is instead
     #[arg(long, default_value = jev::DECISIONS_URL)]
     url: String,
 
@@ -152,8 +156,8 @@ pub struct Args {
     #[arg(long, value_name = "PATH", requires = "rules")]
     svg: Option<PathBuf>,
 
-    /// How wide a --table may be; the terminal's width by default. A table never gets narrower
-    /// than its question ids and answers need, so below that it prints wider
+    /// How wide a --table or --list-models may be; the terminal's width by default. A table never
+    /// gets narrower than its question ids and answers need, so below that it prints wider
     #[arg(long, value_name = "COLUMNS")]
     width: Option<usize>,
 
@@ -165,6 +169,17 @@ pub struct Args {
     /// answers, the outcome and the drawing; a state, -q and -r fill it in to start with
     #[arg(long, conflicts_with_all = ["noul", "choice", "score", "image", "format", "svg", "width", "dry_run"])]
     explore: bool,
+
+    /// Print every model in a table: its context window, its price and what it reads, from
+    /// OpenRouter just now. Needs no key; --json prints it for a script
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "state", "state_file", "state_json", "image", "noul", "choice", "score", "questions", "rules", "model", "text", "graph",
+            "svg", "dry_run", "explore",
+        ]
+    )]
+    list_models: bool,
 
     /// The port --explore listens on, on 127.0.0.1; any free one by default
     #[arg(long, default_value_t = 0)]
@@ -229,6 +244,9 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     if args.explore {
         return explore::serve(args).await;
     }
+    if args.list_models {
+        return list_models(args).await;
+    }
     // A drawing without a state is the rules' structure, which needs no call. Standard input is read
     // here to tell: a script that pipes nothing in is asking for the structure, not an empty state.
     let draws = args.graph || args.svg.is_some();
@@ -269,6 +287,15 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
         Some(rules) => print!("{}", print::render_outcome(args.format(), &reply, &rules.evaluate(&reply)?, args.width())?),
         None => print!("{}", print::render(args.format(), &reply, &ids, args.width())?),
     }
+    Ok(())
+}
+
+/// Prints the models on offer. The default --url is the decisions endpoint, which lists nothing, so
+/// only one that was changed says where the list is.
+async fn list_models(args: &Args) -> anyhow::Result<()> {
+    let url = if args.url == jev::DECISIONS_URL { jev::MODELS_URL } else { &args.url };
+    let models = Client::new("").with_timeout(Duration::from_secs_f64(args.timeout)).list_models(url).await?;
+    print!("{}", print::render_models(args.format(), &models, args.width())?);
     Ok(())
 }
 
@@ -525,6 +552,27 @@ mod tests {
         assert!(parsed(&["state", "--port", "7000"]).is_err());
         assert!(parsed(&["state", "--no-open"]).is_err());
         assert!(Args::command().try_get_matches_from(["jev", "--explore", "--noul", "n=?"]).is_err());
+    }
+
+    #[test]
+    fn lists_models_on_its_own() {
+        let list = invocation(&["--list-models"]);
+        assert!(list.args.list_models);
+        assert_eq!(list.args.format(), Format::Text);
+        for fine in [&["--list-models", "--json"][..], &["--list-models", "--table", "--width", "120", "--timeout", "5"]] {
+            assert!(Args::command().try_get_matches_from(std::iter::once("jev").chain(fine.iter().copied())).is_ok(), "{fine:?}");
+        }
+        for wrong in [
+            &["state", "--list-models"][..],
+            &["--list-models", "--noul", "n=?"],
+            &["--list-models", "-q", "q.json"],
+            &["--list-models", "-m", "typesafe/jev-1.14"],
+            &["--list-models", "--dry-run"],
+            &["--list-models", "--explore"],
+            &["--list-models", "--text"],
+        ] {
+            assert!(Args::command().try_get_matches_from(std::iter::once("jev").chain(wrong.iter().copied())).is_err(), "{wrong:?}");
+        }
     }
 
     #[test]

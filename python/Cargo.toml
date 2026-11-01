@@ -4,7 +4,7 @@
 name = "fuzzy-jev-python"
 version = "0.7.0"
 edition = "2021"
-description = "Python bindings for fuzzy-jev: typed Choice, Score and Noul answers from TypeSafe's Jev, and fuzzy rules over them."
+description = "Python bindings for fuzzy-jev: typed Choice, Score and Noul answers from OpenRouter's decision models, and fuzzy rules over them."
 repository = "https://github.com/dsaad68/fuzzy-jev"
 license = "MIT"
 publish = false

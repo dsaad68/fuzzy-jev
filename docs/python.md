@@ -72,10 +72,10 @@ print(reply.render())
 ```
 
 ```text
-department   billing  confidence 0.82  (billing 0.88, technical 0.12, sales 0.00)
-frustration  1.04 of 2, nearest "Frustrated"  confidence 0.94
-is_urgent    0.95 yes
-427 tokens in, 73 out, $0.000018, typesafe/jev-1.13-20260917
+department   billing  confidence 0.80  (billing 0.87, technical 0.13, sales 0.00)
+frustration  1.01 of 2, nearest "Frustrated"  confidence 0.97
+is_urgent    0.96 yes
+427 tokens in, 73 out, $0.000018, typesafe/jev-1.14-20261014
 ```
 
 Every question sees the same state and is answered on its own, so ask them all in one call: an extra
@@ -197,7 +197,7 @@ reply.score("frustration")               # ScoreAnswer
 reply["department"]                      # the answer, of whichever type
 "department" in reply, len(reply)
 reply.answers                            # every answer by id
-reply.model, reply.id, reply.provider    # "typesafe/jev-1.13-20260917", OpenRouter's id, "TypeSafe"
+reply.model, reply.id, reply.provider    # "typesafe/jev-1.14-20261014", OpenRouter's id, "TypeSafe"
 reply.usage                              # input_tokens, output_tokens, cost (US dollars, or None)
 ```
 

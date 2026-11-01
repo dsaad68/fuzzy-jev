@@ -1,7 +1,7 @@
-"""A client for TypeSafe's Jev on OpenRouter's decisions endpoint.
+"""A client for OpenRouter's decision models, TypeSafe's Jev by default.
 
-Jev reads a state (a string, a dict or a list) and answers typed questions about it: a Choice
-between options, a Score along levels, or a Noul, the probability that something is true. Rules
+A model reads a state (a string, a dict, or a list, which can hold images) and answers typed
+questions about it: a Choice between options, a Score along levels, or a Noul, the probability that something is true. Rules
 combine those answers, by fuzzy logic, into decisions and amounts.
 
     import jev

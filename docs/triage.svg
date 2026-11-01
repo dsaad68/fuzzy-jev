@@ -10,28 +10,29 @@
 <text x="740.0" y="42.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#9aa0a6">anger</text>
 <text x="1164.0" y="42.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#9aa0a6">reply_within</text>
 <text x="1366.0" y="42.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#9aa0a6">items</text>
+<g class="rule" data-rule="1" data-kind="item" data-then="page on-call">
 <text x="8.0" y="127.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R1</text>
 <text x="44.0" y="77.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if blocked AND (security OR today)  ⇒  page on-call</text>
 <rect x="44.0" y="84.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="154.1" width="82.0" height="5.9" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="153.4" width="82.0" height="6.6" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="94.0" width="82.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="89.0" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">no</text>
-<rect x="138.0" y="99.9" width="82.0" height="60.1" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="179.0" y="111.9" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.91</text>
+<rect x="138.0" y="100.6" width="82.0" height="59.4" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="179.0" y="112.6" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.90</text>
 <rect x="138.0" y="94.0" width="82.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="179.0" y="172.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">yes</text>
 <rect x="246.0" y="84.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="250.0" y="151.4" width="37.0" height="8.6" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="250.0" y="157.4" width="37.0" height="2.6" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="250.0" y="94.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="268.5" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">billi…</text>
-<rect x="295.0" y="154.7" width="37.0" height="5.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="295.0" y="156.0" width="37.0" height="4.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="295.0" y="94.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="313.5" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">suppo…</text>
-<rect x="340.0" y="108.5" width="37.0" height="51.5" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="358.5" y="120.5" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.78</text>
+<rect x="340.0" y="100.6" width="37.0" height="59.4" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="358.5" y="112.6" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.90</text>
 <rect x="340.0" y="94.0" width="37.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="358.5" y="172.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">secur…</text>
-<rect x="385.0" y="159.3" width="37.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="385.0" y="160.0" width="37.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="385.0" y="94.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="403.5" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">other</text>
 <rect x="448.0" y="84.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -50,86 +51,90 @@
 <line x1="834.0" y1="122.0" x2="842.0" y2="122.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M848.0,122.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="852.0" y="84.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="860.0" y="100.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.91</text>
-<text x="860.0" y="113.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ blocked  0.91</text>
+<text x="860.0" y="100.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.90</text>
+<text x="860.0" y="113.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ blocked  0.90</text>
 <text x="860.0" y="126.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ OR (a + b − ab)  1.00</text>
-<text x="860.0" y="139.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  ├ security  0.78</text>
+<text x="860.0" y="139.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  ├ security  0.90</text>
 <text x="860.0" y="152.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">  └ today  1.00</text>
 <line x1="1056.0" y1="122.0" x2="1266.0" y2="122.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M1272.0,122.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="1276.0" y="84.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="1282.0" y="100.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">page on-call</text>
-<rect x="1282.0" y="116.0" width="152.9" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1450.0" y="100.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.91</text>
+<rect x="1282.0" y="116.0" width="151.2" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1450.0" y="100.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.90</text>
 <rect x="1282.0" y="116.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="1382.8" y1="111.0" x2="1382.8" y2="143.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="2" data-kind="item" data-then="escalate to a lead">
 <text x="8.0" y="269.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R2</text>
 <text x="44.0" y="219.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if VERY angry OR INDEED blocked AND billing  ⇒  escalate to a lead</text>
 <rect x="44.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="296.1" width="82.0" height="5.9" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="295.4" width="82.0" height="6.6" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="236.0" width="82.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="89.0" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">no</text>
-<rect x="138.0" y="241.9" width="82.0" height="60.1" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="179.0" y="253.9" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.91</text>
+<rect x="138.0" y="242.6" width="82.0" height="59.4" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="179.0" y="254.6" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.90</text>
 <rect x="138.0" y="236.0" width="82.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="179.0" y="314.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">yes</text>
 <rect x="246.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="250.0" y="293.4" width="37.0" height="8.6" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="268.5" y="290.4" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.13</text>
+<rect x="250.0" y="299.4" width="37.0" height="2.6" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="268.5" y="296.4" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.04</text>
 <rect x="250.0" y="236.0" width="37.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="268.5" y="314.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">billi…</text>
-<rect x="295.0" y="296.7" width="37.0" height="5.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="295.0" y="298.0" width="37.0" height="4.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="295.0" y="236.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="313.5" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">suppo…</text>
-<rect x="340.0" y="250.5" width="37.0" height="51.5" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="340.0" y="242.6" width="37.0" height="59.4" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="340.0" y="236.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="358.5" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">secur…</text>
-<rect x="385.0" y="301.3" width="37.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="385.0" y="302.0" width="37.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="385.0" y="236.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="403.5" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">other</text>
 <rect x="650.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <rect x="654.0" y="302.0" width="52.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="654.0" y="236.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="680.0" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Calm</text>
-<rect x="714.0" y="297.4" width="52.0" height="4.6" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="714.0" y="294.7" width="52.0" height="7.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="714.0" y="236.0" width="52.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="740.0" y="314.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">Annoyed</text>
-<rect x="774.0" y="240.6" width="52.0" height="61.4" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="800.0" y="252.6" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.93</text>
+<rect x="774.0" y="243.3" width="52.0" height="58.7" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="800.0" y="255.3" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.89</text>
 <rect x="774.0" y="236.0" width="52.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="800.0" y="314.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">Angry</text>
-<path d="M795.8,316.0 l-4,7 h8 z" fill="#c2410c"/>
-<text x="795.8" y="332.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#c2410c">expected 1.93</text>
+<path d="M793.4,316.0 l-4,7 h8 z" fill="#c2410c"/>
+<text x="793.4" y="332.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#c2410c">expected 1.89</text>
 <line x1="834.0" y1="264.0" x2="842.0" y2="264.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M848.0,264.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="852.0" y="226.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
-<text x="860.0" y="242.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">OR (a + b − ab)  0.88</text>
-<text x="860.0" y="255.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ VERY (x²)  0.86</text>
-<text x="860.0" y="268.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">│ └ angry  0.93</text>
-<text x="860.0" y="281.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ AND (min)  0.13</text>
+<text x="860.0" y="242.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">OR (a + b − ab)  0.80</text>
+<text x="860.0" y="255.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ VERY (x²)  0.79</text>
+<text x="860.0" y="268.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">│ └ angry  0.89</text>
+<text x="860.0" y="281.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ AND (min)  0.04</text>
 <text x="860.0" y="294.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">…</text>
 <line x1="1056.0" y1="264.0" x2="1266.0" y2="264.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M1272.0,264.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="1276.0" y="226.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
 <text x="1282.0" y="242.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">escalate to a lead</text>
-<rect x="1282.0" y="258.0" width="133.4" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1450.0" y="242.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.79</text>
+<rect x="1282.0" y="258.0" width="121.0" height="22.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1450.0" y="242.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.72</text>
 <rect x="1282.0" y="258.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="1382.8" y1="253.0" x2="1382.8" y2="285.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="3" data-kind="item" data-then="weekly billing queue">
 <text x="8.0" y="411.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R3</text>
 <text x="44.0" y="361.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if billing AND relaxed  ⇒  weekly billing queue</text>
 <rect x="246.0" y="368.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="250.0" y="435.4" width="37.0" height="8.6" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="268.5" y="432.4" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.13</text>
+<rect x="250.0" y="441.4" width="37.0" height="2.6" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="268.5" y="438.4" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.04</text>
 <rect x="250.0" y="378.0" width="37.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="268.5" y="456.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">billi…</text>
-<rect x="295.0" y="438.7" width="37.0" height="5.3" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="295.0" y="440.0" width="37.0" height="4.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="295.0" y="378.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="313.5" y="456.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">suppo…</text>
-<rect x="340.0" y="392.5" width="37.0" height="51.5" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="340.0" y="384.6" width="37.0" height="59.4" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="340.0" y="378.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="358.5" y="456.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">secur…</text>
-<rect x="385.0" y="443.3" width="37.0" height="0.7" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="385.0" y="444.0" width="37.0" height="0.0" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="385.0" y="378.0" width="37.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="403.5" y="456.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">other</text>
 <rect x="448.0" y="368.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -149,7 +154,7 @@
 <path d="M848.0,406.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="852.0" y="368.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
 <text x="860.0" y="384.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">AND (min)  0.00</text>
-<text x="860.0" y="397.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ billing  0.13</text>
+<text x="860.0" y="397.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ billing  0.04</text>
 <text x="860.0" y="410.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ relaxed  0.00</text>
 <line x1="1056.0" y1="406.0" x2="1266.0" y2="406.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M1272.0,406.0 l-8,-4 v8 z" fill="#1f2328"/>
@@ -159,14 +164,16 @@
 <text x="1450.0" y="384.0" font-size="12" text-anchor="end" font-weight="normal" fill="#1f2328">0.00</text>
 <rect x="1282.0" y="400.0" width="168.0" height="22.0" fill="none" stroke="#1f2328" stroke-width="1.2"/>
 <line x1="1382.8" y1="395.0" x2="1382.8" y2="427.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
+</g>
+<g class="rule" data-rule="4" data-kind="output" data-then="reply_within">
 <text x="8.0" y="553.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R4</text>
 <text x="44.0" y="503.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if today OR blocked  ⇒  reply_within IS soon</text>
 <rect x="44.0" y="510.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<rect x="48.0" y="580.1" width="82.0" height="5.9" fill="#d0d4d9" stroke="none" stroke-width="0"/>
+<rect x="48.0" y="579.4" width="82.0" height="6.6" fill="#d0d4d9" stroke="none" stroke-width="0"/>
 <rect x="48.0" y="520.0" width="82.0" height="66.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="89.0" y="598.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">no</text>
-<rect x="138.0" y="525.9" width="82.0" height="60.1" fill="#b8c4d0" stroke="none" stroke-width="0"/>
-<text x="179.0" y="537.9" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.91</text>
+<rect x="138.0" y="526.6" width="82.0" height="59.4" fill="#b8c4d0" stroke="none" stroke-width="0"/>
+<text x="179.0" y="538.6" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">0.90</text>
 <rect x="138.0" y="520.0" width="82.0" height="66.0" fill="none" stroke="#1f2328" stroke-width="2"/>
 <text x="179.0" y="598.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">yes</text>
 <rect x="448.0" y="510.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -187,7 +194,7 @@
 <rect x="852.0" y="510.0" width="200.0" height="76.0" fill="#f6f8fa" stroke="#d0d4d9" stroke-width="1"/>
 <text x="860.0" y="526.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">OR (a + b − ab)  1.00</text>
 <text x="860.0" y="539.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">├ today  1.00</text>
-<text x="860.0" y="552.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ blocked  0.91</text>
+<text x="860.0" y="552.0" font-size="11" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#1f2328" xml:space="preserve">└ blocked  0.90</text>
 <line x1="1056.0" y1="548.0" x2="1064.0" y2="548.0" stroke="#1f2328" stroke-width="1.2"/>
 <path d="M1070.0,548.0 l-8,-4 v8 z" fill="#1f2328"/>
 <rect x="1074.0" y="510.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -200,6 +207,8 @@
 <text x="1104.0" y="598.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">same_day</text>
 <polyline points="1124.0,586.0 1194.0,520.0 1254.0,520.0 1254.0,586.0" fill="none" stroke="#9aa0a6" stroke-width="1" stroke-linejoin="round"/>
 <text x="1224.0" y="598.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">later</text>
+</g>
+<g class="rule" data-rule="5" data-kind="output" data-then="reply_within">
 <text x="8.0" y="695.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R5</text>
 <text x="44.0" y="645.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if this_week  ⇒  reply_within IS same_day</text>
 <rect x="448.0" y="652.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -231,6 +240,8 @@
 <text x="1104.0" y="740.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">same_day</text>
 <polyline points="1124.0,728.0 1194.0,662.0 1254.0,662.0 1254.0,728.0" fill="none" stroke="#9aa0a6" stroke-width="1" stroke-linejoin="round"/>
 <text x="1224.0" y="740.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">later</text>
+</g>
+<g class="rule" data-rule="6" data-kind="output" data-then="reply_within">
 <text x="8.0" y="837.0" font-size="15" text-anchor="start" font-weight="bold" fill="#1f2328">R6</text>
 <text x="44.0" y="787.0" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">if relaxed  ⇒  reply_within IS later</text>
 <rect x="448.0" y="794.0" width="180.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
@@ -262,9 +273,10 @@
 <text x="1252.0" y="867.0" font-size="10" text-anchor="end" font-weight="bold" fill="#1f2328">0.00</text>
 <polyline points="1124.0,870.0 1194.0,804.0 1254.0,804.0 1254.0,870.0" fill="none" stroke="#1f2328" stroke-width="2.2" stroke-linejoin="round"/>
 <text x="1224.0" y="882.0" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2328">later</text>
+</g>
 <text x="1500.0" y="77.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">reply_within = 2.17</text>
 <rect x="1500.0" y="84.0" width="260.0" height="76.0" fill="none" stroke="#d0d4d9" stroke-width="1"/>
-<polygon points="1500.0,160.0 1500.0,94.0 1501.1,94.0 1502.2,94.0 1503.2,94.0 1504.3,94.0 1505.4,94.0 1506.5,94.0 1507.6,95.7 1508.7,100.6 1509.8,105.6 1510.8,110.5 1511.9,115.4 1513.0,120.4 1514.1,125.3 1515.2,130.3 1516.2,135.2 1517.3,140.2 1518.4,145.2 1519.5,150.1 1520.6,155.1 1521.7,160.0 1522.8,160.0 1523.8,160.0 1524.9,160.0 1526.0,160.0 1527.1,160.0 1528.2,160.0 1529.2,160.0 1530.3,160.0 1531.4,160.0 1532.5,160.0 1533.6,160.0 1534.7,160.0 1535.8,160.0 1536.8,160.0 1537.9,160.0 1539.0,160.0 1540.1,160.0 1541.2,160.0 1542.2,160.0 1543.3,160.0 1544.4,160.0 1545.5,160.0 1546.6,160.0 1547.7,160.0 1548.8,160.0 1549.8,160.0 1550.9,160.0 1552.0,160.0 1553.1,160.0 1554.2,160.0 1555.2,160.0 1556.3,160.0 1557.4,160.0 1558.5,160.0 1559.6,160.0 1560.7,160.0 1561.8,160.0 1562.8,160.0 1563.9,160.0 1565.0,160.0 1566.1,160.0 1567.2,160.0 1568.2,160.0 1569.3,160.0 1570.4,160.0 1571.5,160.0 1572.6,160.0 1573.7,160.0 1574.8,160.0 1575.8,160.0 1576.9,160.0 1578.0,160.0 1579.1,160.0 1580.2,160.0 1581.2,160.0 1582.3,160.0 1583.4,160.0 1584.5,160.0 1585.6,160.0 1586.7,160.0 1587.8,160.0 1588.8,160.0 1589.9,160.0 1591.0,160.0 1592.1,160.0 1593.2,160.0 1594.2,160.0 1595.3,160.0 1596.4,160.0 1597.5,160.0 1598.6,160.0 1599.7,160.0 1600.8,160.0 1601.8,160.0 1602.9,160.0 1604.0,160.0 1605.1,160.0 1606.2,160.0 1607.2,160.0 1608.3,160.0 1609.4,160.0 1610.5,160.0 1611.6,160.0 1612.7,160.0 1613.8,160.0 1614.8,160.0 1615.9,160.0 1617.0,160.0 1618.1,160.0 1619.2,160.0 1620.2,160.0 1621.3,160.0 1622.4,160.0 1623.5,160.0 1624.6,160.0 1625.7,160.0 1626.8,160.0 1627.8,160.0 1628.9,160.0 1630.0,160.0 1631.1,160.0 1632.2,160.0 1633.2,160.0 1634.3,160.0 1635.4,160.0 1636.5,160.0 1637.6,160.0 1638.7,160.0 1639.8,160.0 1640.8,160.0 1641.9,160.0 1643.0,160.0 1644.1,160.0 1645.2,160.0 1646.2,160.0 1647.3,160.0 1648.4,160.0 1649.5,160.0 1650.6,160.0 1651.7,160.0 1652.8,160.0 1653.8,160.0 1654.9,160.0 1656.0,160.0 1657.1,160.0 1658.2,160.0 1659.2,160.0 1660.3,160.0 1661.4,160.0 1662.5,160.0 1663.6,160.0 1664.7,160.0 1665.8,160.0 1666.8,160.0 1667.9,160.0 1669.0,160.0 1670.1,160.0 1671.2,160.0 1672.2,160.0 1673.3,160.0 1674.4,160.0 1675.5,160.0 1676.6,160.0 1677.7,160.0 1678.8,160.0 1679.8,160.0 1680.9,160.0 1682.0,160.0 1683.1,160.0 1684.2,160.0 1685.2,160.0 1686.3,160.0 1687.4,160.0 1688.5,160.0 1689.6,160.0 1690.7,160.0 1691.8,160.0 1692.8,160.0 1693.9,160.0 1695.0,160.0 1696.1,160.0 1697.2,160.0 1698.2,160.0 1699.3,160.0 1700.4,160.0 1701.5,160.0 1702.6,160.0 1703.7,160.0 1704.8,160.0 1705.8,160.0 1706.9,160.0 1708.0,160.0 1709.1,160.0 1710.2,160.0 1711.2,160.0 1712.3,160.0 1713.4,160.0 1714.5,160.0 1715.6,160.0 1716.7,160.0 1717.8,160.0 1718.8,160.0 1719.9,160.0 1721.0,160.0 1722.1,160.0 1723.2,160.0 1724.2,160.0 1725.3,160.0 1726.4,160.0 1727.5,160.0 1728.6,160.0 1729.7,160.0 1730.8,160.0 1731.8,160.0 1732.9,160.0 1734.0,160.0 1735.1,160.0 1736.2,160.0 1737.2,160.0 1738.3,160.0 1739.4,160.0 1740.5,160.0 1741.6,160.0 1742.7,160.0 1743.8,160.0 1744.8,160.0 1745.9,160.0 1747.0,160.0 1748.1,160.0 1749.2,160.0 1750.2,160.0 1751.3,160.0 1752.4,160.0 1753.5,160.0 1754.6,160.0 1755.7,160.0 1756.8,160.0 1757.8,160.0 1758.9,160.0 1760.0,160.0 1760.0,160.0" fill="#b8c4d0" stroke="#1f2328" stroke-width="1"/>
+<polygon points="1500.0,160.0 1500.0,94.0 1500.0,94.0 1501.1,94.0 1502.2,94.0 1503.2,94.0 1504.3,94.0 1505.4,94.0 1506.5,94.0 1507.2,94.0 1507.2,94.0 1507.6,95.7 1508.7,100.6 1509.8,105.5 1510.8,110.5 1511.9,115.4 1513.0,120.4 1514.1,125.4 1515.2,130.3 1516.2,135.2 1517.3,140.2 1518.4,145.2 1519.5,150.1 1520.6,155.0 1521.7,160.0 1521.7,160.0 1522.8,160.0 1523.8,160.0 1524.9,160.0 1526.0,160.0 1527.1,160.0 1528.2,160.0 1529.2,160.0 1530.3,160.0 1531.4,160.0 1532.5,160.0 1533.6,160.0 1534.7,160.0 1535.8,160.0 1536.8,160.0 1537.9,160.0 1539.0,160.0 1540.1,160.0 1541.2,160.0 1542.2,160.0 1543.3,160.0 1544.4,160.0 1545.5,160.0 1546.6,160.0 1547.7,160.0 1548.8,160.0 1549.8,160.0 1550.9,160.0 1552.0,160.0 1553.1,160.0 1554.2,160.0 1555.2,160.0 1556.3,160.0 1557.4,160.0 1558.5,160.0 1559.6,160.0 1560.7,160.0 1561.8,160.0 1562.8,160.0 1563.9,160.0 1565.0,160.0 1566.1,160.0 1567.2,160.0 1568.2,160.0 1569.3,160.0 1570.4,160.0 1571.5,160.0 1572.6,160.0 1573.7,160.0 1574.8,160.0 1575.8,160.0 1576.9,160.0 1578.0,160.0 1579.1,160.0 1580.2,160.0 1581.2,160.0 1582.3,160.0 1583.4,160.0 1584.5,160.0 1585.6,160.0 1586.7,160.0 1587.8,160.0 1588.8,160.0 1589.9,160.0 1591.0,160.0 1592.1,160.0 1593.2,160.0 1594.2,160.0 1595.3,160.0 1596.4,160.0 1597.5,160.0 1598.6,160.0 1599.7,160.0 1600.8,160.0 1601.8,160.0 1602.9,160.0 1604.0,160.0 1605.1,160.0 1606.2,160.0 1607.2,160.0 1608.3,160.0 1609.4,160.0 1610.5,160.0 1611.6,160.0 1612.7,160.0 1613.8,160.0 1614.8,160.0 1615.9,160.0 1617.0,160.0 1618.1,160.0 1619.2,160.0 1620.2,160.0 1621.3,160.0 1622.4,160.0 1623.5,160.0 1624.6,160.0 1625.7,160.0 1626.8,160.0 1627.8,160.0 1628.9,160.0 1630.0,160.0 1631.1,160.0 1632.2,160.0 1633.2,160.0 1634.3,160.0 1635.4,160.0 1636.5,160.0 1637.6,160.0 1638.7,160.0 1639.8,160.0 1640.8,160.0 1641.9,160.0 1643.0,160.0 1644.1,160.0 1645.2,160.0 1646.2,160.0 1647.3,160.0 1648.4,160.0 1649.5,160.0 1650.6,160.0 1651.7,160.0 1652.8,160.0 1653.8,160.0 1654.9,160.0 1656.0,160.0 1657.1,160.0 1658.2,160.0 1659.2,160.0 1660.3,160.0 1661.4,160.0 1662.5,160.0 1663.6,160.0 1664.7,160.0 1665.8,160.0 1666.8,160.0 1667.9,160.0 1669.0,160.0 1670.1,160.0 1671.2,160.0 1672.2,160.0 1673.3,160.0 1674.4,160.0 1675.5,160.0 1676.6,160.0 1677.7,160.0 1678.8,160.0 1679.8,160.0 1680.9,160.0 1682.0,160.0 1683.1,160.0 1684.2,160.0 1685.2,160.0 1686.3,160.0 1687.4,160.0 1688.5,160.0 1689.6,160.0 1690.7,160.0 1691.8,160.0 1692.8,160.0 1693.9,160.0 1695.0,160.0 1696.1,160.0 1697.2,160.0 1698.2,160.0 1699.3,160.0 1700.4,160.0 1701.5,160.0 1702.6,160.0 1703.7,160.0 1704.8,160.0 1705.8,160.0 1706.9,160.0 1708.0,160.0 1709.1,160.0 1710.2,160.0 1711.2,160.0 1712.3,160.0 1713.4,160.0 1714.5,160.0 1715.6,160.0 1716.7,160.0 1717.8,160.0 1718.8,160.0 1719.9,160.0 1721.0,160.0 1722.1,160.0 1723.2,160.0 1724.2,160.0 1725.3,160.0 1726.4,160.0 1727.5,160.0 1728.6,160.0 1729.7,160.0 1730.8,160.0 1731.8,160.0 1732.9,160.0 1734.0,160.0 1735.1,160.0 1736.2,160.0 1737.2,160.0 1738.3,160.0 1739.4,160.0 1740.5,160.0 1741.6,160.0 1742.7,160.0 1743.8,160.0 1744.8,160.0 1745.9,160.0 1747.0,160.0 1748.1,160.0 1749.2,160.0 1750.2,160.0 1751.3,160.0 1752.4,160.0 1753.5,160.0 1754.6,160.0 1755.7,160.0 1756.8,160.0 1757.8,160.0 1758.9,160.0 1760.0,160.0 1760.0,160.0" fill="#b8c4d0" stroke="#1f2328" stroke-width="1"/>
 <polyline points="1500.0,160.0 1500.0,94.0 1507.2,94.0 1521.7,160.0" fill="none" stroke="#9aa0a6" stroke-width="1" stroke-linejoin="round"/>
 <text x="1503.6" y="172.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#9aa0a6">soon</text>
 <polyline points="1514.4,160.0 1543.3,94.0 1543.3,94.0 1586.7,160.0" fill="none" stroke="#9aa0a6" stroke-width="1" stroke-linejoin="round"/>
@@ -278,17 +290,17 @@
 <text x="1760.0" y="188.0" font-size="10" text-anchor="end" font-weight="normal" fill="#9aa0a6">72</text>
 <text x="1500.0" y="231.0" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2328">items (threshold 0.60)</text>
 <text x="1500.0" y="258.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">page on-call</text>
-<rect x="1600.0" y="246.0" width="109.2" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1726.0" y="258.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.91 yes</text>
+<rect x="1600.0" y="246.0" width="108.0" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1726.0" y="258.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.90 yes</text>
 <rect x="1600.0" y="246.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1500.0" y="280.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">escalate to a l…</text>
-<rect x="1600.0" y="268.0" width="95.3" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
-<text x="1726.0" y="280.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.79 yes</text>
+<rect x="1600.0" y="268.0" width="86.4" height="16.0" fill="#2f7d4a" stroke="none" stroke-width="0"/>
+<text x="1726.0" y="280.0" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2328">0.72 yes</text>
 <rect x="1600.0" y="268.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <text x="1500.0" y="302.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">weekly billing …</text>
 <rect x="1600.0" y="290.0" width="0.0" height="16.0" fill="#b8c4d0" stroke="none" stroke-width="0"/>
 <text x="1726.0" y="302.0" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">0.00</text>
 <rect x="1600.0" y="290.0" width="120.0" height="16.0" fill="none" stroke="#9aa0a6" stroke-width="1"/>
 <line x1="1672.0" y1="240.0" x2="1672.0" y2="312.0" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 3"/>
-<text x="44.0" y="934.0" font-size="11" text-anchor="start" font-weight="normal" fill="#9aa0a6">typesafe/jev-1.13-20260917 · AND = min, OR = a + b − ab</text>
+<text x="44.0" y="934.0" font-size="11" text-anchor="start" font-weight="normal" fill="#9aa0a6">typesafe/jev-1.14-20261014 · AND = min, OR = a + b − ab</text>
 </svg>

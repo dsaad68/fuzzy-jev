@@ -5,13 +5,15 @@
 [![Rust](https://img.shields.io/badge/Rust-2021_edition-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Ask **Jev** typed questions about a piece of text and get probabilities back, rather than prose. A **Choice** between named options, a **Score** on an ordered scale, or a **Noul** —
-the probability that something is true.
+A client for [OpenRouter](https://openrouter.ai)'s decision models. Ask one typed questions about
+text or images and get probabilities back, rather than prose: a **Choice** between named options, a
+**Score** on an ordered scale, or a **Noul**, the probability that something is true.
 
-Jev is [TypeSafe](https://typesafe.ai)'s model. This client reaches it through
-[OpenRouter](https://openrouter.ai), which serves it on the decisions endpoint
-(`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one;
-`--url` points the same questions at another endpoint.
+[33 models](#models) from 14 providers are supported, and 22 of them read [images](#images). The
+default is **Jev**, the [TypeSafe](https://typesafe.ai) model this project began with and is named
+after; `-m` picks another. They all sit on one endpoint
+(`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one, and `--url`
+points the same questions at another endpoint.
 
 A [rules file](#fuzzy-rules) is a policy over those answers: it reads each probability as the
 degree to which a condition holds, and combines them with `AND`, `OR`, `NOT` and hedges into a
@@ -24,9 +26,9 @@ an example worked by hand.
 ![The weather rules drawn as a fuzzy rule base: each question's probabilities, each rule's operators, and what to wear against the threshold](docs/wear.svg)
 
 A command for your terminal, a Rust library that also compiles for `wasm32-unknown-unknown`, a
-[Python package](docs/python.md), and an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask Jev instead of judging
-by eye — `jev add skill` writes it into your project. The crate and the command are both called
-`jev`.
+[Python package](docs/python.md), and an [Agent Skill](#the-agent-skill) that teaches a coding agent when to ask a model instead of judging
+by eye — `jev add skill` writes it into your project. The package is `fuzzy-jev`, and the library
+and the command are both called `jev`.
 
 ```sh
 export OPENROUTER_API_KEY=sk-or-...
@@ -39,9 +41,9 @@ jev 'Help! My payouts have been failing for 3 days.' \
 
 ```text
 is_urgent    0.95 yes
-department   billing  confidence 0.84  (billing 0.89, technical 0.11, sales 0.00)
-frustration  1.04 of 2, nearest "Frustrated"  confidence 0.94
-427 tokens in, 73 out, $0.000018, typesafe/jev-1.13-20260917
+department   billing  confidence 0.80  (billing 0.87, technical 0.13, sales 0.00)
+frustration  1.02 of 2, nearest "Frustrated"  confidence 0.97
+403 tokens in, 73 out, $0.000017, typesafe/jev-1.14-20261014
 ```
 
 Every question sees the same state and is answered on its own, so ask all of them in one call: an
@@ -53,6 +55,7 @@ extra question costs a few tokens and no extra round trip.
 - [Asking](#asking)
   - [Models](#models)
   - [A structured state](#a-structured-state)
+  - [Images](#images)
 - [Fuzzy rules](#fuzzy-rules)
   - [Outputs: a crisp amount](#outputs-a-crisp-amount)
 - [Drawing the rules](#drawing-the-rules)
@@ -173,11 +176,33 @@ jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
   Score, a Choice, or structured instructions asked of one is refused before any call is made:
   ``question `anger`: respan/span-01 answers yes/no questions only, and this is a score``.
   Span 02 answers every type.
+- **The Span 01 models read about 3,000 tokens of a state**, and don't say so when there is more:
+  they take a state of any length, read its start and end, and skip the middle. A fact in the
+  middle of a long one scores as if it weren't there. OpenRouter lists no context window for them,
+  so that figure is measured. Keep what matters short, or use another model.
 - **`scaledown/classify-1` needs a description on every Choice option**: `--choice
   'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`.
 - **`liquid/d1` leaves OpenRouter on 2026-11-20.** `~liquid/d1-latest` keeps working.
 - **Any other id** the endpoint serves works too, sent as it is and not checked. `jev --help`
   lists the supported ones, and so do `jev::MODELS` and `jev.MODELS`.
+
+`jev --list-models` prints every model with its context window, its price and what it reads, as
+OpenRouter lists them now, so it needs a connection but no key. `--json` gives a script the same
+list, and `Client::list_models` gives it to Rust.
+
+```text
+┌──────────────────────┬───────────┬────────┬───────────────────────────┐
+│ model                │   context │   $/1M │ input                     │
+├──────────────────────┼───────────┼────────┼───────────────────────────┤
+│ ~typesafe/jev-latest │   262,144 │ $0.042 │ text, image               │
+│ respan/span-01-lite  │    ~3,000 │   free │ text                      │
+│ cloudflare/clef-omni │    65,536 │ $0.150 │ text, image, audio, video │
+│ scaledown/classify-1 │ 1,000,000 │ $0.040 │ text, file                │
+└──────────────────────┴───────────┴────────┴───────────────────────────┘
+```
+
+Context is in tokens, and the price is per million input tokens. `--image` sends images; audio,
+video and files go in a `--state-json` state, in the shape the model reads.
 
 ### A structured state
 
@@ -257,10 +282,10 @@ criteria = { true = "Threats, repeated escalation, money at stake", false = "Rou
 ```
 
 ```text
-team        billing  confidence 0.99  (billing 0.99, success 0.01, support 0.00)
-urgency     2.48 of 3, nearest "Today"  confidence 0.52
+team        billing  confidence 0.97  (billing 0.98, success 0.02, support 0.00)
+urgency     2.58 of 3, nearest "Now"  confidence 0.59
 churn_risk  0.86 yes
-571 tokens in, 72 out, $0.000024, typesafe/jev-1.13-20260917
+571 tokens in, 72 out, $0.000024, typesafe/jev-1.14-20261014
 ```
 
 The numbers move a little from call to call, so a threshold is worth setting with a margin rather
@@ -357,7 +382,7 @@ take a reference that is the whole state as text and answer without having seen 
 
 A decision is often several answers combined: "a raincoat when it rains, unless it's hot". A
 **rules file** says that directly. It names the answers it needs as **terms**, combines them with
-fuzzy logic, and gives each outcome a **support score**. The rules are your policy; Jev supplies the
+fuzzy logic, and gives each outcome a **support score**. The rules are your policy; the model supplies the
 evidence. Reading a probability as a degree is a modelling choice, so a score says how strongly the
 policy supports an outcome, not how likely it is.
 
@@ -427,14 +452,14 @@ jev '16°C, the air feels sticky, and a light drizzle has started.' \
 ```
 
 ```text
-coat               0.00
-light jacket       0.02
-raincoat           0.98  yes
-umbrella           0.98  yes
-t-shirt            0.00
+coat               0.01
+light jacket       0.03
+raincoat           0.97  yes
+umbrella           0.97  yes
+t-shirt            0.01
 breathable fabric  1.00  yes
 threshold 0.50
-475 tokens in, 47 out, $0.000020, typesafe/jev-1.13-20260917
+475 tokens in, 47 out, $0.000020, typesafe/jev-1.14-20261014
 ```
 
 - **Terms** are lowercase names, and every word in a rule is a term or an operator. A term points
@@ -500,7 +525,7 @@ jev 'A fairly normal week: two moderate showers, and the soil is damp but drying
 ```
 
 ```text
-irrigation  51.02  (short 0.00, medium 0.98, long 0.02)
+irrigation  49.49  (short 0.02, medium 0.97, long 0.01)
 ```
 
 `then = "OUTPUT IS SET"` always concludes in an output, and a misspelt one is an error that
@@ -552,24 +577,24 @@ probability (the term's own in brackets):
 
 ```text
 R3  raining AND NOT hot  ⇒  raincoat
-    AND (min)  0.98
-    ├─ raining  0.98  ← raining: no 0.02 · [yes 0.98]
-    └─ NOT (1 − x)  1.00
-       └─ hot  0.00  ← temp: Cold 0.00 · Mild 1.00 · [Hot 0.00]
-    ⇒ raincoat  0.98  ███████████████████▋
+    AND (min)  0.97
+    ├─ raining  0.97  ← raining: no 0.03 · [yes 0.97]
+    └─ NOT (1 − x)  0.99
+       └─ hot  0.01  ← temp: Cold 0.01 · Mild 0.98 · [Hot 0.01]
+    ⇒ raincoat  0.97  ███████████████████▍
 ```
 
 An output is drawn as a plot of its merged shape, with `↑` at its centre:
 
 ```text
-  irrigation = 51.02
-  1.0 ┤░░░░░░░░░░░░░               ▃▆▆▃               ░░░░░░░░░░░░░
+  irrigation = 49.49
+  1.0 ┤░░░░░░░░░░░░░               ▃▇▇▃               ░░░░░░░░░░░░░
       │░░░░░░░░░░░░░░░░         ▁▄██████▄▁         ░░░░░░░░░░░░░░░░
-      │░░░░░░░░░░░░░░░░░░     ▂▅██████████▅▂     ░░░░░░░░░░░░░░░░░░
+      │░░░░░░░░░░░░░░░░░░░    ▃▅██████████▅▄    ░░░░░░░░░░░░░░░░░░░
       │░░░░░░░░░░░░░░░░░░░░░▃▇██████████████▇▃░░░░░░░░░░░░░░░░░░░░░
-      │░░░░░░░░░░░░░░░░░░▁▄████████████████████▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
-  0.0 └──────────────────────────────┬─────────────────────────────
-       0                             ↑ 51.02                    100
+      │▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄████████████████████▄▁░░░░░░░░░░░░░░░░░░
+  0.0 └─────────────────────────────┬──────────────────────────────
+       0                            ↑ 49.49                     100
            short                  medium                  long
 ```
 
@@ -577,7 +602,7 @@ An output is drawn as a plot of its merged shape, with `↑` at its centre:
 
 `jev --explore` opens a page in the browser for writing a state, questions and rules, and seeing
 what they come to. It is the command, in a page: the same questions, the same rules engine, and the
-same drawing.
+same drawing. It takes no images yet, so `--explore` doesn't combine with `--image`.
 
 ```sh
 jev --explore
@@ -602,9 +627,9 @@ On the right, what they come to:
 
 - **The rules diagram**, the `--svg` drawing, redrawn as the questions or the rules change, at no
   cost. It zooms, fits, pans, and can take the whole width.
-- **Run** (<kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>↵</kbd>) asks Jev. Then the **decision**, a card per
+- **Run** (<kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>↵</kbd>) asks the model. Then the **decision**, a card per
   item with its score against the threshold and each output's value, sits above the diagram:
-  hovering a card lights up the rules behind it, and hovering a rule its card. Jev's **answers**
+  hovering a card lights up the rules behind it, and hovering a rule its card. The model's **answers**
   follow as probability bars, with the model, tokens and cost.
 - The **text and JSON** the command prints: the outcome, the `--graph` tree, the answers, what
   `--json` prints and the request `--dry-run` shows, each with a button to save it, as is the SVG.
@@ -708,7 +733,7 @@ errors, threads and asyncio, and releasing.
 
 ```sh
 cargo test                          # offline
-cargo test --tests -- --ignored     # one real call; passes without calling when the key isn't set
+cargo test --tests -- --ignored     # a few real calls; passes without calling when the key isn't set
 cargo run --example triage -- "Could you tell me what the enterprise plan costs?"
 ```
 
@@ -717,8 +742,8 @@ Pushing a tag such as `v0.2.0` builds the four binaries and puts them on a Relea
 can be started by hand from the Actions tab, which leaves them as artifacts.
 The same tag publishes the Python package to PyPI; [building and releasing it](docs/python.md#building-and-releasing).
 
-Extracted from [wasm-agent](https://github.com/dsaad68/wasm-agent), where this began as
-`crates/jev` and where dx's shell offers the same command to an agent. This repository was called
+Extracted from [wasm-agent](https://github.com/dsaad68/wasm-agent), where this began as a client
+for Jev alone, in `crates/jev`, and where dx's shell offers the same command to an agent. This repository was called
 `jev-cli` until the fuzzy rules arrived; GitHub redirects the old URLs.
 
 ## License
