@@ -99,6 +99,7 @@ jev.Client(key=None, *, model=None, url=None, timeout=None)
 | `decide(state, questions)` | Asks, and waits for the `DecisionResponse`. |
 | `decide_async(state, questions)` | The same, awaitable. |
 | `request(state, questions)` | The request body `decide` would send, as a dict, without sending it. Costs no call and needs no key. |
+| `list_models(url=None)` | Every model on offer now, from OpenRouter's list (`jev.MODELS_URL`), as `jev --list-models` prints them: a dict per model of `id`, `context` (tokens), `measured`, `price` (dollars per million input tokens), `inputs` and `supported`. Needs no key, and doesn't send one. `list_models_async` is the same, awaitable. |
 
 A client's `repr` never shows the key.
 
@@ -360,14 +361,14 @@ Everything is importable from `jev`; types are in `jev/_jev.pyi`.
 
 | Name | |
 | --- | --- |
-| `Client(key=None, *, model=None, url=None, timeout=None)` | `.decide`, `.decide_async`, `.request`, `.model`, `.url` |
+| `Client(key=None, *, model=None, url=None, timeout=None)` | `.decide`, `.decide_async`, `.request`, `.list_models`, `.list_models_async`, `.model`, `.url` |
 | `Question` | `.choice`, `.score`, `.noul`, `.from_dict`; `.kind`, `.instructions`, `.to_dict()`, `.check()` |
 | `load_questions(text, format=None)` | a `jev -q` file's questions, JSON or TOML, as a dict |
 | `DecisionResponse` | `.choice`, `.score`, `.noul`, `.answer`, `[id]`, `.answers`, `.model`, `.id`, `.provider`, `.usage`, `.render`, `.to_dict`, `.to_json`, `.from_dict`, `.from_json` |
 | `ChoiceAnswer`, `ScoreAnswer`, `NoulAnswer`, `Usage` | the fields above |
 | `Rules(text, questions)` | `.evaluate`, `.graph_svg`, `.graph_text` |
 | `Outcome`, `Item`, `OutputValue` | the fields above |
-| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only", "images"}`, the default first |
+| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `MODELS_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only", "images"}`, the default first |
 | `JevError` and its subclasses | [Errors](#errors) |
 
 ## Building and releasing

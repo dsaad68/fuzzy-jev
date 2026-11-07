@@ -11,11 +11,27 @@ class Model(TypedDict):
     noul_only: bool
     images: bool
 
+class ModelInfo(TypedDict):
+    """A model as it is on offer now, from `Client.list_models`: OpenRouter's list, corrected by what this package has checked.
+
+    `context` is in tokens and `price` in dollars per million input tokens, each None when unknown; `measured` says the context
+    was measured rather than listed, and `supported` that the model is one of `MODELS`.
+    """
+
+    id: str
+    context: int | None
+    measured: bool
+    price: float | None
+    inputs: list[str]
+    supported: bool
+
 __version__: str
 DEFAULT_MODEL: str
 #: The supported models, the default first.
 MODELS: list[Model]
 DECISIONS_URL: str
+#: OpenRouter's list of the models on the decisions endpoint, which `Client.list_models` reads.
+MODELS_URL: str
 DEFAULT_TIMEOUT: float
 
 #: Any JSON value: a state, instructions and criteria are usually strings, but needn't be.
@@ -69,6 +85,8 @@ class Client:
     def request(self, state: Json, questions: Questions) -> dict[str, Json]: ...
     def decide(self, state: Json, questions: Questions) -> DecisionResponse: ...
     def decide_async(self, state: Json, questions: Questions) -> Awaitable[DecisionResponse]: ...
+    def list_models(self, url: str | None = None) -> list[ModelInfo]: ...
+    def list_models_async(self, url: str | None = None) -> Awaitable[list[ModelInfo]]: ...
 
 class Usage:
     @property

@@ -38,17 +38,17 @@ A question is `ID=INSTRUCTIONS` then `|`-separated criteria. Each flag repeats; 
 order written.
 
 ```sh
-jev 'Our card was declined and the account is now suspended — nobody can get in.' \
+jev 'Our card was declined and the account is now suspended — nobody can get in. How do we pay the overdue invoice?' \
   --choice 'team=Which team should handle this? Route by what the sender is asking for, not by what happened to them.|billing:how the customer is charged or pays us|support:the product not working or not understood|security:who can get into the account' \
   --noul 'blocked=Is the sender blocked from working right now?' \
   --score 'urgency=How urgent is this?|No deadline|This week|Today'
 ```
 
 ```text
-team     billing  confidence 0.79  (billing 0.86, security 0.12, support 0.02)
-blocked  0.90 yes
-urgency  1.98 of 2, nearest "Today"  confidence 0.97
-420 tokens in, 69 out, $0.000018, typesafe/jev-1.13-20260917
+team     billing  confidence 0.96  (billing 0.97, security 0.02, support 0.01)
+blocked  0.89 yes
+urgency  1.92 of 2, nearest "Today"  confidence 0.86
+430 tokens in, 69 out, $0.000018, typesafe/jev-1.14-20261014
 ```
 
 | Flag | |
@@ -61,7 +61,7 @@ urgency  1.98 of 2, nearest "Today"  confidence 0.97
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
-| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 33 supported and what each can't do, and `jev --list-models` each one's context window, price and inputs. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. Quote a `~` id, or the shell may expand it. |
+| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 33 supported and what each can't do, and `jev --list-models` each one's context window, price and inputs. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. `nace-ai/drex-max` takes at most 16 questions a call. Quote a `~` id, or the shell may expand it. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
 ### Write a questions file

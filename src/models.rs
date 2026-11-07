@@ -94,7 +94,7 @@ pub const MODELS: [Model; 33] = [
     Model { id: "cloudflare/clef", about: "Cloudflare's Clef, 27B", noul_only: false, images: true },
     Model { id: "cloudflare/clef-flash", about: "Clef Flash, the fast Clef, 9B", noul_only: false, images: true },
     Model { id: "cloudflare/clef-omni", about: "Clef Omni, the mixture-of-experts Clef", noul_only: false, images: true },
-    Model { id: "nace-ai/drex-max", about: "Drex Max, Nace.AI's largest", noul_only: false, images: true },
+    Model { id: "nace-ai/drex-max", about: "Drex Max, Nace.AI's largest: at most 16 questions a call", noul_only: false, images: true },
     Model { id: "nace-ai/drex-v2.0", about: "Drex v2.0, from Nace.AI: text only", noul_only: false, images: false },
     Model { id: "nace-ai/drex-v1.5", about: "Drex v1.5, from Nace.AI: text only", noul_only: false, images: false },
     Model { id: "openai/gpt-6-luna-decisions", about: "GPT-6 Luna, served for decisions", noul_only: false, images: true },
@@ -125,6 +125,10 @@ pub const MODELS: [Model; 33] = [
 /// 0. Measured: they take a state of any size, read its start and end, and skip the middle without
 /// saying so. A fact in the middle of a long state scores as if it weren't there.
 const MEASURED_CONTEXT: [(&str, u64); 3] = [("respan/span-01", 3000), ("respan/span-01-lite", 3000), ("respan/span-01-lite:free", 3000)];
+
+/// The most questions these models take in one call, where it is fewer than the endpoint's own
+/// limit. Measured: one more is refused with a 422, after the call.
+const MAX_QUESTIONS: [(&str, usize); 1] = [("nace-ai/drex-max", 16)];
 
 /// A model as it is on offer now: OpenRouter's listing, corrected by what this crate has checked.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -221,7 +225,8 @@ pub fn model(id: &str) -> Option<&'static Model> {
 
 /// Whether `request`'s model can answer each of its questions ([`Model::check`]) and read its state,
 /// when it is one of [`MODELS`]; any other model is taken at its word. The first question it can't
-/// is an [`Error::Invalid`], and images it can't read an [`Error::Image`]. [`crate::Client`] checks
+/// is an [`Error::Invalid`], as is a question past the most it takes in a call, and images it can't
+/// read an [`Error::Image`]. [`crate::Client`] checks
 /// this where it builds a request and again where it sends one, and the CLI where it builds one, so
 /// a dry run finds what sending would.
 pub fn check_request(request: &DecisionRequest) -> crate::Result<()> {
@@ -229,8 +234,16 @@ pub fn check_request(request: &DecisionRequest) -> crate::Result<()> {
     if !model.images && crate::has_images(&request.state) {
         return Err(Error::Image(format!("{} reads text only, and this state has images in it", model.id)));
     }
-    for (id, question) in &request.questions {
+    for (at, (id, question)) in request.questions.iter().enumerate() {
         model.check(question).map_err(|why| Error::Invalid { id: id.clone(), why })?;
+        if let Some((_, most)) = MAX_QUESTIONS.iter().find(|(limited, _)| *limited == model.id).filter(|(_, most)| at >= *most) {
+            let why = format!(
+                "{} takes at most {most} questions a call, and this request asks {}: split them",
+                model.id,
+                request.questions.len()
+            );
+            return Err(Error::Invalid { id: id.clone(), why });
+        }
     }
     Ok(())
 }
@@ -353,6 +366,23 @@ mod tests {
         assert!(check_request(&request("~liquid/d1-latest", json!([image]))).is_ok());
         // A model this crate doesn't know is taken at its word.
         assert!(check_request(&request("someone/else", json!([image]))).is_ok());
+    }
+
+    #[test]
+    fn refuses_more_questions_than_a_model_takes_in_a_call() {
+        let request = |model: &str, count: usize| DecisionRequest {
+            model: model.to_owned(),
+            state: json!("text"),
+            questions: (0..count).map(|at| (format!("q{at:02}"), Question::noul("Is it?"))).collect(),
+        };
+        assert!(check_request(&request("nace-ai/drex-max", 16)).is_ok());
+        let refused = check_request(&request("nace-ai/drex-max", 17)).unwrap_err().to_string();
+        assert_eq!(refused, "question `q16`: nace-ai/drex-max takes at most 16 questions a call, and this request asks 17: split them");
+        // Every other model takes as many as the endpoint does.
+        assert!(check_request(&request("~typesafe/jev-latest", 17)).is_ok());
+        for (id, _) in MAX_QUESTIONS {
+            assert!(model(id).is_some_and(|model| model.about.contains("questions a call")), "{id}");
+        }
     }
 
     #[test]

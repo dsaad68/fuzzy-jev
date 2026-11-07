@@ -261,6 +261,29 @@ impl Client {
         pyo3_async_runtimes::tokio::future_into_py(py, async move { client.send(&request).await.map(DecisionResponse).map_err(error) })
     }
 
+    /// The models on offer now, from OpenRouter's list (`url`, `MODELS_URL` otherwise): a dict per
+    /// model of `id`, `context` (tokens), `measured`, `price` (dollars per million input tokens),
+    /// `inputs` and `supported`, as `jev --list-models` prints them. The list is public, so the key
+    /// isn't sent. Other Python threads run meanwhile.
+    #[pyo3(signature = (url = None))]
+    fn list_models<'py>(&self, py: Python<'py>, url: Option<String>) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.inner.clone();
+        let url = url.unwrap_or_else(|| jev::MODELS_URL.to_owned());
+        let models = py.detach(|| pyo3_async_runtimes::tokio::get_runtime().block_on(async move { client.list_models(&url).await }));
+        object(py, &models.map_err(error)?)
+    }
+
+    /// `list_models`, awaitable.
+    #[pyo3(signature = (url = None))]
+    fn list_models_async<'py>(&self, py: Python<'py>, url: Option<String>) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.inner.clone();
+        let url = url.unwrap_or_else(|| jev::MODELS_URL.to_owned());
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let models = client.list_models(&url).await.map_err(error)?;
+            Python::attach(|py| object(py, &models).map(Bound::unbind))
+        })
+    }
+
     fn __repr__(&self) -> String {
         // Never the key.
         format!("Client(model={:?}, url={:?})", self.model, self.url)
@@ -726,6 +749,7 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
         .collect::<PyResult<Vec<_>>>()?;
     m.add("MODELS", PyList::new(py, models)?)?;
     m.add("DECISIONS_URL", jev::DECISIONS_URL)?;
+    m.add("MODELS_URL", jev::MODELS_URL)?;
     m.add("DEFAULT_TIMEOUT", jev::DEFAULT_TIMEOUT.as_secs_f64())?;
     m.add_class::<Client>()?;
     m.add_class::<Question>()?;

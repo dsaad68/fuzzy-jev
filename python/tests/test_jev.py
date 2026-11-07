@@ -195,6 +195,22 @@ def test_refuses_rules_that_dont_fit():
         jev.Rules('[terms]\nt = "urgency.Tomorrow"\n[[rule]]\nif = "t"\nthen = "x"\n', questions)
 
 
+LISTING = json.dumps(
+    {
+        "data": [
+            {"id": "typesafe/jev-1.14", "context_length": 262144, "pricing": {"prompt": "0.000000042"},
+             "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "scaledown/classify-1", "context_length": 1000000, "pricing": {"prompt": "0.00000004"},
+             "architecture": {"input_modalities": ["text", "image", "file"]}},
+            {"id": "respan/span-01", "context_length": 0, "pricing": {"prompt": "0.00000002"},
+             "architecture": {"input_modalities": ["text"]}},
+            {"id": "someone/new", "context_length": 1024, "pricing": {"prompt": "0"},
+             "architecture": {"input_modalities": ["text"]}},
+        ]
+    }
+)
+
+
 @pytest.fixture
 def server():
     """A decisions endpoint on localhost: the fixture for a request, or a 401 without a key."""
@@ -207,6 +223,17 @@ def server():
                 status, body = 200, FIXTURE
             else:
                 status, body = 401, '{"error": {"message": "Missing Authentication header", "code": 401}}'
+            self.send_response(status)
+            self.send_header("content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(body.encode())
+
+        def do_GET(self):
+            seen.append((self.headers.get("authorization"), self.path))
+            if self.path == "/models":
+                status, body = 200, LISTING
+            else:
+                status, body = 404, '{"error": {"message": "No such list", "code": 404}}'
             self.send_response(status)
             self.send_header("content-type", "application/json")
             self.end_headers()
@@ -238,6 +265,40 @@ def test_decides_async(server):
 
     replies = asyncio.run(ask())
     assert [reply.noul("is_urgent") for reply in replies] == [0.95] * 3
+
+
+def test_lists_the_models(server):
+    url, seen = server
+    models = jev.Client("key", url=url).list_models(url.replace("/decisions", "/models"))
+    by_id = {model["id"]: model for model in models}
+    # Every supported model, the default first, then the ones only the list has.
+    assert len(models) == len(jev.MODELS) + 1
+    assert models[0]["id"] == jev.DEFAULT_MODEL
+    assert models[-1] == {"id": "someone/new", "context": 1024, "measured": False, "price": 0.0, "inputs": ["text"], "supported": False}
+    assert by_id["typesafe/jev-1.14"]["price"] == 0.042
+    # Corrected where calling the model disagreed with the list.
+    assert by_id["scaledown/classify-1"]["inputs"] == ["text", "file"]
+    assert (by_id["respan/span-01"]["context"], by_id["respan/span-01"]["measured"]) == (3000, True)
+    # Gone from the list: kept, with nothing made up about it.
+    assert (by_id["liquid/d1"]["context"], by_id["liquid/d1"]["price"]) == (None, None)
+    # The list is public, so the key stays home.
+    assert seen == [(None, "/models")]
+    assert jev.MODELS_URL.startswith("https://openrouter.ai/")
+
+
+def test_lists_the_models_async(server):
+    url, _ = server
+
+    async def ask():
+        return await jev.Client(url=url).list_models_async(url.replace("/decisions", "/models"))
+
+    assert len(asyncio.run(ask())) == len(jev.MODELS) + 1
+
+
+def test_a_list_that_isnt_there_is_an_http_error(server):
+    url, _ = server
+    with pytest.raises(jev.HttpError, match="returned HTTP 404: No such list"):
+        jev.Client().list_models(url.replace("/decisions", "/nothing"))
 
 
 def test_raises_the_endpoints_error(server):
