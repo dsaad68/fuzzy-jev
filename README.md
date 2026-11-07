@@ -9,7 +9,7 @@ A client for [OpenRouter](https://openrouter.ai)'s decision models. Ask one type
 text or images and get probabilities back, rather than prose: a **Choice** between named options, a
 **Score** on an ordered scale, or a **Noul**, the probability that something is true.
 
-[33 models](#models) from 14 providers are supported, and 22 of them read [images](#images). The
+[35 models](#models) from 16 providers are supported, and 23 of them read [images](#images). The
 default is **Jev**, the [TypeSafe](https://typesafe.ai) model this project began with and is named
 after; `-m` picks another. They all sit on one endpoint
 (`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one, and `--url`
@@ -126,7 +126,7 @@ with `--questions` (`-q`); file questions come first, then the flags'.
 
 ### Models
 
-33 models on the same endpoint are supported, and `-m` picks one. Every one was called to see what it
+35 models on the same endpoint are supported, and `-m` picks one. Every one was called to see what it
 takes, since OpenRouter's listing isn't always right about it:
 
 | Model | | Questions | Images |
@@ -148,6 +148,7 @@ takes, since OpenRouter's listing isn't always right about it:
 | `perplexity/pplx-decider-v1.2` | Perplexity's Decider V1.2, pinned | all | yes |
 | `~perplexity/pplx-decider-flash-latest` | Decider Flash, the smaller Decider, whichever version is the latest | all | yes |
 | `perplexity/pplx-decider-flash-v1.2` | Decider Flash V1.2, pinned | all | yes |
+| `parallel/decisions-fast:free` | Parallel's Decisions Fast, which also researches the live web; free | all | no |
 | `baseten/mammoth-1` | Mammoth 1, Baseten's largest, 27B | all | yes |
 | `baseten/elephant-1` | Elephant 1, from Baseten, 9B | all | yes |
 | `baseten/joey-1` | Joey 1, Baseten's smallest, 2B | all | yes |
@@ -159,6 +160,7 @@ takes, since OpenRouter's listing isn't always right about it:
 | `nace-ai/drex-v1.5` | Drex v1.5, from Nace.AI | all | no |
 | `openai/gpt-6-luna-decisions` | GPT-6 Luna, served for decisions | all | yes |
 | `inception/mercury-decide` | Inception's Mercury Decide | all | yes |
+| `morph/reflex` | Morph's Reflex | all | yes |
 | `microsoft/microsoft-decision-1` | Microsoft's Decision 1 | all | no |
 | `upstage/solar-decide` | Upstage's Solar Decide | all | no |
 | `upstage/solar-decide-flash` | Solar Decide Flash, the low-latency Solar | all | no |
@@ -180,8 +182,11 @@ jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
   they take a state of any length, read its start and end, and skip the middle. A fact in the
   middle of a long one scores as if it weren't there. OpenRouter lists no context window for them,
   so that figure is measured. Keep what matters short, or use another model.
-- **`nace-ai/drex-max` takes at most 16 questions a call.** A request with more is refused before
+- **Three models take fewer questions a call** than the endpoint does: `nace-ai/drex-max` 16,
+  `parallel/decisions-fast:free` 100 and `morph/reflex` 128. A request with more is refused before
   it's sent; split the questions over two calls.
+- **`parallel/decisions-fast:free` also researches the live web**, by Parallel's own account, so
+  its answers can rest on more than the state. It is free, and it reads text only.
 - **`scaledown/classify-1` needs a description on every Choice option**: `--choice
   'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`.
 - **`liquid/d1` leaves OpenRouter on 2026-11-20.** `~liquid/d1-latest` keeps working.
@@ -346,18 +351,18 @@ endpoint refuses the whole request, and there are no partial answers.
 | --- | --- |
 | 4 | `respan/span-02`, `nace-ai/drex-max`, the three `cloudflare/clef` models |
 | 8 | Liquid's and Perplexity's |
-| 16 | Baseten's, `inception/mercury-decide` |
+| 16 | Baseten's, `inception/mercury-decide`, `morph/reflex` |
 | 64 or more | Jev, `openai/gpt-6-luna-decisions` |
 
 These come from calling each model with small images, and the models don't all state them:
 `cloudflare/clef` and `cloudflare/clef-flash` failed at 5 without saying why, Mercury took 16 and
-refused 32, and 64 is the most that was tried. Large photos hit other limits first. Jev takes 16 MiB
+refused 32, Morph says 16 itself when it refuses 17, and 64 is the most that was tried. Large photos hit other limits first. Jev takes 16 MiB
 per image and 32 MiB per request, base64 included, so about 24 MiB of files, and every image also
 uses up the model's context.
 
 #### What to know about images
 
-- **22 of the models read images**, marked in the [table](#models). One that doesn't is refused
+- **23 of the models read images**, marked in the [table](#models). One that doesn't is refused
   before any call is made: `nace-ai/drex-v2.0 reads text only, and this state has images in it`.
   Any other id is sent as it is.
 - **With an image, the text comes only from `STATE` or `--state-file`.** Standard input isn't read
