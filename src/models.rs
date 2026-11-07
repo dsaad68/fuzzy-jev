@@ -30,7 +30,7 @@ pub struct Model {
 }
 
 /// The supported models, the default ([`crate::DEFAULT_MODEL`]) first.
-pub const MODELS: [Model; 33] = [
+pub const MODELS: [Model; 35] = [
     Model {
         id: "~typesafe/jev-latest",
         about: "TypeSafe's Jev, whichever version is the latest; the default",
@@ -88,6 +88,12 @@ pub const MODELS: [Model; 33] = [
         images: true,
     },
     Model { id: "perplexity/pplx-decider-flash-v1.2", about: "Decider Flash V1.2, pinned", noul_only: false, images: true },
+    Model {
+        id: "parallel/decisions-fast:free",
+        about: "Parallel's Decisions Fast, which also researches the live web; free, text only, at most 100 questions a call",
+        noul_only: false,
+        images: false,
+    },
     Model { id: "baseten/mammoth-1", about: "Mammoth 1, Baseten's largest, 27B", noul_only: false, images: true },
     Model { id: "baseten/elephant-1", about: "Elephant 1, from Baseten, 9B", noul_only: false, images: true },
     Model { id: "baseten/joey-1", about: "Joey 1, Baseten's smallest, 2B", noul_only: false, images: true },
@@ -99,6 +105,7 @@ pub const MODELS: [Model; 33] = [
     Model { id: "nace-ai/drex-v1.5", about: "Drex v1.5, from Nace.AI: text only", noul_only: false, images: false },
     Model { id: "openai/gpt-6-luna-decisions", about: "GPT-6 Luna, served for decisions", noul_only: false, images: true },
     Model { id: "inception/mercury-decide", about: "Inception's Mercury Decide", noul_only: false, images: true },
+    Model { id: "morph/reflex", about: "Morph's Reflex: at most 128 questions a call", noul_only: false, images: true },
     Model { id: "microsoft/microsoft-decision-1", about: "Microsoft's Decision 1: text only", noul_only: false, images: false },
     Model { id: "upstage/solar-decide", about: "Upstage's Solar Decide: text only", noul_only: false, images: false },
     Model {
@@ -128,7 +135,7 @@ const MEASURED_CONTEXT: [(&str, u64); 3] = [("respan/span-01", 3000), ("respan/s
 
 /// The most questions these models take in one call, where it is fewer than the endpoint's own
 /// limit. Measured: one more is refused with a 422, after the call.
-const MAX_QUESTIONS: [(&str, usize); 1] = [("nace-ai/drex-max", 16)];
+const MAX_QUESTIONS: [(&str, usize); 3] = [("nace-ai/drex-max", 16), ("parallel/decisions-fast:free", 100), ("morph/reflex", 128)];
 
 /// A model as it is on offer now: OpenRouter's listing, corrected by what this crate has checked.
 #[derive(Debug, Clone, PartialEq, Serialize)]
