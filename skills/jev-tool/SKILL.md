@@ -84,10 +84,10 @@ asking you to do, not by what happened to them"), where it applies to every opti
 One line per question, in the order you asked them:
 
 ```text
-team     billing  confidence 0.79  (billing 0.86, security 0.12, support 0.02)
-blocked  0.90 yes
-urgency  1.98 of 2  confidence 0.97  (No deadline given 0.00, Wants it this week 0.02, Blocked 0.98)
-420 tokens in, 69 out, $0.000018, typesafe/jev-1.13-20260917
+team     billing  confidence 0.89  (billing 0.93, security 0.05, support 0.02)
+blocked  0.72 yes
+urgency  1.97 of 2, nearest "Blocked until it is answered"  confidence 0.97
+452 tokens in, 69 out, $0.000019, typesafe/jev-1.14-20261014
 ```
 
 The answer says **what**; the confidence says **whether to act on it**. Take the answer where it is

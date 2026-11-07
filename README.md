@@ -180,6 +180,8 @@ jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
   they take a state of any length, read its start and end, and skip the middle. A fact in the
   middle of a long one scores as if it weren't there. OpenRouter lists no context window for them,
   so that figure is measured. Keep what matters short, or use another model.
+- **`nace-ai/drex-max` takes at most 16 questions a call.** A request with more is refused before
+  it's sent; split the questions over two calls.
 - **`scaledown/classify-1` needs a description on every Choice option**: `--choice
   'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`.
 - **`liquid/d1` leaves OpenRouter on 2026-11-20.** `~liquid/d1-latest` keeps working.
@@ -188,7 +190,7 @@ jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
 
 `jev --list-models` prints every model with its context window, its price and what it reads, as
 OpenRouter lists them now, so it needs a connection but no key. `--json` gives a script the same
-list, and `Client::list_models` gives it to Rust.
+list, and `Client::list_models` gives it to Rust and `Client.list_models` to Python.
 
 ```text
 ┌──────────────────────┬───────────┬────────┬───────────────────────────┐
