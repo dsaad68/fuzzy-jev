@@ -12,7 +12,8 @@ description: >-
   summarizing or rewriting text — Jev only answers questions you define.
 license: MIT
 compatibility: >-
-  Needs OPENROUTER_API_KEY and network access to openrouter.ai. `jev` is a native binary from
+  Needs OPENROUTER_API_KEY and network access to openrouter.ai, or a local Ollama with a decision
+  model pulled (`--ollama -m d1`, no key). `jev` is a native binary from
   the fuzzy-jev crate (`cargo install fuzzy-jev`, or `cargo install --path .` in a clone of its
   repository); jq is handy for reading `--json`.
 metadata:
@@ -62,6 +63,7 @@ urgency  1.92 of 2, nearest "Today"  confidence 0.86
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
 | `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 35 supported and what each can't do, and `jev --list-models` each one's context window, price and inputs. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. `nace-ai/drex-max` takes at most 16 questions a call, `parallel/decisions-fast:free` 100 and `morph/reflex` 128. Quote a `~` id, or the shell may expand it. |
+| `--ollama` | Ask a model Ollama runs on this machine instead, such as `-m d1` or `-m d1-omni` (both read images). No key, no cost. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
 ### Write a questions file

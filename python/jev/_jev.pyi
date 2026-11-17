@@ -30,6 +30,7 @@ DEFAULT_MODEL: str
 #: The supported models, the default first.
 MODELS: list[Model]
 DECISIONS_URL: str
+OLLAMA_URL: str
 #: OpenRouter's list of the models on the decisions endpoint, which `Client.list_models` reads.
 MODELS_URL: str
 DEFAULT_TIMEOUT: float

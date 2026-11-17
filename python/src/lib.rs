@@ -749,6 +749,7 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
         .collect::<PyResult<Vec<_>>>()?;
     m.add("MODELS", PyList::new(py, models)?)?;
     m.add("DECISIONS_URL", jev::DECISIONS_URL)?;
+    m.add("OLLAMA_URL", jev::OLLAMA_URL)?;
     m.add("MODELS_URL", jev::MODELS_URL)?;
     m.add("DEFAULT_TIMEOUT", jev::DEFAULT_TIMEOUT.as_secs_f64())?;
     m.add_class::<Client>()?;

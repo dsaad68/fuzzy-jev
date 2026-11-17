@@ -376,12 +376,13 @@ impl Run {
         if server.key.is_empty() && server.url == jev::DECISIONS_URL {
             anyhow::bail!("OPENROUTER_API_KEY is not set: set it where you start `jev --explore`");
         }
-        let reply = Client::new(&server.key).with_url(&server.url).with_timeout(server.timeout).send(&request).await?;
+        let client = Client::new(&server.key).with_url(&server.url).with_timeout(server.timeout);
+        let reply = client.send(&request).await?;
         // `json` is what `--json` prints and `dryRun` what `--dry-run` does, so a saved file is the
         // command's own; `ids` are the questions in the order asked, answered or not.
         let mut body = json!({
             "request": request,
-            "dryRun": serde_json::to_string_pretty(&request)? + "\n",
+            "dryRun": serde_json::to_string_pretty(&client.body(&request))? + "\n",
             "reply": reply,
             "ids": ids,
             "answers": print::render(Format::Text, &reply, &ids, 100)?,

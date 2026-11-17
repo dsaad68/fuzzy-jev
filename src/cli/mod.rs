@@ -58,7 +58,8 @@ NAME:DESCRIPTION) for --choice, two to ten levels from the lowest for --score, a
 in the endpoint's own shape, or TOML: a [[question]] table per question with its name, type,
 instruction and criteria, and a choice's options without descriptions as a list of names. A .json
 or .toml name says which; otherwise a file that starts with `{` is JSON. The key is read from
-OPENROUTER_API_KEY.";
+OPENROUTER_API_KEY; Ollama's endpoint (--ollama, or a --url whose path is /v1/systemone) needs none,
+and is sent images its own way.";
 
 /// The examples, then the supported models, from [`jev::MODELS`] so the list can't drift from them.
 fn help_after() -> String {
@@ -130,6 +131,11 @@ pub struct Args {
     #[arg(long, default_value = jev::DECISIONS_URL)]
     url: String,
 
+    /// Ask a model Ollama runs here, such as `-m d1`: --url http://localhost:11434/v1/systemone,
+    /// which needs no key
+    #[arg(long, conflicts_with_all = ["url", "list_models"])]
+    ollama: bool,
+
     /// Give up on the request after this many seconds; it is not sent again
     #[arg(long, value_name = "SECONDS", default_value_t = jev::DEFAULT_TIMEOUT.as_secs_f64(), value_parser = seconds)]
     timeout: f64,
@@ -161,7 +167,7 @@ pub struct Args {
     #[arg(long, value_name = "COLUMNS")]
     width: Option<usize>,
 
-    /// Print the request as JSON instead of sending it
+    /// Print the request as JSON instead of sending it, as it would be sent
     #[arg(long)]
     dry_run: bool,
 
@@ -220,7 +226,10 @@ impl Invocation {
     }
 
     fn from_matches(matches: &ArgMatches) -> anyhow::Result<Invocation> {
-        let args = Args::from_arg_matches(matches)?;
+        let mut args = Args::from_arg_matches(matches)?;
+        if args.ollama {
+            jev::OLLAMA_URL.clone_into(&mut args.url);
+        }
         // Not clap's `requires`: a flag like --explore is always there to it, as false.
         for flag in ["port", "no_open"] {
             if !args.explore && matches.value_source(flag) == Some(clap::parser::ValueSource::CommandLine) {
@@ -266,15 +275,16 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
         return draw(args, &rules.expect("--graph and --svg require --rules"), None);
     }
     let (request, ids, rules) = request(&invocation, piped)?;
+    let key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+    let client = Client::new(&key).with_url(&args.url).with_timeout(Duration::from_secs_f64(args.timeout));
     if args.dry_run {
-        println!("{}", serde_json::to_string_pretty(&request)?);
+        println!("{}", serde_json::to_string_pretty(&client.body(&request))?);
         return Ok(());
     }
-    let key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
     if key.trim().is_empty() && args.url == jev::DECISIONS_URL {
         bail!("OPENROUTER_API_KEY is not set");
     }
-    let reply = Client::new(&key).with_url(&args.url).with_timeout(Duration::from_secs_f64(args.timeout)).send(&request).await?;
+    let reply = client.send(&request).await?;
     match rules {
         Some(rules) if draws => {
             draw(args, &rules, Some(&reply))?;
@@ -660,6 +670,15 @@ mod tests {
         assert!(request_error(&["-f", "-", "-i", &png, "-q", "-"]).contains("only one of"));
         assert!(request_error(&["  ", "-i", &png, "--noul", "n=?"]).contains("empty"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn ollama_is_a_url_and_conflicts_with_another() {
+        assert_eq!(invocation(&["state", "--ollama", "-m", "d1", "--noul", "n=?"]).args.url, jev::OLLAMA_URL);
+        assert_eq!(invocation(&["state", "--noul", "n=?"]).args.url, jev::DECISIONS_URL);
+        for argv in [&["jev", "s", "--ollama", "--url", "http://x/v1/systemone"][..], &["jev", "--ollama", "--list-models"]] {
+            assert!(Args::command().try_get_matches_from(argv).is_err(), "{argv:?}");
+        }
     }
 
     #[test]
