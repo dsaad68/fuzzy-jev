@@ -26,6 +26,9 @@
 //! ```
 //!
 //! Works natively and on wasm32, where requests go through the host's `fetch`.
+//!
+//! Ollama serves decision models too, such as Liquid's `d1`, on its own System One endpoint
+//! ([`OLLAMA_URL`]); a client sent there speaks Ollama's shape ([`Client::with_ollama`]).
 
 mod error;
 mod image;
@@ -60,6 +63,11 @@ pub const DEFAULT_MODEL: &str = "~typesafe/jev-latest";
 /// OpenRouter's decisions endpoint.
 pub const DECISIONS_URL: &str = "https://openrouter.ai/api/alpha/decisions";
 
+/// Ollama's System One endpoint, on the machine it runs on. It needs no key. A request to it, or
+/// to any other URL whose path is `/v1/systemone` (such as `https://ollama.com/v1/systemone`), is
+/// sent in Ollama's shape: see [`Client::with_ollama`].
+pub const OLLAMA_URL: &str = "http://localhost:11434/v1/systemone";
+
 /// OpenRouter's list of the models on that endpoint, with each one's price and context window.
 pub const MODELS_URL: &str = "https://openrouter.ai/api/v1/models?output_modalities=decisions";
 
@@ -75,6 +83,7 @@ pub struct Client {
     url: String,
     model: String,
     timeout: Duration,
+    ollama: bool,
 }
 
 impl Client {
@@ -87,6 +96,7 @@ impl Client {
             url: DECISIONS_URL.to_owned(),
             model: DEFAULT_MODEL.to_owned(),
             timeout: DEFAULT_TIMEOUT,
+            ollama: false,
         }
     }
 
@@ -108,9 +118,21 @@ impl Client {
         self
     }
 
-    /// Sends requests to `url` instead of OpenRouter's decisions endpoint.
+    /// Sends requests to `url` instead of OpenRouter's decisions endpoint. A URL whose path is
+    /// `/v1/systemone`, Ollama's ([`OLLAMA_URL`]), turns on Ollama's shape, and any other turns it
+    /// off; [`Client::with_ollama`] after this says otherwise.
     pub fn with_url(mut self, url: &str) -> Client {
         url.clone_into(&mut self.url);
+        self.ollama = is_ollama(url);
+        self
+    }
+
+    /// Whether to send requests in Ollama's shape. Ollama reads a state as text and refuses
+    /// images inside it, so a state's images ([`image_part`]) go in a top-level `images` array
+    /// instead, as bare base64, and its text parts are joined into a string. A request without
+    /// images is the same either way. [`Client::with_url`] sets this from the URL.
+    pub fn with_ollama(mut self, ollama: bool) -> Client {
+        self.ollama = ollama;
         self
     }
 
@@ -165,7 +187,7 @@ impl Client {
     /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
         models::check_request(request)?;
-        let body = serde_json::to_vec(request).map_err(|e| Error::Decode(e.to_string()))?;
+        let body = serde_json::to_vec(&self.body(request)).map_err(|e| Error::Decode(e.to_string()))?;
         let mut post = self.http.post(&self.url).header("content-type", "application/json").timeout(self.usable_timeout()).body(body);
         if !self.key.is_empty() {
             post = post.bearer_auth(&self.key);
@@ -180,6 +202,24 @@ impl Client {
         let reply: DecisionResponse = serde_json::from_slice(&body).map_err(|e| Error::Decode(e.to_string()))?;
         reply.check_against(&request.questions)?;
         Ok(reply)
+    }
+
+    /// What [`Client::send`] sends for `request`, to serialize: the request itself, or for Ollama
+    /// ([`Client::with_ollama`]), the request with its images beside the state. It is never a
+    /// [`serde_json::Value`] on the way, which would sort a Choice's options by name.
+    pub fn body<'a>(&self, request: &'a DecisionRequest) -> impl Serialize + 'a {
+        #[derive(Serialize)]
+        #[serde(untagged)]
+        enum Body<'a> {
+            Request(&'a DecisionRequest),
+            Ollama { model: &'a str, state: serde_json::Value, images: Vec<String>, questions: &'a BTreeMap<String, Question> },
+        }
+        match self.ollama.then(|| image::ollama_shape(&request.state)) {
+            Some((state, images)) if !images.is_empty() => {
+                Body::Ollama { model: &request.model, state, images, questions: &request.questions }
+            }
+            _ => Body::Request(request),
+        }
     }
 
     /// The models on offer now, from the list at `url`, usually [`MODELS_URL`]: each one's context
@@ -206,18 +246,27 @@ impl Client {
     }
 }
 
-/// What an error reply says: OpenRouter's `{"error": {"message": …}}`, or the start of the body.
+/// Whether `url` is Ollama's System One endpoint, on whatever host: its path is `/v1/systemone`.
+/// Liquid's own API, at `/decisions/v1/systemone`, is another one, and isn't sent Ollama's shape.
+fn is_ollama(url: &str) -> bool {
+    reqwest::Url::parse(url).is_ok_and(|url| url.path().trim_end_matches('/') == "/v1/systemone")
+}
+
+/// What an error reply says: OpenRouter's `{"error": {"message": …}}`, Ollama's `{"error": "…"}`,
+/// or the start of the body.
 fn error_message(body: &[u8]) -> String {
     #[derive(serde::Deserialize)]
     struct Reply {
         error: Message,
     }
     #[derive(serde::Deserialize)]
-    struct Message {
-        message: String,
+    #[serde(untagged)]
+    enum Message {
+        Object { message: String },
+        Text(String),
     }
     match serde_json::from_slice::<Reply>(body) {
-        Ok(reply) => reply.error.message,
+        Ok(Reply { error: Message::Object { message } | Message::Text(message) }) => message,
         Err(_) => String::from_utf8_lossy(&body[..body.len().min(300)]).into_owned(),
     }
 }
@@ -395,6 +444,47 @@ mod tests {
     #[test]
     fn reads_error_replies() {
         assert_eq!(error_message(br#"{"error":{"message":"Missing Authentication header","code":401}}"#), "Missing Authentication header");
+        assert_eq!(error_message(br#"{"error":"model 'd2' not found"}"#), "model 'd2' not found");
         assert_eq!(error_message(b"Bad Gateway"), "Bad Gateway");
+    }
+
+    #[test]
+    fn knows_ollamas_endpoint_by_its_path() {
+        for url in [OLLAMA_URL, "http://gpu-box:11434/v1/systemone/", "https://ollama.com/v1/systemone"] {
+            assert!(is_ollama(url), "{url}");
+        }
+        for url in [DECISIONS_URL, "https://api.liquid.ai/decisions/v1/systemone", "http://localhost:11434/api/chat", "not a url"] {
+            assert!(!is_ollama(url), "{url}");
+        }
+    }
+
+    #[test]
+    fn sends_images_beside_the_state_to_ollama() {
+        let state = json!([crate::text_part("Returned by a customer."), crate::image_part(b"\x89PNG\r\n\x1a\nrest").unwrap()]);
+        let questions = || [("damaged", Question::noul("Is it damaged?"))];
+        let ollama = Client::new("").with_url(OLLAMA_URL).with_model("d1");
+        let body = serde_json::to_value(ollama.body(&ollama.request(&state, questions()).unwrap())).unwrap();
+        assert_eq!(
+            body,
+            json!({
+                "model": "d1",
+                "state": "Returned by a customer.",
+                "images": ["iVBORw0KGgpyZXN0"],
+                "questions": {"damaged": {"type": "noul", "instructions": "Is it damaged?"}}
+            })
+        );
+
+        // OpenRouter, or Ollama's shape turned off, sends the request as it is.
+        for client in [Client::new("key"), Client::new("").with_url(OLLAMA_URL).with_ollama(false)] {
+            let request = client.request(&state, questions()).unwrap();
+            assert_eq!(serde_json::to_string(&client.body(&request)).unwrap(), serde_json::to_string(&request).unwrap());
+        }
+        let after = Client::new("").with_ollama(true).with_url(DECISIONS_URL);
+        assert!(serde_json::to_value(after.body(&ollama.request(&state, questions()).unwrap())).unwrap()["images"].is_null());
+
+        // A Choice's options go in the order written, as they do to OpenRouter.
+        let colour = [("colour", Question::choice("Which colour?", [("red", ""), ("blue", ""), ("green", "")]))];
+        let sent = serde_json::to_string(&ollama.body(&ollama.request(&state, colour).unwrap())).unwrap();
+        assert!(sent.contains(r#""criteria":{"red":"","blue":"","green":""}"#), "{sent}");
     }
 }

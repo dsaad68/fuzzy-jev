@@ -256,6 +256,16 @@ def test_decides(server):
     assert seen[0][1]["model"] == "typesafe/jev-latest"
 
 
+def test_sends_images_beside_the_state_to_ollama(server):
+    url, seen = server
+    ollama = url.rsplit("/", 1)[0] + "/v1/systemone"
+    assert jev.OLLAMA_URL == "http://localhost:11434/v1/systemone"
+    state = [jev.text_part("Returned by a customer."), jev.image_part(b"\x89PNG\r\n\x1a\nrest")]
+    jev.Client("key", url=ollama, model="d1", timeout=5).decide(state, triage())
+    assert seen[0][1]["state"] == "Returned by a customer."
+    assert seen[0][1]["images"] == ["iVBORw0KGgpyZXN0"]
+
+
 def test_decides_async(server):
     url, _ = server
 

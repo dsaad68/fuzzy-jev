@@ -91,7 +91,7 @@ jev.Client(key=None, *, model=None, url=None, timeout=None)
 | --- | --- |
 | `key` | An OpenRouter API key. Without one it is read from `OPENROUTER_API_KEY`. An empty key sends no `Authorization` header, for an endpoint (`url`) that adds the key itself. |
 | `model` | Another model; `jev.DEFAULT_MODEL` (`~typesafe/jev-latest`) otherwise. `jev.MODELS` lists the supported ones. |
-| `url` | Another endpoint; `jev.DECISIONS_URL` otherwise. |
+| `url` | Another endpoint; `jev.DECISIONS_URL` otherwise. `jev.OLLAMA_URL`, or any URL whose path is `/v1/systemone`, is Ollama's, which needs no key and is sent images its own way: see [With Ollama](../README.md#with-ollama). |
 | `timeout` | Seconds for the whole request, from sending it to reading the reply; `jev.DEFAULT_TIMEOUT` (60) otherwise. A request that timed out is not sent again: it may have been answered, and billed, all the same. |
 
 | Method | |
@@ -368,7 +368,7 @@ Everything is importable from `jev`; types are in `jev/_jev.pyi`.
 | `ChoiceAnswer`, `ScoreAnswer`, `NoulAnswer`, `Usage` | the fields above |
 | `Rules(text, questions)` | `.evaluate`, `.graph_svg`, `.graph_text` |
 | `Outcome`, `Item`, `OutputValue` | the fields above |
-| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `MODELS_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only", "images"}`, the default first |
+| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `MODELS_URL`, `OLLAMA_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only", "images"}`, the default first |
 | `JevError` and its subclasses | [Errors](#errors) |
 
 ## Building and releasing

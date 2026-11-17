@@ -56,6 +56,7 @@ extra question costs a few tokens and no extra round trip.
   - [Models](#models)
   - [A structured state](#a-structured-state)
   - [Images](#images)
+  - [With Ollama](#with-ollama)
 - [Fuzzy rules](#fuzzy-rules)
   - [Outputs: a crisp amount](#outputs-a-crisp-amount)
 - [Drawing the rules](#drawing-the-rules)
@@ -115,6 +116,7 @@ with `--questions` (`-q`); file questions come first, then the flags'.
 | `--image` (`-i`) | A PNG or JPEG to judge, after any text; repeatable. See [Images](#images). |
 | `--model` (`-m`) | Another model; the default is `~typesafe/jev-latest`. See [Models](#models). |
 | `--url` | Another endpoint. With one, `OPENROUTER_API_KEY` may be unset, for an endpoint that adds the key. |
+| `--ollama` | Ask a model [Ollama runs on this machine](#with-ollama): `--url http://localhost:11434/v1/systemone`, no key. |
 | `--text` | One line per question. The default. |
 | `--table` | A table: question, type, answer, confidence, and every option's probability. |
 | `--json` | The reply as this crate reads it (the fields it knows, re-encoded), for `jq` and scripts. |
@@ -122,7 +124,7 @@ with `--questions` (`-q`); file questions come first, then the flags'.
 | `--graph` | With `-r`: [draw the rules](#drawing-the-rules) in the terminal. |
 | `--svg PATH` | With `-r`: draw the rules as an SVG image. Without a state, either one draws the structure alone, with no call. |
 | `--timeout SECONDS` | Give up on the request after this long; 60 by default. It is not sent again. |
-| `--dry-run` | Print the request instead of sending it. No key needed. |
+| `--dry-run` | Print the request, as it would be sent, instead of sending it. No key needed. |
 
 ### Models
 
@@ -382,6 +384,34 @@ let state = serde_json::json!([jev::text_part("One parcel, from two sides."), je
 These are OpenRouter's own `image_url` parts, not the `assets` map TypeSafe documents. Only Jev reads
 `assets` everywhere: most other models refuse a reference inside text or an object, and Liquid's
 take a reference that is the whole state as text and answer without having seen the image.
+
+### With Ollama
+
+[Ollama](https://ollama.com) runs decision models on your own machine, such as Liquid's
+[`d1`](https://ollama.com/library/d1) and the smaller `d1-omni`, which both read images. It
+serves them on its own System One endpoint, which needs no key, and `--ollama` points there:
+
+```sh
+ollama pull d1
+
+jev --ollama -m d1 'Help! My payouts have been failing for 3 days.' --noul 'is_urgent=Does this message convey urgency?'
+jev --ollama -m d1 'Returned by a customer.' -i parcel.jpg --noul 'damaged=Is the parcel damaged?'
+```
+
+Everything else works as it does on OpenRouter: every question type, `-q`, `-r`, the output
+formats and `--explore`. For Ollama on another machine, or Ollama's cloud, give the URL instead:
+`--url http://gpu-box:11434/v1/systemone`, or `--url https://ollama.com/v1/systemone` with the key
+in `OPENROUTER_API_KEY`.
+
+Ollama reads images differently: it takes the state as text and the images beside it, in a
+top-level `images` array of bare base64. Any endpoint whose path is `/v1/systemone` is sent that
+shape, so the same `-i` and `image_part` work on both; `--dry-run` prints what is sent. (Liquid's
+own `/decisions/v1/systemone` is not Ollama's, and gets OpenRouter's.) In Rust it is
+`Client::new("").with_url(jev::OLLAMA_URL)`, and `Client::with_ollama` says which shape to send
+whatever the URL; in Python, `jev.Client(url=jev.OLLAMA_URL)`.
+
+Ollama checks a request's text against 64 KiB and its whole body against 32 MiB, and the input must
+fit the loaded context window: an error from it says which.
 
 ## Fuzzy rules
 
@@ -689,7 +719,7 @@ you would any instruction you're adding to a project.
 
 ```toml
 [dependencies]
-jev = { package = "fuzzy-jev", version = "0.7", default-features = false }
+jev = { package = "fuzzy-jev", version = "0.8", default-features = false }
 ```
 
 ```rust
