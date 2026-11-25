@@ -12,7 +12,8 @@ use jev::print::{self, Format};
 use jev::Client;
 
 #[derive(Parser)]
-#[command(name = "jev model", about = "The models on the decisions endpoint")]
+// Wider lines are hard to read, however wide the terminal: as `jev --help`.
+#[command(name = "jev model", about = "The models on the decisions endpoint", max_term_width = 100)]
 struct Model {
     #[command(subcommand)]
     command: Command,
@@ -36,8 +37,9 @@ pub struct List {
     #[arg(long, value_name = "COLUMNS")]
     width: Option<usize>,
 
-    /// Where the list is
-    #[arg(long, default_value = jev::MODELS_URL)]
+    /// Where the list is; OpenRouter's by default
+    // The address isn't printed: one word too long to wrap, it would run past an 80-column help.
+    #[arg(long, default_value = jev::MODELS_URL, hide_default_value = true)]
     url: String,
 
     /// Give up after this many seconds
@@ -81,7 +83,22 @@ pub async fn list_models(url: &str, timeout: f64, format: Format, width: usize) 
 
 #[cfg(test)]
 mod tests {
+    use clap::CommandFactory;
+
     use super::*;
+
+    #[test]
+    fn its_help_fits_the_terminal() {
+        for width in [80, 100] {
+            let mut model = Model::command().term_width(width);
+            model.build();
+            let list = model.find_subcommand_mut("list").unwrap().render_help().to_string();
+            for help in [model.render_help().to_string(), list] {
+                let long: Vec<&str> = help.lines().filter(|line| line.chars().count() > width).collect();
+                assert!(long.is_empty(), "{width}: {long:#?}");
+            }
+        }
+    }
 
     #[test]
     fn reads_jev_model_list() {
