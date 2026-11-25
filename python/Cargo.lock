@@ -225,7 +225,7 @@ dependencies = [
 
 [[package]]
 name = "fuzzy-jev"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "base64",
  "reqwest",
@@ -237,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "fuzzy-jev-python"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "fuzzy-jev",
  "pyo3",
