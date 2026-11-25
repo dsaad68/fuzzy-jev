@@ -3,6 +3,7 @@
 //! of it.
 
 mod explore;
+mod model;
 mod skill;
 
 use std::io::{IsTerminal, Read};
@@ -17,58 +18,81 @@ use jev::spec::{self, Kind};
 use jev::{Client, DecisionRequest};
 use serde_json::Value;
 
+pub use model::command as model_command;
 pub use skill::command as skill_command;
 
-const EXAMPLES: &str = "\
-Examples:
+// Each line in 80 columns, so that clap, which wraps the help at the terminal's width, leaves it
+// as it is written here in any terminal that wide. Each starts with a newline, after the heading
+// `after_help` puts on it.
+const EXAMPLES: &str = "
   jev 'Help! My payouts have been failing for 3 days.' \\
     --noul 'is_urgent=Does this message convey urgency?' \\
-    --choice 'department=Which team should handle this?|billing:Payments, refunds|technical:Bugs, outages|sales:Pricing' \\
-    --score 'frustration=How frustrated is the customer?|Calm|Frustrated|Very angry'
+    --choice 'team=Which team should handle it?|billing|technical|sales' \\
+    --score 'frustration=How frustrated is the customer?|Calm|Frustrated|Angry'
 
   cat ticket.json | jev --state-json --questions questions.json --json
 
-  jev 'Returned by a customer.' -i parcel.jpg --noul 'damaged=Is the parcel damaged?'
-                             images in the state, with or without text; repeat -i for more.
-                             PNG or JPEG, and a text-only model is refused them before any call
+  jev 'Returned by a customer.' -i parcel.jpg --noul 'damaged=Is it damaged?'
+                             images in the state, with or without text; one -i
+                             per image. PNG or JPEG, and a text-only model is
+                             refused them before any call
 
   jev '16°C, sticky air, light drizzle' -q weather.json -r wear.toml
-                             fuzzy rules over the answers (AND, OR, NOT, VERY, SOMEWHAT, …):
-                             prints each outcome's score, and yes at or over the threshold
+                             fuzzy rules over the answers (AND, OR, NOT, VERY,
+                             SOMEWHAT, …): prints each outcome's score, and yes
+                             at or over the threshold
 
-  jev '16°C, sticky air, light drizzle' -q weather.json -r wear.toml --graph --svg wear.svg
+  jev '16°C, sticky air, light drizzle' -q weather.json -r wear.toml \\
+    --graph --svg wear.svg
   jev -q weather.json -r wear.toml --graph
-                             draw the rules: a tree per rule in the terminal, and the rule base
-                             as an SVG image; without a state, the structure alone and no call
+                             draw the rules: a tree per rule in the terminal,
+                             and the rule base as an SVG image; without a
+                             state, the structure alone and no call
 
-  jev --explore              a page in the browser to write a state, questions and rules, run
-                             them, and see the answers, the outcome and the drawing (text and
-                             SVG). -q, -r and a state fill it in to start with
+  jev --explore              a page in the browser to write a state, questions
+                             and rules, run them, and see the answers, the
+                             outcome and the drawing (text and SVG). -q, -r and
+                             a state fill it in to start with
 
-  jev --list-models          every model with its context window, price and what it reads, from
-                             OpenRouter just now, so it needs no key. --json for a script
+  jev model list             every model OpenRouter offers now, with its context
+                             window, price, what it reads and what it can't
+                             answer. Needs no key; --json for a script
 
-  jev add skill              teach an agent in this project to use jev: writes the bundled
-                             Agent Skill to .agents/skills/jev, or .claude/skills/jev with --claude.
-                             A file already there and different stops it; --force replaces it
+  jev add skill              teach an agent in this project to use jev: writes
+                             the bundled Agent Skill to .agents/skills/jev, or
+                             .claude/skills/jev with --claude. A file already
+                             there and different stops it; --force replaces it";
 
-A question is ID=INSTRUCTIONS followed by `|`-separated criteria: two or more options (NAME or
-NAME:DESCRIPTION) for --choice, two to ten levels from the lowest for --score, and none or
-|WHAT YES MEANS|WHAT NO MEANS for --noul. A --questions file is a JSON object of ids to questions
-in the endpoint's own shape, or TOML: a [[question]] table per question with its name, type,
-instruction and criteria, and a choice's options without descriptions as a list of names. A .json
-or .toml name says which; otherwise a file that starts with `{` is JSON. The key is read from
-OPENROUTER_API_KEY; Ollama's endpoint (--ollama, or a --url whose path is /v1/systemone) needs none,
-and is sent images its own way.";
+const QUESTIONS: &str = "
+  --noul    ID=INSTRUCTIONS[|WHAT YES MEANS|WHAT NO MEANS]
+  --choice  ID=INSTRUCTIONS|NAME[:DESCRIPTION]|…  two or more options
+  --score   ID=INSTRUCTIONS|LOWEST|…|HIGHEST      two to ten levels, low to high
+  Repeat a flag to ask more. Text with a | in it goes in a --questions file.";
 
-/// The examples, then the supported models, from [`jev::MODELS`] so the list can't drift from them.
-fn help_after() -> String {
-    let width = jev::MODELS.iter().map(|model| model.id.len()).max().unwrap_or(0);
-    let models: String = jev::MODELS.iter().map(|model| format!("\n  {:width$}  {}", model.id, model.about)).collect();
-    format!(
-        "{EXAMPLES}\n\nModels (-m), all on the same endpoint; any other id works too, unchecked:{models}\n\nA yes/no-only model is \
-         refused a Choice or a Score, and a text-only model an image, before any call is made."
-    )
+const QUESTIONS_FILE: &str = "
+  .json  an object of ids to questions, in the endpoint's own shape
+  .toml  a [[question]] table per question, with its name, type, instruction
+         and criteria. A choice's options can be just a list of names
+  Any other name is read as JSON if it starts with {, and as TOML otherwise.";
+
+const KEY: &str = "
+  OpenRouter  OPENROUTER_API_KEY
+  Ollama      none (--ollama, or a --url whose path is /v1/systemone); images
+              go to it in Ollama's own shape";
+
+const MODELS: &str = "
+  ~typesafe/jev-latest by default; `jev model list` prints every other one,
+  with its limits. A request past them is refused before any call is made: a
+  Choice or a Score for a yes/no-only model, an option without a description
+  for a plain-text one, an image for a text-only one, or too many questions.";
+
+/// What follows the options: the sections above, each headed as clap heads its own, so `Examples:`
+/// stands out as `Options:` does in a terminal that shows styles.
+fn after_help() -> String {
+    let style = *clap::builder::Styles::default().get_header();
+    [("Examples", EXAMPLES), ("Questions", QUESTIONS), ("Questions file (-q)", QUESTIONS_FILE), ("Key", KEY), ("Models (-m)", MODELS)]
+        .map(|(heading, body)| format!("{style}{heading}:{style:#}{body}"))
+        .join("\n\n")
 }
 
 #[derive(Parser)]
@@ -78,7 +102,9 @@ fn help_after() -> String {
     version,
     disable_version_flag = true,
     about = "Ask a decision model typed questions about text or images, through OpenRouter",
-    after_help = help_after()
+    after_help = after_help(),
+    // Wider lines are hard to read, however wide the terminal.
+    max_term_width = 100
 )]
 pub struct Args {
     /// Print the version
@@ -122,12 +148,11 @@ pub struct Args {
     #[arg(long, short = 'r', value_name = "PATH")]
     rules: Option<PathBuf>,
 
-    /// The model to ask: one of the models listed below, or any other the endpoint serves
+    /// The model to ask: any the endpoint serves, which `jev model list` prints
     #[arg(long, short = 'm', default_value = jev::DEFAULT_MODEL)]
     model: String,
 
-    /// The decisions endpoint. Another one may add the key itself, so none is needed. With
-    /// --list-models, where the list of models is instead
+    /// The decisions endpoint. Another one may add the key itself, so none is needed
     #[arg(long, default_value = jev::DECISIONS_URL)]
     url: String,
 
@@ -162,7 +187,7 @@ pub struct Args {
     #[arg(long, value_name = "PATH", requires = "rules")]
     svg: Option<PathBuf>,
 
-    /// How wide a --table or --list-models may be; the terminal's width by default. A table never
+    /// How wide a --table may be; the terminal's width by default. A table never
     /// gets narrower than its question ids and answers need, so below that it prints wider
     #[arg(long, value_name = "COLUMNS")]
     width: Option<usize>,
@@ -176,10 +201,11 @@ pub struct Args {
     #[arg(long, conflicts_with_all = ["noul", "choice", "score", "image", "format", "svg", "width", "dry_run"])]
     explore: bool,
 
-    /// Print every model in a table: its context window, its price and what it reads, from
-    /// OpenRouter just now. Needs no key; --json prints it for a script
+    /// The old spelling of `jev model list`, kept so scripts that use it still work. With it,
+    /// --url is where the list is
     #[arg(
         long,
+        hide = true,
         conflicts_with_all = [
             "state", "state_file", "state_json", "image", "noul", "choice", "score", "questions", "rules", "model", "text", "graph",
             "svg", "dry_run", "explore",
@@ -200,7 +226,7 @@ impl Args {
     /// How wide a table may be: what was asked for, the terminal's width, or 80 columns when the
     /// output isn't a terminal (a pipe or a file).
     fn width(&self) -> usize {
-        self.width.unwrap_or_else(|| terminal_size::terminal_size().map_or(80, |(terminal_size::Width(columns), _)| usize::from(columns)))
+        width(self.width)
     }
 
     /// How to print the reply: at most one of --text, --table and --json is given.
@@ -211,6 +237,12 @@ impl Args {
             _ => Format::Text,
         }
     }
+}
+
+/// How wide a table may be: `asked`, the terminal's width, or 80 columns when the output isn't a
+/// terminal (a pipe or a file).
+fn width(asked: Option<usize>) -> usize {
+    asked.unwrap_or_else(|| terminal_size::terminal_size().map_or(80, |(terminal_size::Width(columns), _)| usize::from(columns)))
 }
 
 /// The arguments, and the flag questions in the order they were written, which clap keeps per flag.
@@ -300,13 +332,11 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Prints the models on offer. The default --url is the decisions endpoint, which lists nothing, so
-/// only one that was changed says where the list is.
+/// `--list-models`, as `jev model list`. The default --url is the decisions endpoint, which lists
+/// nothing, so only one that was changed says where the list is.
 async fn list_models(args: &Args) -> anyhow::Result<()> {
     let url = if args.url == jev::DECISIONS_URL { jev::MODELS_URL } else { &args.url };
-    let models = Client::new("").with_timeout(Duration::from_secs_f64(args.timeout)).list_models(url).await?;
-    print!("{}", print::render_models(args.format(), &models, args.width())?);
-    Ok(())
+    model::list_models(url, args.timeout, args.format(), args.width()).await
 }
 
 /// Draws the rules as asked: the terminal's tree with --graph, the image with --svg.
@@ -470,6 +500,33 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn the_help_fits_the_terminal_and_goes_on_under_its_column() {
+        for width in [80, 100] {
+            let help = Args::command().term_width(width).render_help().to_string();
+            let long: Vec<&str> = help.lines().filter(|line| line.chars().count() > width).collect();
+            assert!(long.is_empty(), "{width}: {long:#?}");
+        }
+        let help = Args::command().term_width(80).render_help().to_string();
+        let lines: Vec<&str> = help.lines().collect();
+        let url = lines.iter().position(|line| line.trim_start().starts_with("--url <URL>")).unwrap();
+        assert!(lines[url + 1].starts_with(&" ".repeat(20)), "{help}");
+        // Each section is written to fit, so clap wraps none of it, and its lines keep their indent.
+        for line in [EXAMPLES, QUESTIONS, QUESTIONS_FILE, KEY, MODELS].iter().flat_map(|body| body.lines().skip(1)) {
+            assert!(line.is_empty() || (line.chars().count() <= 80 && line.starts_with("  ")), "{line:?}");
+        }
+        // Each section is headed, and styled as clap styles its own headings.
+        for heading in ["Examples:", "Questions:", "Questions file (-q):", "Key:", "Models (-m):"] {
+            assert!(lines.contains(&heading), "{heading} in {help}");
+        }
+        let styled = Args::command().render_help().ansi().to_string();
+        let style = *clap::builder::Styles::default().get_header();
+        assert!(
+            styled.contains(&format!("{style}Examples:{style:#}")) && styled.contains(&format!("{style}Options:{style:#}")),
+            "{styled}"
+        );
+    }
 
     fn invocation(argv: &[&str]) -> Invocation {
         let matches = Args::command().try_get_matches_from(std::iter::once("jev").chain(argv.iter().copied())).unwrap();
@@ -712,6 +769,12 @@ mod tests {
         assert!(request_error(&["--questions", "q.json", "--rules", "-"]).contains("only one of"));
         let yes_no_only = request_error(&["state", "--choice", "c=Which?|a|b", "-m", "respan/span-01", "--dry-run"]);
         assert!(yes_no_only.contains("question `c`: respan/span-01 answers yes/no questions only"), "{yes_no_only}");
+        // A plain-text model needs every option described: `a:the first`, not `a` alone.
+        let bare = request_error(&["state", "--choice", "c=Which?|a|b", "-m", "scaledown/classify-1", "--dry-run"]);
+        assert!(bare.contains("question `c`: scaledown/classify-1 needs a description for every option, and `a` has none"), "{bare}");
+        assert!(
+            request(&invocation(&["state", "--choice", "c=Which?|a:the first|b:the second", "-m", "scaledown/classify-1"]), None).is_ok()
+        );
         // A flag's choice is held to the endpoint's limit too, not only a file's.
         let many: Vec<String> = (0..256).map(|at| format!("o{at}")).collect();
         let error = request_error(&["state", "--choice", &format!("c=?|{}", many.join("|"))]);

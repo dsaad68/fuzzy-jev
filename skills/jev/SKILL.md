@@ -62,7 +62,7 @@ urgency  1.92 of 2, nearest "Today"  confidence 0.86
 | `-r FILE` | Fuzzy rules over the answers (TOML, [below](#decide-with-rules)): prints each outcome's score instead of the answers. |
 | `--graph` / `--svg PATH` | With `-r`: draw the rules as a tree per rule in the terminal, or as an SVG rule-base diagram. Without a state, the structure alone and no call. |
 | `--json` / `--table` | The reply as JSON for `jq` (the fields jev knows, re-encoded); or a table. The default is one line per question. |
-| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev --help` lists all 35 supported and what each can't do, and `jev --list-models` each one's context window, price and inputs. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. `nace-ai/drex-max` takes at most 16 questions a call, `parallel/decisions-fast:free` 100 and `morph/reflex` 128. Quote a `~` id, or the shell may expand it. |
+| `-m ID` | Another model. Default `~typesafe/jev-latest`; `jev model list` prints every model OpenRouter offers now, with its context window, price, inputs and limits. `respan/span-01`, `respan/span-01-lite` and `respan/span-01-lite:free` are yes/no-only, and skip the middle of a state past about 3,000 tokens without saying so. `nace-ai/drex-max` takes at most 16 questions a call, `parallel/decisions-fast:free` 100 and `morph/reflex` 128. Quote a `~` id, or the shell may expand it. |
 | `--ollama` | Ask a model Ollama runs on this machine instead, such as `-m d1` or `-m d1-omni` (both read images). No key, no cost. |
 | `--dry-run` | Print the request instead of sending it. **Needs no key** — check a question before paying for it. |
 
@@ -244,8 +244,8 @@ sooner.
 
 - **Jev sees only the state** — not your files, not the conversation, not the question ids. Quote
   into the state everything it needs.
-- **Images need a model that reads them.** `jev --help` marks the others `text only`, and they are
-  refused before any call. Jev itself refuses a side under 280 pixels or over 1568. Ask what is in
+- **Images need a model that reads them.** `jev model list` shows which: `image` among its inputs.
+  One found to read text only is refused before any call. Jev itself refuses a side under 280 pixels or over 1568. Ask what is in
   an image rather than where it comes in the list: some models mix up which of two came second.
 - **A Noul has no `confidence` field.** Its probability is the answer.
 - **A Score's `score` is an expectation, not an index.** `1.98 of 2` is nearly the top level, but

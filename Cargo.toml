@@ -52,7 +52,8 @@ unicode-width = { version = "0.2", optional = true }
 # The CLI is native-only; the library stays wasm32-compatible.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
-clap = { version = "4", features = ["derive"], optional = true }
+# `wrap_help`: the help wrapped at the terminal's width, under its column.
+clap = { version = "4", features = ["derive", "wrap_help"], optional = true }
 tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "time", "sync"], optional = true }
 anyhow = { version = "1", optional = true }
 # How wide a --table may be. Only the terminal's size, where crossterm (which dx uses for its
