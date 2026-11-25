@@ -209,9 +209,10 @@ fn outcome_table(outcome: &Outcome, width: usize) -> String {
 }
 
 /// A model's columns. None comes out when the table doesn't fit, since each was asked for. The
-/// inputs wrap first, and the id, which can't, last. The numbers line up on the right.
-const MODEL_COLUMNS: [&str; 4] = ["model", "context", "$/1M", "input"];
-const MODEL_SQUEEZE_ORDER: [usize; 4] = [3, 2, 1, 0];
+/// inputs wrap first, then the limits, and the id, which can't, last. The numbers line up on the
+/// right.
+const MODEL_COLUMNS: [&str; 5] = ["model", "context", "$/1M", "input", "limits"];
+const MODEL_SQUEEZE_ORDER: [usize; 5] = [3, 4, 2, 1, 0];
 const MODEL_RIGHT: [usize; 2] = [1, 2];
 
 /// A boxed table of `models`, and what it takes to read it.
@@ -223,7 +224,7 @@ fn models_table(models: &[ModelInfo], width: usize) -> String {
             (Some(context), false) => thousands(context),
             (None, _) => "-".to_owned(),
         };
-        rows.push(vec![model.id.clone(), context, price(model.price), model.inputs.join(", ")]);
+        rows.push(vec![model.id.clone(), context, price(model.price), model.inputs.join(", "), limits(model)]);
     }
     let mut notes = vec!["Context is in tokens and the price is per million input tokens, both from OpenRouter just now.".to_owned()];
     if models.iter().any(|model| model.measured) {
@@ -236,15 +237,30 @@ fn models_table(models: &[ModelInfo], width: usize) -> String {
     if models.iter().any(|model| model.inputs.iter().any(|input| input != "text" && input != "image")) {
         notes.push("-i sends images. Audio, video and files go in a --state-json state, in the shape the model reads.".to_owned());
     }
-    let unchecked: Vec<&str> = models.iter().filter(|model| !model.supported).map(|model| model.id.as_str()).collect();
-    if !unchecked.is_empty() {
-        notes.push(format!("Not checked by this version of jev, so taken at OpenRouter's word: {}.", unchecked.join(", ")));
+    if models.iter().any(|model| model.noul_only || model.max_questions.is_some()) {
+        notes.push(
+            "The limits were found by calling each model, and a request past them is refused before any call: a Choice or a Score \
+             asked of a yes/no-only model, or more questions than it takes."
+                .to_owned(),
+        );
     }
     let mut out = boxed(rows, &[], &MODEL_SQUEEZE_ORDER, &MODEL_RIGHT, width);
     for line in notes.iter().flat_map(|note| wrap(note, width)) {
         let _ = writeln!(out, "{line}");
     }
     out
+}
+
+/// What a model can't answer, for its row: empty for most.
+fn limits(model: &ModelInfo) -> String {
+    let mut limits = Vec::new();
+    if model.noul_only {
+        limits.push("yes/no only".to_owned());
+    }
+    if let Some(most) = model.max_questions {
+        limits.push(format!("{most} questions a call"));
+    }
+    limits.join(", ")
 }
 
 /// `number` with a comma every three digits: `262,144`.
@@ -443,7 +459,7 @@ mod tests {
 
     fn listed(id: &str, context: Option<u64>, price: Option<f64>, inputs: &[&str]) -> ModelInfo {
         let inputs = inputs.iter().map(|input| (*input).to_owned()).collect();
-        ModelInfo { id: id.to_owned(), context, measured: false, price, inputs, supported: true }
+        ModelInfo { id: id.to_owned(), name: String::new(), context, measured: false, price, inputs, noul_only: false, max_questions: None }
     }
 
     #[test]
@@ -451,20 +467,20 @@ mod tests {
         let models = [
             listed("typesafe/jev-1.14", Some(262_144), Some(0.042), &["text", "image"]),
             listed("openai/gpt-6-luna-decisions", Some(1_050_000), Some(0.1), &["text", "image"]),
-            ModelInfo { measured: true, ..listed("respan/span-01-lite:free", Some(3000), Some(0.0), &["text"]) },
+            ModelInfo { measured: true, noul_only: true, ..listed("respan/span-01-lite:free", Some(3000), Some(0.0), &["text"]) },
             listed("liquid/d1", None, None, &["text", "image"]),
         ];
         let out = render_models(Format::Table, &models, 100).unwrap();
         let lines: Vec<&str> = out.lines().collect();
-        assert_eq!(lines[1], "│ model                       │   context │   $/1M │ input       │", "{out}");
-        assert_eq!(lines[3], "│ typesafe/jev-1.14           │   262,144 │ $0.042 │ text, image │", "{out}");
-        assert_eq!(lines[4], "│ openai/gpt-6-luna-decisions │ 1,050,000 │ $0.100 │ text, image │", "{out}");
-        assert_eq!(lines[5], "│ respan/span-01-lite:free    │    ~3,000 │   free │ text        │", "{out}");
-        assert_eq!(lines[6], "│ liquid/d1                   │         - │      - │ text, image │", "{out}");
+        assert_eq!(lines[1], "│ model                       │   context │   $/1M │ input       │ limits      │", "{out}");
+        assert_eq!(lines[3], "│ typesafe/jev-1.14           │   262,144 │ $0.042 │ text, image │             │", "{out}");
+        assert_eq!(lines[4], "│ openai/gpt-6-luna-decisions │ 1,050,000 │ $0.100 │ text, image │             │", "{out}");
+        assert_eq!(lines[5], "│ respan/span-01-lite:free    │    ~3,000 │   free │ text        │ yes/no only │", "{out}");
+        assert_eq!(lines[6], "│ liquid/d1                   │         - │      - │ text, image │             │", "{out}");
         assert!(out.contains("from OpenRouter just now"), "{out}");
         // A note is there only for what the table shows.
-        assert!(out.contains("skip the middle"), "{out}");
-        assert!(!out.contains("--state-json") && !out.contains("Not checked"), "{out}");
+        assert!(out.contains("skip the middle") && out.contains("refused before any call"), "{out}");
+        assert!(!out.contains("--state-json"), "{out}");
         assert_eq!(render_models(Format::Text, &models, 100).unwrap(), out);
     }
 
@@ -472,20 +488,26 @@ mod tests {
     fn says_what_a_table_of_models_shows_when_it_shows_it() {
         let models = [
             listed("cloudflare/clef-omni", Some(65_536), Some(0.15), &["text", "image", "audio", "video"]),
-            ModelInfo { supported: false, ..listed("some\u{1b}one/new", Some(1024), Some(0.0375), &["text"]) },
+            listed("some\u{1b}one/new", Some(1024), Some(0.0375), &["text"]),
         ];
         let out = render_models(Format::Table, &models, 100).unwrap();
-        assert!(out.contains("--state-json") && !out.contains("skip the middle"), "{out}");
-        assert!(out.contains("taken at OpenRouter's word: some\\u{1b}one/new."), "{out}");
+        assert!(out.contains("--state-json") && !out.contains("skip the middle") && !out.contains("refused"), "{out}");
+        assert!(out.contains("some\\u{1b}one/new"), "{out}");
         // A digit past the third is kept rather than rounded away.
         assert!(out.contains("$0.0375"), "{out}");
+        let capped = [ModelInfo { max_questions: Some(16), ..listed("nace-ai/drex-max", None, None, &["text", "image"]) }];
+        let out = render_models(Format::Table, &capped, 100).unwrap();
+        assert!(out.contains("│ 16 questions a call │") && out.contains("refused before any call"), "{out}");
     }
 
     #[test]
     fn a_narrow_table_of_models_wraps_the_inputs_and_keeps_every_column() {
-        let models = [listed("cloudflare/clef-omni", Some(65_536), Some(0.15), &["text", "image", "audio", "video"])];
+        let models = [
+            listed("cloudflare/clef-omni", Some(65_536), Some(0.15), &["text", "image", "audio", "video"]),
+            ModelInfo { noul_only: true, max_questions: Some(16), ..listed("respan/span-01", Some(3000), Some(0.02), &["text"]) },
+        ];
         let out = render_models(Format::Table, &models, 60).unwrap();
-        for word in ["cloudflare/clef-omni", "65,536", "$0.150", "video"] {
+        for word in ["cloudflare/clef-omni", "65,536", "$0.150", "video", "yes/no", "questions"] {
             assert!(out.contains(word), "{word} in {out}");
         }
         assert!(out.lines().all(|line| columns(line) <= 60), "{out}");
@@ -493,11 +515,14 @@ mod tests {
 
     #[test]
     fn prints_models_as_json_for_scripts() {
-        let models = [listed("liquid/d1", None, None, &["text"])];
+        let models = [ModelInfo { name: "Liquid: d1".to_owned(), ..listed("liquid/d1", None, None, &["text"]) }];
         let out: Value = serde_json::from_str(&render_models(Format::Json, &models, 80).unwrap()).unwrap();
         assert_eq!(
             out,
-            json!([{"id": "liquid/d1", "context": null, "measured": false, "price": null, "inputs": ["text"], "supported": true}])
+            json!([{
+                "id": "liquid/d1", "name": "Liquid: d1", "context": null, "measured": false, "price": null, "inputs": ["text"],
+                "noul_only": false, "max_questions": null
+            }])
         );
     }
 

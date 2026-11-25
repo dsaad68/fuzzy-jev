@@ -1248,8 +1248,8 @@ async function start() {
   const fromCommand = given.state != null || given.questions != null || given.rules != null;
   for (const name of inputs) $(name).value = (fromCommand ? given[name] : remembered(name)) ?? "";
   defaultModel = given.model;
-  listModels(given.models || []);
   setModel(given.model);
+  loadModels();
   $("stateJson").checked = fromCommand ? given.stateJson : remembered("stateJson") === "true";
   $("formatState").hidden = !$("stateJson").checked;
   // Questions, and a JSON state, start pretty-printed, whoever wrote them.
@@ -1692,13 +1692,13 @@ function makeMenu({ wrap, button, panel = null, list, pick }) {
 
 makeMenu({ wrap: $("exampleMenu"), button: $("example"), list: $("exampleList"), pick: (option) => load(option.dataset.name) });
 
-// The model: one of the supported models, from the menu, or any other id typed under it.
+// The model: one OpenRouter offers now, from the menu, or any other id typed under it.
 let models = [];
 function setModel(id, byHand) {
   $("model").value = id;
   $("modelLabel").textContent = id;
   const known = models.find((model) => model.id === id);
-  $("modelButton").title = known ? `${id}: ${known.about}` : `${id}: a model this page doesn't know, sent as it is`;
+  $("modelButton").title = known ? `${id}: ${known.about}` : `${id}: a model OpenRouter doesn't list, sent as it is`;
   for (const option of $("modelList").children) option.setAttribute("aria-current", option.dataset.id === id);
   if (byHand) edited("model");
 }
@@ -1708,6 +1708,22 @@ function listModels(list) {
     el("li", { role: "option", id: `model-${at}`, "data-id": model.id, "aria-selected": "false" },
       el("span", { class: "title" }, model.id, model.noulOnly ? el("span", { class: "tag" }, "yes/no only") : null),
       el("span", { class: "about" }, model.about))));
+}
+// The menu's models, asked of OpenRouter after the page is up: one that is slow or fails leaves the
+// id typed under the menu, which is what the placeholder then says.
+async function loadModels() {
+  try {
+    const response = await fetch("/models", { headers: { "X-Jev": token } });
+    if (!response.ok) throw new Error((await response.json()).error);
+    listModels((await response.json()).map((model) => ({
+      id: model.id,
+      about: [model.name, model.inputs.join(", "), model.max_questions ? `${model.max_questions} questions a call` : null].filter(Boolean).join(" · "),
+      noulOnly: model.noul_only,
+    })));
+    setModel($("model").value);
+  } catch {
+    $("modelOther").placeholder = "a model id: the list of models didn't load";
+  }
 }
 const modelMenu = makeMenu({ wrap: $("modelMenu"), button: $("modelButton"), panel: $("modelPanel"), list: $("modelList"),
   pick: (option) => setModel(option.dataset.id, true) });

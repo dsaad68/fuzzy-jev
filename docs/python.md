@@ -90,7 +90,7 @@ jev.Client(key=None, *, model=None, url=None, timeout=None)
 | Argument | |
 | --- | --- |
 | `key` | An OpenRouter API key. Without one it is read from `OPENROUTER_API_KEY`. An empty key sends no `Authorization` header, for an endpoint (`url`) that adds the key itself. |
-| `model` | Another model; `jev.DEFAULT_MODEL` (`~typesafe/jev-latest`) otherwise. `jev.MODELS` lists the supported ones. |
+| `model` | Another model; `jev.DEFAULT_MODEL` (`~typesafe/jev-latest`) otherwise. `Client.list_models()` lists the ones on offer. |
 | `url` | Another endpoint; `jev.DECISIONS_URL` otherwise. `jev.OLLAMA_URL`, or any URL whose path is `/v1/systemone`, is Ollama's, which needs no key and is sent images its own way: see [With Ollama](../README.md#with-ollama). |
 | `timeout` | Seconds for the whole request, from sending it to reading the reply; `jev.DEFAULT_TIMEOUT` (60) otherwise. A request that timed out is not sent again: it may have been answered, and billed, all the same. |
 
@@ -99,7 +99,7 @@ jev.Client(key=None, *, model=None, url=None, timeout=None)
 | `decide(state, questions)` | Asks, and waits for the `DecisionResponse`. |
 | `decide_async(state, questions)` | The same, awaitable. |
 | `request(state, questions)` | The request body `decide` would send, as a dict, without sending it. Costs no call and needs no key. |
-| `list_models(url=None)` | Every model on offer now, from OpenRouter's list (`jev.MODELS_URL`), as `jev --list-models` prints them: a dict per model of `id`, `context` (tokens), `measured`, `price` (dollars per million input tokens), `inputs` and `supported`. Needs no key, and doesn't send one. `list_models_async` is the same, awaitable. |
+| `list_models(url=None)` | Every model on offer now, from OpenRouter's list (`jev.MODELS_URL`), as `jev model list` prints them: a dict per model of `id`, `name`, `context` (tokens), `measured`, `price` (dollars per million input tokens), `inputs`, `noul_only` and `max_questions`. Needs no key, and doesn't send one. `list_models_async` is the same, awaitable. |
 
 A client's `repr` never shows the key.
 
@@ -164,7 +164,7 @@ client.decide({"subject": "Refund", "body": "I was charged twice", "plan": "pro"
 
 A state can hold images: a list of `jev.text_part` and `jev.image_part` items, the second taking the
 bytes of a PNG or JPEG file. A model that reads text only is refused them before any call, with
-`ImageError`, and `MODELS` says which ones do (`images`).
+`ImageError`, and `Client.list_models()` says which ones read them (`"image"` in `inputs`).
 
 ```python
 photo = pathlib.Path("parcel.jpg").read_bytes()
@@ -368,7 +368,7 @@ Everything is importable from `jev`; types are in `jev/_jev.pyi`.
 | `ChoiceAnswer`, `ScoreAnswer`, `NoulAnswer`, `Usage` | the fields above |
 | `Rules(text, questions)` | `.evaluate`, `.graph_svg`, `.graph_text` |
 | `Outcome`, `Item`, `OutputValue` | the fields above |
-| `DEFAULT_MODEL`, `MODELS`, `DECISIONS_URL`, `MODELS_URL`, `OLLAMA_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS` is a list of `{"id", "about", "noul_only", "images"}`, the default first |
+| `DEFAULT_MODEL`, `DECISIONS_URL`, `MODELS_URL`, `OLLAMA_URL`, `DEFAULT_TIMEOUT`, `__version__` | `MODELS_URL` is OpenRouter's list of models, which `Client.list_models` reads |
 | `JevError` and its subclasses | [Errors](#errors) |
 
 ## Building and releasing

@@ -1,147 +1,78 @@
-//! The models on the decisions endpoint that this crate supports, and what each of them answers.
+//! The models on the decisions endpoint: which there are, and what some of them can't do.
 //!
-//! Any model id can be sent ([`crate::Client::with_model`]); these are the ones this crate is
-//! checked against. Some answer only yes/no questions, and a request asking one of them anything
-//! else is refused before it is sent ([`Model::check`]), rather than costing a call that fails.
-//! Some read no images, and a state with images in it is refused the same way.
+//! Which models there are is OpenRouter's to say, and it is asked each time
+//! ([`crate::Client::list_models`], `jev model list`), so a model it adds is there without a new
+//! version of this crate, and one it drops is gone. Any id can be sent
+//! ([`crate::Client::with_model`]).
 //!
-//! What each one takes comes from calling it, not from OpenRouter's listing, which says
-//! `scaledown/classify-1` reads images when it refuses them.
+//! What its listing doesn't say, or says wrongly, was found by calling the models, and is kept here
+//! as limits, for those models alone: the ones that answer only yes/no questions, read no images,
+//! take fewer questions a call than the endpoint does, or read less of a state than they're given.
+//! A request asking one of them what it can't answer is refused before it is sent
+//! ([`check_request`]), rather than costing a call that fails. A model with no limits here is taken
+//! at its word.
 //!
-//! What changes without notice, a model's price and context window, isn't kept here: OpenRouter is
-//! asked for it ([`crate::Client::list_models`]), and [`read_listing`] corrects what it says.
+//! The listing says `scaledown/classify-1` reads images, for one, when it refuses them; and it lists
+//! no context window for the Span 01 models, which read about 3,000 tokens of a state.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{DecisionRequest, Error, Question};
 
-/// A model this crate supports.
+/// What calling a model found it can't do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Model {
+struct Limits {
     /// Its id, as a request names it.
-    pub id: &'static str,
-    /// What it is, in a line.
-    pub about: &'static str,
+    id: &'static str,
     /// Whether it answers only yes/no (Noul) questions, and only ones whose instructions and
     /// criteria are plain text.
-    pub noul_only: bool,
+    noul_only: bool,
     /// Whether it reads images in the state ([`crate::image_part`]).
-    pub images: bool,
+    images: bool,
+    /// The most questions it takes in one call, where that is fewer than the endpoint's own limit.
+    /// One more is refused with a 422, after the call.
+    max_questions: Option<usize>,
+    /// Roughly how many tokens of a state it reads, where OpenRouter lists a context window of 0. It
+    /// takes a state of any size, reads its start and end, and skips the middle without saying so:
+    /// a fact in the middle of a long state scores as if it weren't there.
+    context: Option<u64>,
 }
 
-/// The supported models, the default ([`crate::DEFAULT_MODEL`]) first.
-pub const MODELS: [Model; 35] = [
-    Model {
-        id: "~typesafe/jev-latest",
-        about: "TypeSafe's Jev, whichever version is the latest; the default",
-        noul_only: false,
-        images: true,
-    },
-    Model {
-        id: "typesafe/jev-1.14",
-        about: "TypeSafe's Jev 1.14, pinned: the same model until you change it",
-        noul_only: false,
-        images: true,
-    },
-    Model {
-        id: "typesafe/jev-1.13",
-        about: "TypeSafe's Jev 1.13, pinned: the same model until you change it",
-        noul_only: false,
-        images: true,
-    },
-    Model { id: "jaredpalmer/kev-4b", about: "Kev 4B, from jaredpalmer: text only", noul_only: false, images: false },
-    Model { id: "respan/span-02", about: "Respan's Span 02", noul_only: false, images: true },
-    Model { id: "respan/span-01", about: "Respan's Span 01: yes/no questions only, text only", noul_only: true, images: false },
-    Model {
-        id: "respan/span-01-lite",
-        about: "Span 01 Lite, the lighter Span: yes/no questions only, text only",
-        noul_only: true,
-        images: false,
-    },
-    Model {
-        id: "respan/span-01-lite:free",
-        about: "Span 01 Lite, OpenRouter's free variant of it: yes/no questions only, text only",
-        noul_only: true,
-        images: false,
-    },
-    Model { id: "~liquid/d1-latest", about: "Liquid's d1, whichever version is the latest", noul_only: false, images: true },
-    Model { id: "liquid/d1.1", about: "Liquid's d1.1, pinned", noul_only: false, images: true },
-    Model { id: "liquid/d1", about: "Liquid's d1, pinned: leaves OpenRouter on 2026-11-20", noul_only: false, images: true },
-    Model {
-        id: "~liquid/d1-ultra-latest",
-        about: "Liquid's largest, d1-ultra, whichever version is the latest",
-        noul_only: false,
-        images: true,
-    },
-    Model { id: "liquid/d1-ultra", about: "Liquid's d1-ultra, pinned", noul_only: false, images: true },
-    Model {
-        id: "~perplexity/pplx-decider-latest",
-        about: "Perplexity's Decider, whichever version is the latest",
-        noul_only: false,
-        images: true,
-    },
-    Model { id: "perplexity/pplx-decider-v1.2", about: "Perplexity's Decider V1.2, pinned", noul_only: false, images: true },
-    Model {
-        id: "~perplexity/pplx-decider-flash-latest",
-        about: "Decider Flash, the smaller Decider, whichever version is the latest",
-        noul_only: false,
-        images: true,
-    },
-    Model { id: "perplexity/pplx-decider-flash-v1.2", about: "Decider Flash V1.2, pinned", noul_only: false, images: true },
-    Model {
-        id: "parallel/decisions-fast:free",
-        about: "Parallel's Decisions Fast, which also researches the live web; free, text only, at most 100 questions a call",
-        noul_only: false,
-        images: false,
-    },
-    Model { id: "baseten/mammoth-1", about: "Mammoth 1, Baseten's largest, 27B", noul_only: false, images: true },
-    Model { id: "baseten/elephant-1", about: "Elephant 1, from Baseten, 9B", noul_only: false, images: true },
-    Model { id: "baseten/joey-1", about: "Joey 1, Baseten's smallest, 2B", noul_only: false, images: true },
-    Model { id: "cloudflare/clef", about: "Cloudflare's Clef, 27B", noul_only: false, images: true },
-    Model { id: "cloudflare/clef-flash", about: "Clef Flash, the fast Clef, 9B", noul_only: false, images: true },
-    Model { id: "cloudflare/clef-omni", about: "Clef Omni, the mixture-of-experts Clef", noul_only: false, images: true },
-    Model { id: "nace-ai/drex-max", about: "Drex Max, Nace.AI's largest: at most 16 questions a call", noul_only: false, images: true },
-    Model { id: "nace-ai/drex-v2.0", about: "Drex v2.0, from Nace.AI: text only", noul_only: false, images: false },
-    Model { id: "nace-ai/drex-v1.5", about: "Drex v1.5, from Nace.AI: text only", noul_only: false, images: false },
-    Model { id: "openai/gpt-6-luna-decisions", about: "GPT-6 Luna, served for decisions", noul_only: false, images: true },
-    Model { id: "inception/mercury-decide", about: "Inception's Mercury Decide", noul_only: false, images: true },
-    Model { id: "morph/reflex", about: "Morph's Reflex: at most 128 questions a call", noul_only: false, images: true },
-    Model { id: "microsoft/microsoft-decision-1", about: "Microsoft's Decision 1: text only", noul_only: false, images: false },
-    Model { id: "upstage/solar-decide", about: "Upstage's Solar Decide: text only", noul_only: false, images: false },
-    Model {
-        id: "upstage/solar-decide-flash",
-        about: "Solar Decide Flash, the low-latency Solar: text only",
-        noul_only: false,
-        images: false,
-    },
-    Model {
-        id: "togethercomputer/tev1-4b-experimental",
-        about: "Tev1 4B, Together AI's experiment: text only",
-        noul_only: false,
-        images: false,
-    },
-    Model {
-        id: "scaledown/classify-1",
-        about: "ScaleDown's Classify 1: text only, and every Choice option needs a description",
-        noul_only: false,
-        images: false,
-    },
+/// No limits, for the table to start each entry from.
+const NONE: Limits = Limits { id: "", noul_only: false, images: true, max_questions: None, context: None };
+
+/// The models with limits: every other one is taken at its word. Text-only models are here, though
+/// the listing says so too, so an image sent to one is refused without asking the listing.
+const LIMITS: [Limits; 14] = [
+    Limits { id: "respan/span-01", noul_only: true, images: false, context: Some(3000), ..NONE },
+    Limits { id: "respan/span-01-lite", noul_only: true, images: false, context: Some(3000), ..NONE },
+    Limits { id: "respan/span-01-lite:free", noul_only: true, images: false, context: Some(3000), ..NONE },
+    Limits { id: "jaredpalmer/kev-4b", images: false, ..NONE },
+    Limits { id: "parallel/decisions-fast:free", images: false, max_questions: Some(100), ..NONE },
+    Limits { id: "nace-ai/drex-max", max_questions: Some(16), ..NONE },
+    Limits { id: "nace-ai/drex-v2.0", images: false, ..NONE },
+    Limits { id: "nace-ai/drex-v1.5", images: false, ..NONE },
+    Limits { id: "morph/reflex", max_questions: Some(128), ..NONE },
+    Limits { id: "microsoft/microsoft-decision-1", images: false, ..NONE },
+    Limits { id: "upstage/solar-decide", images: false, ..NONE },
+    Limits { id: "upstage/solar-decide-flash", images: false, ..NONE },
+    Limits { id: "togethercomputer/tev1-4b-experimental", images: false, ..NONE },
+    // Also: every Choice option needs a description, which isn't checked here.
+    Limits { id: "scaledown/classify-1", images: false, ..NONE },
 ];
 
-/// Roughly how many tokens of a state these models read, where OpenRouter lists a context window of
-/// 0. Measured: they take a state of any size, read its start and end, and skip the middle without
-/// saying so. A fact in the middle of a long state scores as if it weren't there.
-const MEASURED_CONTEXT: [(&str, u64); 3] = [("respan/span-01", 3000), ("respan/span-01-lite", 3000), ("respan/span-01-lite:free", 3000)];
+/// The limits of the model with this id, if it has any.
+fn limits(id: &str) -> Option<&'static Limits> {
+    LIMITS.iter().find(|limits| limits.id == id)
+}
 
-/// The most questions these models take in one call, where it is fewer than the endpoint's own
-/// limit. Measured: one more is refused with a 422, after the call.
-const MAX_QUESTIONS: [(&str, usize); 3] = [("nace-ai/drex-max", 16), ("parallel/decisions-fast:free", 100), ("morph/reflex", 128)];
-
-/// A model as it is on offer now: OpenRouter's listing, corrected by what this crate has checked.
+/// A model as it is on offer now: OpenRouter's listing, corrected by what calling it found.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ModelInfo {
     /// Its id, as a request names it.
     pub id: String,
+    /// What OpenRouter calls it: `TypeSafe: Jev 1.14`.
+    pub name: String,
     /// How many tokens it reads at once, if that is known.
     pub context: Option<u64>,
     /// Whether [`ModelInfo::context`] was measured by this crate rather than listed by OpenRouter.
@@ -150,14 +81,18 @@ pub struct ModelInfo {
     pub price: Option<f64>,
     /// What a state can hold for it: `text`, `image`, and for some `audio`, `video` or `file`.
     pub inputs: Vec<String>,
-    /// Whether it is one of [`MODELS`], the ones this crate is checked against.
-    pub supported: bool,
+    /// Whether it answers only yes/no (Noul) questions with plain-text instructions and criteria.
+    pub noul_only: bool,
+    /// The most questions it takes in one call, where that is fewer than the endpoint takes.
+    pub max_questions: Option<usize>,
 }
 
 /// One entry of OpenRouter's listing, as far as this crate reads it.
 #[derive(Deserialize)]
 struct Listed {
     id: String,
+    #[serde(default)]
+    name: String,
     #[serde(default)]
     context_length: Option<u64>,
     #[serde(default)]
@@ -180,73 +115,60 @@ struct Architecture {
 }
 
 impl Listed {
-    fn info(&self, model: Option<&Model>) -> ModelInfo {
+    fn info(&self) -> ModelInfo {
+        let limits = limits(&self.id);
         let listed = self.context_length.filter(|context| *context > 0);
-        let measured = MEASURED_CONTEXT.iter().find(|(id, _)| *id == self.id).map(|(_, tokens)| *tokens);
+        let measured = limits.and_then(|limits| limits.context);
         let price = self.pricing.prompt.as_deref().and_then(|price| price.parse::<f64>().ok());
         let mut inputs = self.architecture.input_modalities.clone();
         // A call settles this where the listing and this crate differ: see the top of this file.
-        inputs.retain(|input| input != "image" || model.is_none_or(|model| model.images));
+        inputs.retain(|input| input != "image" || limits.is_none_or(|limits| limits.images));
         ModelInfo {
             id: self.id.clone(),
+            name: self.name.clone(),
             context: listed.or(measured),
             measured: listed.is_none() && measured.is_some(),
             // To the millionth of a dollar: multiplying leaves 0.042 as 0.042000000000000004. A
             // price below zero is OpenRouter's way of saying it varies.
             price: price.filter(|price| *price >= 0.0).map(|price| (price * 1e12).round() / 1e6),
             inputs,
-            supported: model.is_some(),
+            noul_only: limits.is_some_and(|limits| limits.noul_only),
+            max_questions: limits.and_then(|limits| limits.max_questions),
         }
     }
 }
 
-/// OpenRouter's listing ([`crate::MODELS_URL`]) as [`ModelInfo`]s: [`MODELS`] in their order, and
-/// then any model the listing has that they don't. One the listing has dropped is kept, with what
-/// this crate knows of it and neither a price nor a context window.
+/// OpenRouter's listing ([`crate::MODELS_URL`]) as [`ModelInfo`]s: the default model
+/// ([`crate::DEFAULT_MODEL`]) first, and then the rest by id, a `~` id beside the ones it follows.
+/// Each is what the listing says of it, corrected by its limits, if it has any; a model that isn't
+/// listed isn't there.
 pub fn read_listing(body: &[u8]) -> crate::Result<Vec<ModelInfo>> {
     #[derive(Deserialize)]
     struct Listing {
         data: Vec<Listed>,
     }
     let Listing { data } = serde_json::from_slice(body).map_err(|e| Error::Decode(format!("the models list: {e}")))?;
-    let known = |one: &Model| match data.iter().find(|listed| listed.id == one.id) {
-        Some(listed) => listed.info(Some(one)),
-        None => ModelInfo {
-            id: one.id.to_owned(),
-            context: None,
-            measured: false,
-            price: None,
-            inputs: if one.images { vec!["text".to_owned(), "image".to_owned()] } else { vec!["text".to_owned()] },
-            supported: true,
-        },
-    };
-    let mut models: Vec<ModelInfo> = MODELS.iter().map(known).collect();
-    models.extend(data.iter().filter(|listed| model(&listed.id).is_none()).map(|listed| listed.info(None)));
+    let mut models: Vec<ModelInfo> = data.iter().map(Listed::info).collect();
+    models.sort_by_cached_key(|model| (model.id != crate::DEFAULT_MODEL, model.id.trim_start_matches('~').to_owned(), model.id.clone()));
     Ok(models)
 }
 
-/// The supported model with this id, if it is one.
-pub fn model(id: &str) -> Option<&'static Model> {
-    MODELS.iter().find(|model| model.id == id)
-}
-
-/// Whether `request`'s model can answer each of its questions ([`Model::check`]) and read its state,
-/// when it is one of [`MODELS`]; any other model is taken at its word. The first question it can't
-/// is an [`Error::Invalid`], as is a question past the most it takes in a call, and images it can't
-/// read an [`Error::Image`]. [`crate::Client`] checks
-/// this where it builds a request and again where it sends one, and the CLI where it builds one, so
-/// a dry run finds what sending would.
+/// Whether `request`'s model can answer each of its questions and read its state, when it is one
+/// with limits; any other model is taken at its word. The first question it can't answer is an
+/// [`Error::Invalid`], as is a question past the most it takes in a call, and images it can't read
+/// an [`Error::Image`]. [`crate::Client`] checks this where it builds a request and again where it
+/// sends one, and the CLI where it builds one, so a dry run finds what sending would.
 pub fn check_request(request: &DecisionRequest) -> crate::Result<()> {
-    let Some(model) = model(&request.model) else { return Ok(()) };
-    if !model.images && crate::has_images(&request.state) {
-        return Err(Error::Image(format!("{} reads text only, and this state has images in it", model.id)));
+    let Some(limits) = limits(&request.model) else { return Ok(()) };
+    if !limits.images && crate::has_images(&request.state) {
+        return Err(Error::Image(format!("{} reads text only, and this state has images in it", limits.id)));
     }
     for (at, (id, question)) in request.questions.iter().enumerate() {
-        model.check(question).map_err(|why| Error::Invalid { id: id.clone(), why })?;
-        if let Some((_, most)) = MAX_QUESTIONS.iter().find(|(limited, _)| *limited == model.id).filter(|(_, most)| at >= *most) {
+        limits.check(question).map_err(|why| Error::Invalid { id: id.clone(), why })?;
+        if let Some(most) = limits.max_questions.filter(|most| at >= *most) {
             let why = format!(
                 "{} takes at most {most} questions a call, and this request asks {}: split them",
-                model.id,
+                limits.id,
                 request.questions.len()
             );
             return Err(Error::Invalid { id: id.clone(), why });
@@ -255,11 +177,11 @@ pub fn check_request(request: &DecisionRequest) -> crate::Result<()> {
     Ok(())
 }
 
-impl Model {
+impl Limits {
     /// Whether this model can answer `question`: every model answers every type, except one that
-    /// is [`Model::noul_only`], which takes a yes/no question with plain-text instructions and
-    /// criteria, and nothing else. The error says why, as [`crate::Error::Invalid`]'s `why`.
-    pub fn check(&self, question: &Question) -> Result<(), String> {
+    /// is `noul_only`, which takes a yes/no question with plain-text instructions and criteria, and
+    /// nothing else. The error says why, as [`crate::Error::Invalid`]'s `why`.
+    fn check(&self, question: &Question) -> Result<(), String> {
         if !self.noul_only {
             return Ok(());
         }
@@ -286,31 +208,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lists_each_model_once_with_the_default_first() {
-        assert_eq!(MODELS[0].id, crate::DEFAULT_MODEL);
-        for (at, one) in MODELS.iter().enumerate() {
-            assert!(MODELS[..at].iter().all(|earlier| earlier.id != one.id), "{} twice", one.id);
+    fn keeps_each_models_limits_once() {
+        for (at, one) in LIMITS.iter().enumerate() {
+            assert!(LIMITS[..at].iter().all(|earlier| earlier.id != one.id), "{} twice", one.id);
+            // An entry that limits nothing would only be a list of models.
+            assert_ne!(Limits { id: one.id, ..NONE }, *one, "{} has no limits", one.id);
         }
-        assert_eq!(model("jaredpalmer/kev-4b").map(|model| model.noul_only), Some(false));
-        assert!(model("someone/else").is_none());
-    }
-
-    #[test]
-    fn says_in_its_line_what_a_model_cant_do() {
-        // `jev --help` shows `about` alone, so a limit that isn't in it is one nobody is told about.
-        for model in MODELS {
-            assert_eq!(model.noul_only, model.about.contains("yes/no questions only"), "{}", model.id);
-            assert_eq!(model.images, !model.about.contains("text only"), "{}", model.id);
-        }
+        // The default has none: it answers everything, and reads images.
+        assert!(limits(crate::DEFAULT_MODEL).is_none());
+        assert!(limits("someone/else").is_none());
     }
 
     #[test]
     fn reads_the_listing_and_corrects_it() {
         let listing = json!({"data": [
-            {"id": "someone/new", "context_length": 1024, "pricing": {"prompt": "0.0000005", "completion": "0"},
+            {"id": "someone/new", "name": "Someone: New", "context_length": 1024, "pricing": {"prompt": "0.0000005", "completion": "0"},
              "architecture": {"input_modalities": ["text", "image"]}},
-            {"id": "typesafe/jev-1.14", "context_length": 262144, "pricing": {"prompt": "0.000000042", "completion": "0"},
-             "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "typesafe/jev-1.14", "name": "TypeSafe: Jev 1.14", "context_length": 262144,
+             "pricing": {"prompt": "0.000000042", "completion": "0"}, "architecture": {"input_modalities": ["text", "image"]}},
             {"id": "scaledown/classify-1", "context_length": 1000000, "pricing": {"prompt": "0.00000004"},
              "architecture": {"input_modalities": ["text", "image", "file"]}},
             {"id": "cloudflare/clef-omni", "context_length": 65536, "pricing": {"prompt": "-1"},
@@ -319,15 +234,33 @@ mod tests {
              "architecture": {"input_modalities": ["text"]}},
             {"id": "respan/span-01-lite:free", "context_length": 0, "pricing": {"prompt": "0"},
              "architecture": {"input_modalities": ["text"]}},
+            {"id": "nace-ai/drex-max", "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "~liquid/d1-latest", "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "liquid/d1.2", "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "~typesafe/jev-latest", "architecture": {"input_modalities": ["text", "image"]}},
         ]});
         let models = read_listing(listing.to_string().as_bytes()).unwrap();
         let find = |id: &str| models.iter().find(|model| model.id == id).unwrap();
 
-        // The supported models in their own order, the default first, and then the rest.
-        assert_eq!(models.len(), MODELS.len() + 1);
-        assert_eq!(models[0].id, crate::DEFAULT_MODEL);
-        let new = &models[MODELS.len()];
-        assert_eq!((new.id.as_str(), new.supported, new.context), ("someone/new", false, Some(1024)));
+        // What the listing has, and nothing else: the default first, then by id, `~` or not.
+        let ids: Vec<&str> = models.iter().map(|model| model.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "~typesafe/jev-latest",
+                "cloudflare/clef-omni",
+                "~liquid/d1-latest",
+                "liquid/d1.2",
+                "nace-ai/drex-max",
+                "respan/span-01",
+                "respan/span-01-lite:free",
+                "scaledown/classify-1",
+                "someone/new",
+                "typesafe/jev-1.14",
+            ]
+        );
+        let new = find("someone/new");
+        assert_eq!((new.name.as_str(), new.context, new.noul_only, new.max_questions), ("Someone: New", Some(1024), false, None));
         assert_eq!(new.inputs, ["text", "image"]);
 
         // Exactly, where multiplying by a million alone wouldn't be.
@@ -342,11 +275,10 @@ mod tests {
         assert_eq!(find("cloudflare/clef-omni").price, None);
         // A context of 0 means none is listed, which a measurement fills in.
         assert_eq!((find("respan/span-01").context, find("respan/span-01").measured), (Some(3000), true));
-
-        // Gone from the listing, it is still supported, and nothing is made up about it.
-        let gone = find("liquid/d1");
-        assert_eq!((gone.context, gone.price, gone.supported), (None, None, true));
-        assert_eq!(gone.inputs, ["text", "image"]);
+        // What the listing doesn't say at all.
+        assert!(find("respan/span-01").noul_only);
+        assert_eq!(find("nace-ai/drex-max").max_questions, Some(16));
+        assert_eq!((find("nace-ai/drex-max").context, find("nace-ai/drex-max").price), (None, None));
 
         assert!(read_listing(b"<html>").unwrap_err().to_string().contains("the models list"));
     }
@@ -355,8 +287,7 @@ mod tests {
     fn a_listed_context_replaces_a_measured_one() {
         let listing = json!({"data": [{"id": "respan/span-01", "context_length": 8192}]});
         let models = read_listing(listing.to_string().as_bytes()).unwrap();
-        let span = models.iter().find(|model| model.id == "respan/span-01").unwrap();
-        assert_eq!((span.context, span.measured), (Some(8192), false));
+        assert_eq!((models[0].context, models[0].measured), (Some(8192), false));
     }
 
     #[test]
@@ -371,7 +302,7 @@ mod tests {
         assert!(refused.contains("scaledown/classify-1 reads text only"), "{refused}");
         assert!(check_request(&request("scaledown/classify-1", json!("text"))).is_ok());
         assert!(check_request(&request("~liquid/d1-latest", json!([image]))).is_ok());
-        // A model this crate doesn't know is taken at its word.
+        // A model with no limits here is taken at its word.
         assert!(check_request(&request("someone/else", json!([image]))).is_ok());
     }
 
@@ -387,14 +318,11 @@ mod tests {
         assert_eq!(refused, "question `q16`: nace-ai/drex-max takes at most 16 questions a call, and this request asks 17: split them");
         // Every other model takes as many as the endpoint does.
         assert!(check_request(&request("~typesafe/jev-latest", 17)).is_ok());
-        for (id, _) in MAX_QUESTIONS {
-            assert!(model(id).is_some_and(|model| model.about.contains("questions a call")), "{id}");
-        }
     }
 
     #[test]
     fn a_noul_only_model_takes_plain_yes_no_questions_alone() {
-        let span = model("respan/span-01").unwrap();
+        let span = limits("respan/span-01").unwrap();
         assert!(span.check(&Question::noul("Is it raining?")).is_ok());
         assert!(span.check(&Question::noul_with_criteria("Is it raining?", "Rain is falling", "It is dry")).is_ok());
         let score = span.check(&Question::score("How warm?", ["Cold", "Hot"])).unwrap_err();
@@ -403,6 +331,6 @@ mod tests {
         assert!(span.check(&Question::noul(json!({"what": "structured"}))).unwrap_err().contains("plain text"));
         assert!(span.check(&Question::noul_with_criteria("Is it?", json!(["yes"]), "no")).is_err());
         // Every other model takes every type.
-        assert!(model("jaredpalmer/kev-4b").unwrap().check(&Question::score("How warm?", ["Cold", "Hot"])).is_ok());
+        assert!(limits("jaredpalmer/kev-4b").unwrap().check(&Question::score("How warm?", ["Cold", "Hot"])).is_ok());
     }
 }

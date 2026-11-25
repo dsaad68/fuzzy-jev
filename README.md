@@ -9,8 +9,8 @@ A client for [OpenRouter](https://openrouter.ai)'s decision models. Ask one type
 text or images and get probabilities back, rather than prose: a **Choice** between named options, a
 **Score** on an ordered scale, or a **Noul**, the probability that something is true.
 
-[35 models](#models) from 16 providers are supported, and 23 of them read [images](#images). The
-default is **Jev**, the [TypeSafe](https://typesafe.ai) model this project began with and is named
+Every [model](#models) on OpenRouter's decisions endpoint works, and most read [images](#images);
+`jev model list` prints them as OpenRouter offers them now. The default is **Jev**, the [TypeSafe](https://typesafe.ai) model this project began with and is named
 after; `-m` picks another. They all sit on one endpoint
 (`https://openrouter.ai/api/alpha/decisions`), so the key you need is an OpenRouter one, and `--url`
 points the same questions at another endpoint.
@@ -128,54 +128,43 @@ with `--questions` (`-q`); file questions come first, then the flags'.
 
 ### Models
 
-35 models on the same endpoint are supported, and `-m` picks one. Every one was called to see what it
-takes, since OpenRouter's listing isn't always right about it:
+Every model on the decisions endpoint works, and `-m` picks one. Which models there are is
+OpenRouter's to say, and `jev model list` asks it each time, so a model it adds is there without a
+new version of `jev`:
 
-| Model | | Questions | Images |
-| --- | --- | --- | --- |
-| `~typesafe/jev-latest` | TypeSafe's Jev, whichever version is the latest. **The default.** | all | yes |
-| `typesafe/jev-1.14` | TypeSafe's Jev 1.14, pinned: the same model until you change it | all | yes |
-| `typesafe/jev-1.13` | TypeSafe's Jev 1.13, pinned: the same model until you change it | all | yes |
-| `jaredpalmer/kev-4b` | Kev 4B, from jaredpalmer | all | no |
-| `respan/span-02` | Respan's Span 02 | all | yes |
-| `respan/span-01` | Respan's Span 01 | yes/no only | no |
-| `respan/span-01-lite` | Span 01 Lite, the lighter Span | yes/no only | no |
-| `respan/span-01-lite:free` | Span 01 Lite, OpenRouter's free variant of it | yes/no only | no |
-| `~liquid/d1-latest` | Liquid's d1, whichever version is the latest | all | yes |
-| `liquid/d1.1` | Liquid's d1.1, pinned | all | yes |
-| `liquid/d1` | Liquid's d1, pinned: leaves OpenRouter on 2026-11-20 | all | yes |
-| `~liquid/d1-ultra-latest` | Liquid's largest, d1-ultra, whichever version is the latest | all | yes |
-| `liquid/d1-ultra` | Liquid's d1-ultra, pinned | all | yes |
-| `~perplexity/pplx-decider-latest` | Perplexity's Decider, whichever version is the latest | all | yes |
-| `perplexity/pplx-decider-v1.2` | Perplexity's Decider V1.2, pinned | all | yes |
-| `~perplexity/pplx-decider-flash-latest` | Decider Flash, the smaller Decider, whichever version is the latest | all | yes |
-| `perplexity/pplx-decider-flash-v1.2` | Decider Flash V1.2, pinned | all | yes |
-| `parallel/decisions-fast:free` | Parallel's Decisions Fast, which also researches the live web; free | all | no |
-| `baseten/mammoth-1` | Mammoth 1, Baseten's largest, 27B | all | yes |
-| `baseten/elephant-1` | Elephant 1, from Baseten, 9B | all | yes |
-| `baseten/joey-1` | Joey 1, Baseten's smallest, 2B | all | yes |
-| `cloudflare/clef` | Cloudflare's Clef, 27B | all | yes |
-| `cloudflare/clef-flash` | Clef Flash, the fast Clef, 9B | all | yes |
-| `cloudflare/clef-omni` | Clef Omni, the mixture-of-experts Clef | all | yes |
-| `nace-ai/drex-max` | Drex Max, Nace.AI's largest | all | yes |
-| `nace-ai/drex-v2.0` | Drex v2.0, from Nace.AI | all | no |
-| `nace-ai/drex-v1.5` | Drex v1.5, from Nace.AI | all | no |
-| `openai/gpt-6-luna-decisions` | GPT-6 Luna, served for decisions | all | yes |
-| `inception/mercury-decide` | Inception's Mercury Decide | all | yes |
-| `morph/reflex` | Morph's Reflex | all | yes |
-| `microsoft/microsoft-decision-1` | Microsoft's Decision 1 | all | no |
-| `upstage/solar-decide` | Upstage's Solar Decide | all | no |
-| `upstage/solar-decide-flash` | Solar Decide Flash, the low-latency Solar | all | no |
-| `togethercomputer/tev1-4b-experimental` | Tev1 4B, Together AI's experiment | all | no |
-| `scaledown/classify-1` | ScaleDown's Classify 1, and every Choice option needs a description | all | no |
+```sh
+jev model list           # a table: context window, price, what it reads, and its limits
+jev model list --json    # the same, for a script
+```
+
+```text
+┌──────────────────────┬───────────┬────────┬───────────────────────────┬─────────────────────┐
+│ model                │   context │   $/1M │ input                     │ limits              │
+├──────────────────────┼───────────┼────────┼───────────────────────────┼─────────────────────┤
+│ ~typesafe/jev-latest │   262,144 │ $0.042 │ text, image               │                     │
+│ cloudflare/clef-omni │    65,536 │ $0.150 │ text, image, audio, video │                     │
+│ nace-ai/drex-max     │   262,144 │ $0.060 │ text, image               │ 16 questions a call │
+│ respan/span-01-lite  │    ~3,000 │   free │ text                      │ yes/no only         │
+│ scaledown/classify-1 │ 1,000,000 │ $0.040 │ text, file                │                     │
+└──────────────────────┴───────────┴────────┴───────────────────────────┴─────────────────────┘
+```
+
+Context is in tokens, and the price is per million input tokens. `--image` sends images; audio,
+video and files go in a `--state-json` state, in the shape the model reads. It needs a connection
+but no key, and `Client::list_models` gives the same list to Rust and `Client.list_models` to Python.
 
 ```sh
 jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
 ```
 
-- **Pin a version** for answers that don't change under you: the `~` id follows TypeSafe's latest
-  Jev (today `typesafe/jev-1.14`), and the reply's `model` names the one that answered, with its
-  date, such as `typesafe/jev-1.14-20261014`. Liquid's and Perplexity's `~` ids work the same way.
+**Pin a version** for answers that don't change under you: the `~` id follows TypeSafe's latest Jev
+(today `typesafe/jev-1.14`), and the reply's `model` names the one that answered, with its date,
+such as `typesafe/jev-1.14-20261014`. Liquid's and Perplexity's `~` ids work the same way.
+
+OpenRouter's listing doesn't say everything a model can't do, and isn't always right about what it
+reads, so some models were called to find out. What that found is kept in `jev` as limits for those
+models alone, and a request past them is refused before any call is made:
+
 - **The Span 01 models answer yes/no questions only**, with plain-text instructions and criteria. A
   Score, a Choice, or structured instructions asked of one is refused before any call is made:
   ``question `anger`: respan/span-01 answers yes/no questions only, and this is a score``.
@@ -187,31 +176,11 @@ jev 'It is raining.' --noul 'raining=Is it raining?' -m respan/span-01-lite
 - **Three models take fewer questions a call** than the endpoint does: `nace-ai/drex-max` 16,
   `parallel/decisions-fast:free` 100 and `morph/reflex` 128. A request with more is refused before
   it's sent; split the questions over two calls.
-- **`parallel/decisions-fast:free` also researches the live web**, by Parallel's own account, so
-  its answers can rest on more than the state. It is free, and it reads text only.
+- **A text-only model is refused images** before any call. `scaledown/classify-1` is one, though
+  OpenRouter lists it as reading them.
 - **`scaledown/classify-1` needs a description on every Choice option**: `--choice
   'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`.
-- **`liquid/d1` leaves OpenRouter on 2026-11-20.** `~liquid/d1-latest` keeps working.
-- **Any other id** the endpoint serves works too, sent as it is and not checked. `jev --help`
-  lists the supported ones, and so do `jev::MODELS` and `jev.MODELS`.
-
-`jev --list-models` prints every model with its context window, its price and what it reads, as
-OpenRouter lists them now, so it needs a connection but no key. `--json` gives a script the same
-list, and `Client::list_models` gives it to Rust and `Client.list_models` to Python.
-
-```text
-┌──────────────────────┬───────────┬────────┬───────────────────────────┐
-│ model                │   context │   $/1M │ input                     │
-├──────────────────────┼───────────┼────────┼───────────────────────────┤
-│ ~typesafe/jev-latest │   262,144 │ $0.042 │ text, image               │
-│ respan/span-01-lite  │    ~3,000 │   free │ text                      │
-│ cloudflare/clef-omni │    65,536 │ $0.150 │ text, image, audio, video │
-│ scaledown/classify-1 │ 1,000,000 │ $0.040 │ text, file                │
-└──────────────────────┴───────────┴────────┴───────────────────────────┘
-```
-
-Context is in tokens, and the price is per million input tokens. `--image` sends images; audio,
-video and files go in a `--state-json` state, in the shape the model reads.
+- **Any other model** is taken at its word: sent as it is, and not checked.
 
 ### A structured state
 
@@ -364,9 +333,9 @@ uses up the model's context.
 
 #### What to know about images
 
-- **23 of the models read images**, marked in the [table](#models). One that doesn't is refused
-  before any call is made: `nace-ai/drex-v2.0 reads text only, and this state has images in it`.
-  Any other id is sent as it is.
+- **Most models read images**, and `jev model list` says which: those with `image` among their
+  inputs. One found to read text only is refused before any call is made:
+  `nace-ai/drex-v2.0 reads text only, and this state has images in it`. Any other id is sent as it is.
 - **With an image, the text comes only from `STATE` or `--state-file`.** Standard input isn't read
   unless `-f -` asks for it. `--state-json` doesn't combine with `--image`.
 - **Sizes differ by model**, so they are left to the endpoint: Jev refuses a side under 280 pixels

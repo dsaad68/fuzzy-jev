@@ -8,8 +8,13 @@ async fn main() -> anyhow::Result<()> {
     let words: Vec<String> = std::env::args().skip(1).collect();
     // `jev add skill` writes the bundled Agent Skill. It comes before clap because the state is a
     // positional argument, so `add` would otherwise be read as the state to judge.
-    if let Some(done) = cli::skill_command(&words.iter().map(String::as_str).collect::<Vec<_>>()) {
+    let words: Vec<&str> = words.iter().map(String::as_str).collect();
+    if let Some(done) = cli::skill_command(&words) {
         return done;
+    }
+    // `jev model list` prints the models on offer, for the same reason before clap.
+    if let Some(list) = cli::model_command(&words) {
+        return list.run().await;
     }
     cli::run(cli::Invocation::from_env()?).await
 }

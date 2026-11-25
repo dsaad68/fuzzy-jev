@@ -4,8 +4,8 @@
 //! The page is served from this process, on the loopback address only. The key stays here, in
 //! OPENROUTER_API_KEY: the page sends the state, the questions and the rules, and this process asks.
 //!
-//! What reads the command line's inputs or spends the key (`/start` and `/run`) needs this run's
-//! token, a random one in the address's `#` fragment, which the page sends back in `X-Jev`. So
+//! What reads the command line's inputs or spends the key (`/start` and `/run`), and the list of
+//! models it asks OpenRouter for (`/models`), needs this run's token, a random one in the address's `#` fragment, which the page sends back in `X-Jev`. So
 //! another user of the machine, who can reach the port but wasn't given the address, can't use
 //! them. Another site's page can't either: it can't set that header without a preflight this server
 //! never answers, and a request must name this server as its `Host` (and `Origin`, when it has one),
@@ -76,6 +76,8 @@ struct Server {
     token: String,
     /// What the page starts with: the command line's state, questions and rules, and its model.
     start: Value,
+    /// Where the models for the page's menu are listed: OpenRouter's list, asked when the page asks.
+    models_url: String,
 }
 
 /// Serves the page until the process is stopped.
@@ -93,6 +95,7 @@ pub async fn serve(args: &Args) -> anyhow::Result<()> {
         timeout: Duration::from_secs_f64(args.timeout),
         hosts: [format!("127.0.0.1:{port}"), format!("localhost:{port}")],
         token: token(),
+        models_url: jev::MODELS_URL.to_owned(),
     });
 
     let address = format!("http://127.0.0.1:{port}/#{}", server.token);
@@ -155,7 +158,6 @@ fn start(args: &Args, can_ask: bool) -> anyhow::Result<Value> {
         "rules": file(&args.rules)?,
         "model": args.model,
         "canAsk": can_ask,
-        "models": jev::MODELS.iter().map(|model| json!({"id": model.id, "about": model.about, "noulOnly": model.noul_only})).collect::<Vec<_>>(),
         "examples": examples,
     }))
 }
@@ -319,10 +321,20 @@ async fn respond(request: &Request, server: &Server) -> (u16, &'static str, Vec<
             };
             (status, "application/json", body.to_string().into_bytes())
         }
-        ("GET", "/start") | ("POST", "/run") => {
+        // The models on offer now, for the menu: the page asks after it starts, so a slow list
+        // holds nothing else up, and one that fails leaves the id typed under the menu.
+        ("GET", "/models") if with_token => {
+            let client = Client::new("").with_timeout(server.timeout);
+            let (status, body) = match client.list_models(&server.models_url).await {
+                Ok(models) => (200, json!(models)),
+                Err(error) => (502, json!({"error": error.to_string()})),
+            };
+            (status, "application/json", body.to_string().into_bytes())
+        }
+        ("GET", "/start" | "/models") | ("POST", "/run") => {
             (403, "text/plain; charset=utf-8", b"no token: open the address jev --explore printed, with its #".to_vec())
         }
-        (_, "/" | "/start" | "/run") => (405, "text/plain; charset=utf-8", b"method not allowed".to_vec()),
+        (_, "/" | "/start" | "/run" | "/models") => (405, "text/plain; charset=utf-8", b"method not allowed".to_vec()),
         _ => (404, "text/plain; charset=utf-8", b"not found".to_vec()),
     }
 }
@@ -424,6 +436,8 @@ mod tests {
             hosts: ["127.0.0.1:7000".to_owned(), "localhost:7000".to_owned()],
             token: "secret".to_owned(),
             start: json!({}),
+            // Nothing listens there, so the list fails at once.
+            models_url: "http://127.0.0.1:9/models".to_owned(),
         }
     }
 
@@ -464,6 +478,11 @@ mod tests {
         assert_eq!(status(get("/start", None)).await, 403);
         assert_eq!(status(get("/start", ours)).await, 200);
         assert_eq!(status(get("/", None)).await, 200);
+        // So does the list of models, which says why it failed rather than leaving the page waiting.
+        assert_eq!(status(get("/models", None)).await, 403);
+        let (code, _, body) = respond(&get("/models", ours), &server()).await;
+        assert_eq!(code, 502);
+        assert!(serde_json::from_slice::<Value>(&body).unwrap()["error"].is_string());
     }
 
     #[test]

@@ -262,9 +262,9 @@ impl Client {
     }
 
     /// The models on offer now, from OpenRouter's list (`url`, `MODELS_URL` otherwise): a dict per
-    /// model of `id`, `context` (tokens), `measured`, `price` (dollars per million input tokens),
-    /// `inputs` and `supported`, as `jev --list-models` prints them. The list is public, so the key
-    /// isn't sent. Other Python threads run meanwhile.
+    /// model of `id`, `name`, `context` (tokens), `measured`, `price` (dollars per million input
+    /// tokens), `inputs`, `noul_only` and `max_questions`, as `jev model list` prints them. The
+    /// list is public, so the key isn't sent. Other Python threads run meanwhile.
     #[pyo3(signature = (url = None))]
     fn list_models<'py>(&self, py: Python<'py>, url: Option<String>) -> PyResult<Bound<'py, PyAny>> {
         let client = self.inner.clone();
@@ -733,21 +733,6 @@ fn _jev(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("DEFAULT_MODEL", jev::DEFAULT_MODEL)?;
-    // The supported models, the default first: each an `id`, what it is (`about`), and whether it
-    // answers yes/no questions only (`noul_only`) and reads images (`images`), which a request is
-    // checked against before it's sent.
-    let models = jev::MODELS
-        .iter()
-        .map(|model| {
-            let dict = PyDict::new(py);
-            dict.set_item("id", model.id)?;
-            dict.set_item("about", model.about)?;
-            dict.set_item("noul_only", model.noul_only)?;
-            dict.set_item("images", model.images)?;
-            Ok(dict)
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    m.add("MODELS", PyList::new(py, models)?)?;
     m.add("DECISIONS_URL", jev::DECISIONS_URL)?;
     m.add("OLLAMA_URL", jev::OLLAMA_URL)?;
     m.add("MODELS_URL", jev::MODELS_URL)?;

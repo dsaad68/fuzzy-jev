@@ -3,6 +3,7 @@
 //! of it.
 
 mod explore;
+mod model;
 mod skill;
 
 use std::io::{IsTerminal, Read};
@@ -17,9 +18,10 @@ use jev::spec::{self, Kind};
 use jev::{Client, DecisionRequest};
 use serde_json::Value;
 
+pub use model::command as model_command;
 pub use skill::command as skill_command;
 
-const EXAMPLES: &str = "\
+const AFTER_HELP: &str = "\
 Examples:
   jev 'Help! My payouts have been failing for 3 days.' \\
     --noul 'is_urgent=Does this message convey urgency?' \\
@@ -45,8 +47,9 @@ Examples:
                              them, and see the answers, the outcome and the drawing (text and
                              SVG). -q, -r and a state fill it in to start with
 
-  jev --list-models          every model with its context window, price and what it reads, from
-                             OpenRouter just now, so it needs no key. --json for a script
+  jev model list             every model OpenRouter offers now, with its context window, price,
+                             what it reads and what it can't answer. Needs no key; --json for a
+                             script
 
   jev add skill              teach an agent in this project to use jev: writes the bundled
                              Agent Skill to .agents/skills/jev, or .claude/skills/jev with --claude.
@@ -59,17 +62,11 @@ in the endpoint's own shape, or TOML: a [[question]] table per question with its
 instruction and criteria, and a choice's options without descriptions as a list of names. A .json
 or .toml name says which; otherwise a file that starts with `{` is JSON. The key is read from
 OPENROUTER_API_KEY; Ollama's endpoint (--ollama, or a --url whose path is /v1/systemone) needs none,
-and is sent images its own way.";
+and is sent images its own way.
 
-/// The examples, then the supported models, from [`jev::MODELS`] so the list can't drift from them.
-fn help_after() -> String {
-    let width = jev::MODELS.iter().map(|model| model.id.len()).max().unwrap_or(0);
-    let models: String = jev::MODELS.iter().map(|model| format!("\n  {:width$}  {}", model.id, model.about)).collect();
-    format!(
-        "{EXAMPLES}\n\nModels (-m), all on the same endpoint; any other id works too, unchecked:{models}\n\nA yes/no-only model is \
-         refused a Choice or a Score, and a text-only model an image, before any call is made."
-    )
-}
+-m picks the model: ~typesafe/jev-latest by default, or any other the endpoint serves, which
+`jev model list` prints. A model found to answer yes/no questions only is refused a Choice or a
+Score, and one found to read text only an image, before any call is made.";
 
 #[derive(Parser)]
 // `-v` as well as clap's `-V`: what most people type first.
@@ -78,7 +75,7 @@ fn help_after() -> String {
     version,
     disable_version_flag = true,
     about = "Ask a decision model typed questions about text or images, through OpenRouter",
-    after_help = help_after()
+    after_help = AFTER_HELP
 )]
 pub struct Args {
     /// Print the version
@@ -122,12 +119,11 @@ pub struct Args {
     #[arg(long, short = 'r', value_name = "PATH")]
     rules: Option<PathBuf>,
 
-    /// The model to ask: one of the models listed below, or any other the endpoint serves
+    /// The model to ask: any the endpoint serves, which `jev model list` prints
     #[arg(long, short = 'm', default_value = jev::DEFAULT_MODEL)]
     model: String,
 
-    /// The decisions endpoint. Another one may add the key itself, so none is needed. With
-    /// --list-models, where the list of models is instead
+    /// The decisions endpoint. Another one may add the key itself, so none is needed
     #[arg(long, default_value = jev::DECISIONS_URL)]
     url: String,
 
@@ -162,7 +158,7 @@ pub struct Args {
     #[arg(long, value_name = "PATH", requires = "rules")]
     svg: Option<PathBuf>,
 
-    /// How wide a --table or --list-models may be; the terminal's width by default. A table never
+    /// How wide a --table may be; the terminal's width by default. A table never
     /// gets narrower than its question ids and answers need, so below that it prints wider
     #[arg(long, value_name = "COLUMNS")]
     width: Option<usize>,
@@ -176,10 +172,11 @@ pub struct Args {
     #[arg(long, conflicts_with_all = ["noul", "choice", "score", "image", "format", "svg", "width", "dry_run"])]
     explore: bool,
 
-    /// Print every model in a table: its context window, its price and what it reads, from
-    /// OpenRouter just now. Needs no key; --json prints it for a script
+    /// The old spelling of `jev model list`, kept so scripts that use it still work. With it,
+    /// --url is where the list is
     #[arg(
         long,
+        hide = true,
         conflicts_with_all = [
             "state", "state_file", "state_json", "image", "noul", "choice", "score", "questions", "rules", "model", "text", "graph",
             "svg", "dry_run", "explore",
@@ -200,7 +197,7 @@ impl Args {
     /// How wide a table may be: what was asked for, the terminal's width, or 80 columns when the
     /// output isn't a terminal (a pipe or a file).
     fn width(&self) -> usize {
-        self.width.unwrap_or_else(|| terminal_size::terminal_size().map_or(80, |(terminal_size::Width(columns), _)| usize::from(columns)))
+        width(self.width)
     }
 
     /// How to print the reply: at most one of --text, --table and --json is given.
@@ -211,6 +208,12 @@ impl Args {
             _ => Format::Text,
         }
     }
+}
+
+/// How wide a table may be: `asked`, the terminal's width, or 80 columns when the output isn't a
+/// terminal (a pipe or a file).
+fn width(asked: Option<usize>) -> usize {
+    asked.unwrap_or_else(|| terminal_size::terminal_size().map_or(80, |(terminal_size::Width(columns), _)| usize::from(columns)))
 }
 
 /// The arguments, and the flag questions in the order they were written, which clap keeps per flag.
@@ -300,13 +303,11 @@ pub async fn run(invocation: Invocation) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Prints the models on offer. The default --url is the decisions endpoint, which lists nothing, so
-/// only one that was changed says where the list is.
+/// `--list-models`, as `jev model list`. The default --url is the decisions endpoint, which lists
+/// nothing, so only one that was changed says where the list is.
 async fn list_models(args: &Args) -> anyhow::Result<()> {
     let url = if args.url == jev::DECISIONS_URL { jev::MODELS_URL } else { &args.url };
-    let models = Client::new("").with_timeout(Duration::from_secs_f64(args.timeout)).list_models(url).await?;
-    print!("{}", print::render_models(args.format(), &models, args.width())?);
-    Ok(())
+    model::list_models(url, args.timeout, args.format(), args.width()).await
 }
 
 /// Draws the rules as asked: the terminal's tree with --graph, the image with --svg.

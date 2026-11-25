@@ -50,14 +50,14 @@ use serde::Serialize;
 
 pub use error::{Error, Result};
 pub use image::{has_images, image_part, text_part};
-pub use models::{Model, ModelInfo, MODELS};
+pub use models::ModelInfo;
 pub use types::{
     Answer, ChoiceAnswer, DecisionRequest, DecisionResponse, NoulAnswer, NoulCriteria, Options, Question, ScoreAnswer, Usage, ROUNDING,
 };
 
 /// The model requests go to unless the client says otherwise: TypeSafe's Jev, whichever version is
-/// the latest. [`MODELS`] lists every supported model; pin one, such as `typesafe/jev-1.13`, for
-/// answers that don't change when a new version comes out.
+/// the latest. [`Client::list_models`] lists the others on offer; pin one, such as
+/// `typesafe/jev-1.13`, for answers that don't change when a new version comes out.
 pub const DEFAULT_MODEL: &str = "~typesafe/jev-latest";
 
 /// OpenRouter's decisions endpoint.
@@ -180,9 +180,9 @@ impl Client {
     }
 
     /// Sends `request` as it is, whatever model it names. A question the model can't answer (one
-    /// of [`MODELS`] that takes yes/no questions only, asked anything else) is refused here, before
-    /// the call, as [`Error::Invalid`], and images it can't read as [`Error::Image`]. The reply is
-    /// checked against the request
+    /// that takes yes/no questions only, asked anything else: [`models::check_request`]) is refused
+    /// here, before the call, as [`Error::Invalid`], and images it can't read as [`Error::Image`].
+    /// The reply is checked against the request
     /// ([`DecisionResponse::check_against`]): an answer missing, of another type, or that isn't
     /// well formed is an error here, so every caller gets the same, checked reply.
     pub async fn send(&self, request: &DecisionRequest) -> Result<DecisionResponse> {
@@ -223,7 +223,7 @@ impl Client {
     }
 
     /// The models on offer now, from the list at `url`, usually [`MODELS_URL`]: each one's context
-    /// window, price and inputs, corrected by what this crate has checked
+    /// window, price and inputs, corrected by what calling it found, and what it can't answer
     /// ([`models::read_listing`]). The list is public, so no key is sent.
     pub async fn list_models(&self, url: &str) -> Result<Vec<ModelInfo>> {
         let reply = self.http.get(url).timeout(self.usable_timeout()).send().await.map_err(|e| Error::Http(e.to_string()))?;

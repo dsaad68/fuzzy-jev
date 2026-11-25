@@ -204,8 +204,10 @@ LISTING = json.dumps(
              "architecture": {"input_modalities": ["text", "image", "file"]}},
             {"id": "respan/span-01", "context_length": 0, "pricing": {"prompt": "0.00000002"},
              "architecture": {"input_modalities": ["text"]}},
-            {"id": "someone/new", "context_length": 1024, "pricing": {"prompt": "0"},
+            {"id": "someone/new", "name": "Someone: New", "context_length": 1024, "pricing": {"prompt": "0"},
              "architecture": {"input_modalities": ["text"]}},
+            {"id": "~typesafe/jev-latest", "context_length": 262144, "pricing": {"prompt": "0.000000042"},
+             "architecture": {"input_modalities": ["text", "image"]}},
         ]
     }
 )
@@ -281,16 +283,19 @@ def test_lists_the_models(server):
     url, seen = server
     models = jev.Client("key", url=url).list_models(url.replace("/decisions", "/models"))
     by_id = {model["id"]: model for model in models}
-    # Every supported model, the default first, then the ones only the list has.
-    assert len(models) == len(jev.MODELS) + 1
-    assert models[0]["id"] == jev.DEFAULT_MODEL
-    assert models[-1] == {"id": "someone/new", "context": 1024, "measured": False, "price": 0.0, "inputs": ["text"], "supported": False}
+    # What the list has, and nothing else: the default first, then by id.
+    assert [model["id"] for model in models] == [
+        jev.DEFAULT_MODEL, "respan/span-01", "scaledown/classify-1", "someone/new", "typesafe/jev-1.14"
+    ]
+    assert by_id["someone/new"] == {
+        "id": "someone/new", "name": "Someone: New", "context": 1024, "measured": False, "price": 0.0, "inputs": ["text"],
+        "noul_only": False, "max_questions": None,
+    }
     assert by_id["typesafe/jev-1.14"]["price"] == 0.042
-    # Corrected where calling the model disagreed with the list.
+    # Corrected where calling the model disagreed with the list, or found what it doesn't say.
     assert by_id["scaledown/classify-1"]["inputs"] == ["text", "file"]
     assert (by_id["respan/span-01"]["context"], by_id["respan/span-01"]["measured"]) == (3000, True)
-    # Gone from the list: kept, with nothing made up about it.
-    assert (by_id["liquid/d1"]["context"], by_id["liquid/d1"]["price"]) == (None, None)
+    assert by_id["respan/span-01"]["noul_only"]
     # The list is public, so the key stays home.
     assert seen == [(None, "/models")]
     assert jev.MODELS_URL.startswith("https://openrouter.ai/")
@@ -302,7 +307,7 @@ def test_lists_the_models_async(server):
     async def ask():
         return await jev.Client(url=url).list_models_async(url.replace("/decisions", "/models"))
 
-    assert len(asyncio.run(ask())) == len(jev.MODELS) + 1
+    assert len(asyncio.run(ask())) == 5
 
 
 def test_a_list_that_isnt_there_is_an_http_error(server):
@@ -328,12 +333,13 @@ def test_keeps_the_key_out_of_repr():
     assert "secret" not in repr(jev.Client("secret"))
 
 
-def test_lists_the_supported_models():
-    ids = [model["id"] for model in jev.MODELS]
-    assert ids[0] == jev.DEFAULT_MODEL == "~typesafe/jev-latest"
-    assert {"typesafe/jev-1.13", "jaredpalmer/kev-4b", "respan/span-01", "respan/span-01-lite", "respan/span-01-lite:free"} <= set(ids)
-    assert all(model["noul_only"] == model["id"].startswith("respan/span-01") for model in jev.MODELS)
-    assert {model["id"] for model in jev.MODELS if model["images"]} >= {jev.DEFAULT_MODEL, "~liquid/d1-latest", "respan/span-02"}
+def test_refuses_what_a_model_was_found_not_to_answer():
+    with pytest.raises(jev.InvalidQuestionError, match="respan/span-01 answers yes/no questions only"):
+        jev.Client("key", model="respan/span-01").request("state", {"c": jev.Question.choice("Which?", ["a", "b"])})
+    with pytest.raises(jev.ImageError, match="reads text only"):
+        jev.Client("key", model="scaledown/classify-1").request([jev.image_part(b"\x89PNG\r\n\x1a\n")], {"n": jev.Question.noul("?")})
+    # Any other model is taken at its word.
+    jev.Client("key", model="someone/new").request([jev.image_part(b"\x89PNG\r\n\x1a\n")], {"c": jev.Question.choice("Which?", ["a", "b"])})
 
 
 def test_a_state_of_parts_holds_text_and_images():
