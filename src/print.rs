@@ -237,10 +237,17 @@ fn models_table(models: &[ModelInfo], width: usize) -> String {
     if models.iter().any(|model| model.inputs.iter().any(|input| input != "text" && input != "image")) {
         notes.push("-i sends images. Audio, video and files go in a --state-json state, in the shape the model reads.".to_owned());
     }
-    if models.iter().any(|model| model.noul_only || model.max_questions.is_some()) {
+    if models.iter().any(|model| model.noul_only || model.plain_text || model.max_questions.is_some()) {
         notes.push(
             "The limits were found by calling each model, and a request past them is refused before any call: a Choice or a Score \
              asked of a yes/no-only model, or more questions than it takes."
+                .to_owned(),
+        );
+    }
+    if models.iter().any(|model| model.plain_text) {
+        notes.push(
+            "plain text: instructions and criteria as text, not JSON, and a description for every Choice option (a:the first, not \
+             a alone)."
                 .to_owned(),
         );
     }
@@ -256,6 +263,9 @@ fn limits(model: &ModelInfo) -> String {
     let mut limits = Vec::new();
     if model.noul_only {
         limits.push("yes/no only".to_owned());
+    }
+    if model.plain_text {
+        limits.push("plain text".to_owned());
     }
     if let Some(most) = model.max_questions {
         limits.push(format!("{most} questions a call"));
@@ -459,7 +469,17 @@ mod tests {
 
     fn listed(id: &str, context: Option<u64>, price: Option<f64>, inputs: &[&str]) -> ModelInfo {
         let inputs = inputs.iter().map(|input| (*input).to_owned()).collect();
-        ModelInfo { id: id.to_owned(), name: String::new(), context, measured: false, price, inputs, noul_only: false, max_questions: None }
+        ModelInfo {
+            id: id.to_owned(),
+            name: String::new(),
+            context,
+            measured: false,
+            price,
+            inputs,
+            noul_only: false,
+            plain_text: false,
+            max_questions: None,
+        }
     }
 
     #[test]
@@ -498,6 +518,11 @@ mod tests {
         let capped = [ModelInfo { max_questions: Some(16), ..listed("nace-ai/drex-max", None, None, &["text", "image"]) }];
         let out = render_models(Format::Table, &capped, 100).unwrap();
         assert!(out.contains("│ 16 questions a call │") && out.contains("refused before any call"), "{out}");
+        assert!(!out.contains("a description for every Choice option"), "{out}");
+        // A limit the column can only name is said in full under the table.
+        let plain = [ModelInfo { plain_text: true, ..listed("scaledown/classify-1", None, None, &["text", "file"]) }];
+        let out = render_models(Format::Table, &plain, 100).unwrap();
+        assert!(out.contains("│ plain text │") && out.contains("a description for every Choice option"), "{out}");
     }
 
     #[test]
@@ -521,7 +546,7 @@ mod tests {
             out,
             json!([{
                 "id": "liquid/d1", "name": "Liquid: d1", "context": null, "measured": false, "price": null, "inputs": ["text"],
-                "noul_only": false, "max_questions": null
+                "noul_only": false, "plain_text": false, "max_questions": null
             }])
         );
     }

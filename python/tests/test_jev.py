@@ -289,13 +289,14 @@ def test_lists_the_models(server):
     ]
     assert by_id["someone/new"] == {
         "id": "someone/new", "name": "Someone: New", "context": 1024, "measured": False, "price": 0.0, "inputs": ["text"],
-        "noul_only": False, "max_questions": None,
+        "noul_only": False, "plain_text": False, "max_questions": None,
     }
     assert by_id["typesafe/jev-1.14"]["price"] == 0.042
     # Corrected where calling the model disagreed with the list, or found what it doesn't say.
     assert by_id["scaledown/classify-1"]["inputs"] == ["text", "file"]
     assert (by_id["respan/span-01"]["context"], by_id["respan/span-01"]["measured"]) == (3000, True)
     assert by_id["respan/span-01"]["noul_only"]
+    assert by_id["scaledown/classify-1"]["plain_text"]
     # The list is public, so the key stays home.
     assert seen == [(None, "/models")]
     assert jev.MODELS_URL.startswith("https://openrouter.ai/")
@@ -336,6 +337,9 @@ def test_keeps_the_key_out_of_repr():
 def test_refuses_what_a_model_was_found_not_to_answer():
     with pytest.raises(jev.InvalidQuestionError, match="respan/span-01 answers yes/no questions only"):
         jev.Client("key", model="respan/span-01").request("state", {"c": jev.Question.choice("Which?", ["a", "b"])})
+    with pytest.raises(jev.InvalidQuestionError, match="scaledown/classify-1 needs a description for every option, and `a` has none"):
+        jev.Client("key", model="scaledown/classify-1").request("state", {"c": jev.Question.choice("Which?", ["a", "b"])})
+    jev.Client("key", model="scaledown/classify-1").request("state", {"c": jev.Question.choice("Which?", {"a": "the first", "b": "the second"})})
     with pytest.raises(jev.ImageError, match="reads text only"):
         jev.Client("key", model="scaledown/classify-1").request([jev.image_part(b"\x89PNG\r\n\x1a\n")], {"n": jev.Question.noul("?")})
     # Any other model is taken at its word.

@@ -81,9 +81,10 @@ const KEY: &str = "
               go to it in Ollama's own shape";
 
 const MODELS: &str = "
-  ~typesafe/jev-latest by default; `jev model list` prints every other one.
-  A model found to answer yes/no questions only is refused a Choice or a
-  Score, and one found to read text only an image, before any call is made.";
+  ~typesafe/jev-latest by default; `jev model list` prints every other one,
+  with its limits. A request past them is refused before any call is made: a
+  Choice or a Score for a yes/no-only model, an option without a description
+  for a plain-text one, an image for a text-only one, or too many questions.";
 
 /// What follows the options: the sections above, each headed as clap heads its own, so `Examples:`
 /// stands out as `Options:` does in a terminal that shows styles.
@@ -768,6 +769,12 @@ mod tests {
         assert!(request_error(&["--questions", "q.json", "--rules", "-"]).contains("only one of"));
         let yes_no_only = request_error(&["state", "--choice", "c=Which?|a|b", "-m", "respan/span-01", "--dry-run"]);
         assert!(yes_no_only.contains("question `c`: respan/span-01 answers yes/no questions only"), "{yes_no_only}");
+        // A plain-text model needs every option described: `a:the first`, not `a` alone.
+        let bare = request_error(&["state", "--choice", "c=Which?|a|b", "-m", "scaledown/classify-1", "--dry-run"]);
+        assert!(bare.contains("question `c`: scaledown/classify-1 needs a description for every option, and `a` has none"), "{bare}");
+        assert!(
+            request(&invocation(&["state", "--choice", "c=Which?|a:the first|b:the second", "-m", "scaledown/classify-1"]), None).is_ok()
+        );
         // A flag's choice is held to the endpoint's limit too, not only a file's.
         let many: Vec<String> = (0..256).map(|at| format!("o{at}")).collect();
         let error = request_error(&["state", "--choice", &format!("c=?|{}", many.join("|"))]);

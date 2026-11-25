@@ -138,15 +138,15 @@ jev model list --json    # the same, for a script
 ```
 
 ```text
-┌──────────────────────┬───────────┬────────┬───────────────────────────┬─────────────────────┐
-│ model                │   context │   $/1M │ input                     │ limits              │
-├──────────────────────┼───────────┼────────┼───────────────────────────┼─────────────────────┤
-│ ~typesafe/jev-latest │   262,144 │ $0.042 │ text, image               │                     │
-│ cloudflare/clef-omni │    65,536 │ $0.150 │ text, image, audio, video │                     │
-│ nace-ai/drex-max     │   262,144 │ $0.060 │ text, image               │ 16 questions a call │
-│ respan/span-01-lite  │    ~3,000 │   free │ text                      │ yes/no only         │
-│ scaledown/classify-1 │ 1,000,000 │ $0.040 │ text, file                │                     │
-└──────────────────────┴───────────┴────────┴───────────────────────────┴─────────────────────┘
+┌──────────────────────┬───────────┬────────┬───────────────────────────┬─────────────────────────┐
+│ model                │   context │   $/1M │ input                     │ limits                  │
+├──────────────────────┼───────────┼────────┼───────────────────────────┼─────────────────────────┤
+│ ~typesafe/jev-latest │   262,144 │ $0.042 │ text, image               │                         │
+│ cloudflare/clef-omni │    65,536 │ $0.150 │ text, image, audio, video │                         │
+│ nace-ai/drex-max     │   262,144 │ $0.060 │ text, image               │ 16 questions a call     │
+│ respan/span-01-lite  │    ~3,000 │   free │ text                      │ yes/no only, plain text │
+│ scaledown/classify-1 │ 1,000,000 │ $0.040 │ text, file                │ plain text              │
+└──────────────────────┴───────────┴────────┴───────────────────────────┴─────────────────────────┘
 ```
 
 Context is in tokens, and the price is per million input tokens. `--image` sends images; audio,
@@ -178,8 +178,11 @@ models alone, and a request past them is refused before any call is made:
   it's sent; split the questions over two calls.
 - **A text-only model is refused images** before any call. `scaledown/classify-1` is one, though
   OpenRouter lists it as reading them.
-- **`scaledown/classify-1` needs a description on every Choice option**: `--choice
-  'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`.
+- **`scaledown/classify-1` takes questions in plain text, with a description on every Choice
+  option**: `--choice 'c=Which?|a:the first|b:the second'`, not `--choice 'c=Which?|a|b'`, which
+  is refused before the call:
+  ``question `c`: scaledown/classify-1 needs a description for every option, and `a` has none``.
+  Structured instructions or criteria are refused too. `jev model list` marks it `plain text`.
 - **Any other model** is taken at its word: sent as it is, and not checked.
 
 ### A structured state

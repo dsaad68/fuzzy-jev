@@ -99,7 +99,7 @@ jev.Client(key=None, *, model=None, url=None, timeout=None)
 | `decide(state, questions)` | Asks, and waits for the `DecisionResponse`. |
 | `decide_async(state, questions)` | The same, awaitable. |
 | `request(state, questions)` | The request body `decide` would send, as a dict, without sending it. Costs no call and needs no key. |
-| `list_models(url=None)` | Every model on offer now, from OpenRouter's list (`jev.MODELS_URL`), as `jev model list` prints them: a dict per model of `id`, `name`, `context` (tokens), `measured`, `price` (dollars per million input tokens), `inputs`, `noul_only` and `max_questions`. Needs no key, and doesn't send one. `list_models_async` is the same, awaitable. |
+| `list_models(url=None)` | Every model on offer now, from OpenRouter's list (`jev.MODELS_URL`), as `jev model list` prints them: a dict per model of `id`, `name`, `context` (tokens), `measured`, `price` (dollars per million input tokens), `inputs`, `noul_only`, `plain_text` and `max_questions`. Needs no key, and doesn't send one. `list_models_async` is the same, awaitable. |
 
 A client's `repr` never shows the key.
 

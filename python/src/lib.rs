@@ -263,7 +263,7 @@ impl Client {
 
     /// The models on offer now, from OpenRouter's list (`url`, `MODELS_URL` otherwise): a dict per
     /// model of `id`, `name`, `context` (tokens), `measured`, `price` (dollars per million input
-    /// tokens), `inputs`, `noul_only` and `max_questions`, as `jev model list` prints them. The
+    /// tokens), `inputs`, `noul_only`, `plain_text` and `max_questions`, as `jev model list` prints them. The
     /// list is public, so the key isn't sent. Other Python threads run meanwhile.
     #[pyo3(signature = (url = None))]
     fn list_models<'py>(&self, py: Python<'py>, url: Option<String>) -> PyResult<Bound<'py, PyAny>> {

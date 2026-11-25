@@ -6,8 +6,9 @@
 //! ([`crate::Client::with_model`]).
 //!
 //! What its listing doesn't say, or says wrongly, was found by calling the models, and is kept here
-//! as limits, for those models alone: the ones that answer only yes/no questions, read no images,
-//! take fewer questions a call than the endpoint does, or read less of a state than they're given.
+//! as limits, for those models alone: the ones that answer only yes/no questions, take questions in
+//! plain text only, read no images, take fewer questions a call than the endpoint does, or read less
+//! of a state than they're given.
 //! A request asking one of them what it can't answer is refused before it is sent
 //! ([`check_request`]), rather than costing a call that fails. A model with no limits here is taken
 //! at its word.
@@ -16,6 +17,7 @@
 //! no context window for the Span 01 models, which read about 3,000 tokens of a state.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{DecisionRequest, Error, Question};
 
@@ -24,9 +26,12 @@ use crate::{DecisionRequest, Error, Question};
 struct Limits {
     /// Its id, as a request names it.
     id: &'static str,
-    /// Whether it answers only yes/no (Noul) questions, and only ones whose instructions and
-    /// criteria are plain text.
+    /// Whether it answers only yes/no (Noul) questions.
     noul_only: bool,
+    /// Whether it takes only questions whose instructions and criteria are plain text: no
+    /// structured rubric, and no Choice option without a description. OpenRouter answers one that
+    /// isn't with a 400, "ScaleDown only accepts present, plain-string instructions and criteria".
+    plain_text: bool,
     /// Whether it reads images in the state ([`crate::image_part`]).
     images: bool,
     /// The most questions it takes in one call, where that is fewer than the endpoint's own limit.
@@ -39,14 +44,14 @@ struct Limits {
 }
 
 /// No limits, for the table to start each entry from.
-const NONE: Limits = Limits { id: "", noul_only: false, images: true, max_questions: None, context: None };
+const NONE: Limits = Limits { id: "", noul_only: false, plain_text: false, images: true, max_questions: None, context: None };
 
 /// The models with limits: every other one is taken at its word. Text-only models are here, though
 /// the listing says so too, so an image sent to one is refused without asking the listing.
 const LIMITS: [Limits; 14] = [
-    Limits { id: "respan/span-01", noul_only: true, images: false, context: Some(3000), ..NONE },
-    Limits { id: "respan/span-01-lite", noul_only: true, images: false, context: Some(3000), ..NONE },
-    Limits { id: "respan/span-01-lite:free", noul_only: true, images: false, context: Some(3000), ..NONE },
+    Limits { id: "respan/span-01", noul_only: true, plain_text: true, images: false, context: Some(3000), ..NONE },
+    Limits { id: "respan/span-01-lite", noul_only: true, plain_text: true, images: false, context: Some(3000), ..NONE },
+    Limits { id: "respan/span-01-lite:free", noul_only: true, plain_text: true, images: false, context: Some(3000), ..NONE },
     Limits { id: "jaredpalmer/kev-4b", images: false, ..NONE },
     Limits { id: "parallel/decisions-fast:free", images: false, max_questions: Some(100), ..NONE },
     Limits { id: "nace-ai/drex-max", max_questions: Some(16), ..NONE },
@@ -57,8 +62,7 @@ const LIMITS: [Limits; 14] = [
     Limits { id: "upstage/solar-decide", images: false, ..NONE },
     Limits { id: "upstage/solar-decide-flash", images: false, ..NONE },
     Limits { id: "togethercomputer/tev1-4b-experimental", images: false, ..NONE },
-    // Also: every Choice option needs a description, which isn't checked here.
-    Limits { id: "scaledown/classify-1", images: false, ..NONE },
+    Limits { id: "scaledown/classify-1", plain_text: true, images: false, ..NONE },
 ];
 
 /// The limits of the model with this id, if it has any.
@@ -81,8 +85,11 @@ pub struct ModelInfo {
     pub price: Option<f64>,
     /// What a state can hold for it: `text`, `image`, and for some `audio`, `video` or `file`.
     pub inputs: Vec<String>,
-    /// Whether it answers only yes/no (Noul) questions with plain-text instructions and criteria.
+    /// Whether it answers only yes/no (Noul) questions.
     pub noul_only: bool,
+    /// Whether it takes only questions whose instructions and criteria are plain text, with a
+    /// description for every Choice option.
+    pub plain_text: bool,
     /// The most questions it takes in one call, where that is fewer than the endpoint takes.
     pub max_questions: Option<usize>,
 }
@@ -133,6 +140,7 @@ impl Listed {
             price: price.filter(|price| *price >= 0.0).map(|price| (price * 1e12).round() / 1e6),
             inputs,
             noul_only: limits.is_some_and(|limits| limits.noul_only),
+            plain_text: limits.is_some_and(|limits| limits.plain_text),
             max_questions: limits.and_then(|limits| limits.max_questions),
         }
     }
@@ -179,24 +187,34 @@ pub fn check_request(request: &DecisionRequest) -> crate::Result<()> {
 
 impl Limits {
     /// Whether this model can answer `question`: every model answers every type, except one that
-    /// is `noul_only`, which takes a yes/no question with plain-text instructions and criteria, and
-    /// nothing else. The error says why, as [`crate::Error::Invalid`]'s `why`.
+    /// is `noul_only`, and every form, except one that is `plain_text`. The error says why, as
+    /// [`crate::Error::Invalid`]'s `why`.
     fn check(&self, question: &Question) -> Result<(), String> {
-        if !self.noul_only {
-            return Ok(());
-        }
         let only = |what: &str| format!("{} answers yes/no questions only, and this is {what}", self.id);
         match question {
-            Question::Choice { .. } => Err(only("a choice")),
-            Question::Score { .. } => Err(only("a score")),
+            Question::Choice { .. } if self.noul_only => return Err(only("a choice")),
+            Question::Score { .. } if self.noul_only => return Err(only("a score")),
+            _ => {}
+        }
+        if !self.plain_text {
+            return Ok(());
+        }
+        let plain = match question {
             Question::Noul { instructions, criteria } => {
-                let plain = instructions.is_string()
-                    && criteria.as_ref().is_none_or(|criteria| criteria.yes.is_string() && criteria.no.is_string());
-                match plain {
-                    true => Ok(()),
-                    false => Err(format!("{} takes yes/no questions whose instructions and criteria are plain text", self.id)),
-                }
+                instructions.is_string() && criteria.as_ref().is_none_or(|criteria| criteria.yes.is_string() && criteria.no.is_string())
             }
+            Question::Score { instructions, criteria } => instructions.is_string() && criteria.iter().all(Value::is_string),
+            Question::Choice { instructions, criteria } => {
+                // A Choice option written as a name alone is `null`, which isn't text either.
+                if let Some((name, _)) = criteria.0.iter().find(|(_, description)| description.is_null()) {
+                    return Err(format!("{} needs a description for every option, and `{name}` has none", self.id));
+                }
+                instructions.is_string() && criteria.0.iter().all(|(_, description)| description.is_string())
+            }
+        };
+        match plain {
+            true => Ok(()),
+            false => Err(format!("{} takes questions whose instructions and criteria are plain text", self.id)),
         }
     }
 }
@@ -276,7 +294,9 @@ mod tests {
         // A context of 0 means none is listed, which a measurement fills in.
         assert_eq!((find("respan/span-01").context, find("respan/span-01").measured), (Some(3000), true));
         // What the listing doesn't say at all.
-        assert!(find("respan/span-01").noul_only);
+        assert!(find("respan/span-01").noul_only && find("respan/span-01").plain_text);
+        assert!(find("scaledown/classify-1").plain_text && !find("scaledown/classify-1").noul_only);
+        assert!(!find("someone/new").plain_text);
         assert_eq!(find("nace-ai/drex-max").max_questions, Some(16));
         assert_eq!((find("nace-ai/drex-max").context, find("nace-ai/drex-max").price), (None, None));
 
@@ -332,5 +352,26 @@ mod tests {
         assert!(span.check(&Question::noul_with_criteria("Is it?", json!(["yes"]), "no")).is_err());
         // Every other model takes every type.
         assert!(limits("jaredpalmer/kev-4b").unwrap().check(&Question::score("How warm?", ["Cold", "Hot"])).is_ok());
+    }
+
+    #[test]
+    fn a_plain_text_model_needs_a_description_for_every_option() {
+        // What OpenRouter answers scaledown/classify-1 with, a 400 "ScaleDown only accepts present,
+        // plain-string instructions and criteria", refused here before the call.
+        let classify = limits("scaledown/classify-1").unwrap();
+        assert!(classify.check(&Question::choice("Which?", [("billing", "charges"), ("support", "")])).is_ok());
+        let bare = classify.check(&Question::choice("Which?", [("billing", json!("charges")), ("support", Value::Null)])).unwrap_err();
+        assert_eq!(bare, "scaledown/classify-1 needs a description for every option, and `support` has none");
+        assert!(classify
+            .check(&Question::choice("Which?", [("a", json!({"what": "A"})), ("b", json!("B"))]))
+            .unwrap_err()
+            .contains("plain text"));
+        assert!(classify.check(&Question::noul(json!({"question": "Is it?"}))).unwrap_err().contains("plain text"));
+        // Every type, in plain text, and a noul without criteria.
+        assert!(classify.check(&Question::noul("Is it?")).is_ok());
+        assert!(classify.check(&Question::score("How upset?", ["Calm", "Upset"])).is_ok());
+        // The others take a name alone.
+        let kev = limits("jaredpalmer/kev-4b").unwrap();
+        assert!(kev.check(&Question::choice("Which?", [("a", Value::Null), ("b", Value::Null)])).is_ok());
     }
 }

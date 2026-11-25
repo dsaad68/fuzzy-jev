@@ -1717,7 +1717,12 @@ async function loadModels() {
     if (!response.ok) throw new Error((await response.json()).error);
     listModels((await response.json()).map((model) => ({
       id: model.id,
-      about: [model.name, model.inputs.join(", "), model.max_questions ? `${model.max_questions} questions a call` : null].filter(Boolean).join(" · "),
+      about: [
+        model.name,
+        model.inputs.join(", "),
+        model.plain_text ? "plain text: a description for every option" : null,
+        model.max_questions ? `${model.max_questions} questions a call` : null,
+      ].filter(Boolean).join(" · "),
       noulOnly: model.noul_only,
     })));
     setModel($("model").value);

@@ -7,8 +7,9 @@ class ModelInfo(TypedDict):
     """A model as it is on offer now, from `Client.list_models`: OpenRouter's list, corrected by what this package has checked.
 
     `context` is in tokens and `price` in dollars per million input tokens, each None when unknown; `measured` says the context
-    was measured rather than listed. `noul_only` says the model answers yes/no questions only, and `max_questions` is the most
-    it takes in a call where that is fewer than the endpoint takes: a request past either is refused before it is sent.
+    was measured rather than listed. `noul_only` says the model answers yes/no questions only, `plain_text` that it takes
+    instructions and criteria as text only, with a description for every Choice option, and `max_questions` is the most it
+    takes in a call where that is fewer than the endpoint takes: a request past any of them is refused before it is sent.
     """
 
     id: str
@@ -18,6 +19,7 @@ class ModelInfo(TypedDict):
     price: float | None
     inputs: list[str]
     noul_only: bool
+    plain_text: bool
     max_questions: int | None
 
 __version__: str
