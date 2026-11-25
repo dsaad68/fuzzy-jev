@@ -226,6 +226,21 @@ fn models_table(models: &[ModelInfo], width: usize) -> String {
         };
         rows.push(vec![model.id.clone(), context, price(model.price), model.inputs.join(", "), limits(model)]);
     }
+    // With OpenRouter's longest ids, the limits column takes the room the others need in 80
+    // columns, and a cell would be cut. Then the limits go under the table instead, a line each.
+    let narrowest: Vec<usize> = (0..MODEL_COLUMNS.len())
+        .map(|column| rows.iter().flat_map(|row| row[column].split_whitespace()).map(columns).max().unwrap_or(0))
+        .collect();
+    let mut under = Vec::new();
+    if !fits(&narrowest, width) {
+        for row in &mut rows {
+            row.pop();
+        }
+        let limited: Vec<(&str, String)> =
+            models.iter().map(|model| (model.id.as_str(), limits(model))).filter(|(_, limits)| !limits.is_empty()).collect();
+        let id_width = limited.iter().map(|(id, _)| columns(id)).max().unwrap_or(0);
+        under.extend(limited.iter().map(|(id, limits)| format!("  {}  {limits}", pad(id, id_width))));
+    }
     let mut notes = vec!["Context is in tokens and the price is per million input tokens, both from OpenRouter just now.".to_owned()];
     if models.iter().any(|model| model.measured) {
         notes.push(
@@ -252,6 +267,12 @@ fn models_table(models: &[ModelInfo], width: usize) -> String {
         );
     }
     let mut out = boxed(rows, &[], &MODEL_SQUEEZE_ORDER, &MODEL_RIGHT, width);
+    if !under.is_empty() {
+        let _ = writeln!(out, "Limits:");
+        for line in &under {
+            let _ = writeln!(out, "{line}");
+        }
+    }
     for line in notes.iter().flat_map(|note| wrap(note, width)) {
         let _ = writeln!(out, "{line}");
     }
@@ -536,6 +557,26 @@ mod tests {
             assert!(out.contains(word), "{word} in {out}");
         }
         assert!(out.lines().all(|line| columns(line) <= 60), "{out}");
+    }
+
+    #[test]
+    fn puts_the_limits_under_a_table_too_narrow_for_them() {
+        let models = [
+            listed("perplexity/pplx-decider-flash-v1.3:free", Some(262_144), Some(0.0), &["text", "image"]),
+            ModelInfo { noul_only: true, plain_text: true, measured: true, ..listed("respan/span-01", Some(3000), Some(0.02), &["text"]) },
+            ModelInfo { max_questions: Some(16), ..listed("nace-ai/drex-max", Some(262_144), Some(0.06), &["text", "image"]) },
+        ];
+        let out = render_models(Format::Table, &models, 80).unwrap();
+        assert!(out.lines().all(|line| columns(line) <= 80), "{out}");
+        // Every cell whole, and no limits column.
+        assert!(out.contains("│ text, image │") && out.contains("│ text        │") && !out.contains("│ limits"), "{out}");
+        let lines: Vec<&str> = out.lines().collect();
+        let at = lines.iter().position(|line| *line == "Limits:").unwrap();
+        assert_eq!(lines[at + 1], "  respan/span-01    yes/no only, plain text", "{out}");
+        assert_eq!(lines[at + 2], "  nace-ai/drex-max  16 questions a call", "{out}");
+        // Wide enough, the column is back, and the list isn't there.
+        let wide = render_models(Format::Table, &models, 120).unwrap();
+        assert!(wide.contains("│ limits") && !wide.contains("Limits:"), "{wide}");
     }
 
     #[test]
